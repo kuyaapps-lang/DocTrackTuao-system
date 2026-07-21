@@ -12,206 +12,196 @@ const password = ref('')
 </script>
 
 <template>
+<div
+    class="relative min-h-screen overflow-hidden
+    bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-800
+    flex flex-col items-center justify-center
+    px-6 py-10"
+>
 
-<div class="min-h-screen flex flex-col md:grid md:grid-cols-2">
+    <!-- Animated Background -->
+    <div class="absolute inset-0 overflow-hidden">
 
-    <!-- LEFT SIDE -->
-    <div
-        class="relative overflow-hidden flex flex-col justify-center items-center
-        bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-800
-        text-white p-10 min-h-[40vh] md:min-h-screen"
-    >
-
-        <!-- Animated Gradient Overlay -->
         <div
-            class="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-blue-300/10 animate-pulse"
+            class="absolute -top-48 -left-48 w-[600px] h-[600px]
+            bg-cyan-400/20 blur-3xl
+            animate-[spin_35s_linear_infinite]"
+            style="border-radius:42% 58% 70% 30% / 45% 45% 55% 55%;"
         ></div>
 
-        <!-- Wavy Blob Background -->
-        <div class="absolute inset-0 overflow-hidden">
+        <div
+            class="absolute bottom-[-250px] right-[-180px]
+            w-[650px] h-[650px]
+            bg-blue-400/20 blur-3xl
+            animate-[spin_45s_linear_infinite_reverse]"
+            style="border-radius:61% 39% 33% 67% / 70% 50% 50% 30%;"
+        ></div>
 
-            <!-- Blob 1 -->
-            <div
-                class="absolute -top-40 -left-40 w-[500px] h-[500px]
-                bg-cyan-400/20 blur-3xl
-                animate-[spin_30s_linear_infinite]"
-                style="border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;"
-            ></div>
-
-            <!-- Blob 2 -->
-            <div
-                class="absolute bottom-[-200px] right-[-150px] w-[550px] h-[550px]
-                bg-blue-300/20 blur-3xl
-                animate-[spin_40s_linear_infinite_reverse]"
-                style="border-radius: 61% 39% 33% 67% / 70% 50% 50% 30%;"
-            ></div>
-
-            <!-- Blob 3 -->
-            <div
-                class="absolute top-[35%] left-[60%] w-[250px] h-[250px]
-                bg-white/10 blur-2xl animate-pulse"
-                style="border-radius: 57% 43% 34% 66% / 55% 48% 52% 45%;"
-            ></div>
-
-        </div>
-
-        <!-- Watermark -->
-        <img
-            :src="logo"
-            alt="Watermark"
-            class="absolute w-[500px] opacity-[0.04]"
-        />
-
-        <!-- Content -->
-        <div class="relative z-10 flex flex-col items-center">
-
-            <!-- Logo -->
-            <div
-                class="backdrop-blur-md bg-white/10 p-5 rounded-full
-                border border-white/20 shadow-2xl mb-6"
-            >
-                <img
-                    :src="logo"
-                    alt="Municipality Logo"
-                    class="w-28 h-28 object-cover"
-                />
-            </div>
-
-            <!-- Title -->
-            <h1
-                class="text-5xl md:text-6xl font-black tracking-wide mb-3 text-center"
-            >
-                Document Tracking System
-            </h1>
-
-            <!-- Subtitle -->
-            <p
-                class="text-xl md:text-2xl font-semibold text-cyan-100 mb-5 text-center"
-            >
-                Local Government Unit of Tuao
-            </p>
-
-            <!-- Description -->
-            <p
-                class="text-center text-blue-100/90
-                max-w-md leading-relaxed text-base md:text-lg"
-            >
-                Secure and efficient document tracking system
-                for monitoring, routing, and managing official documents.
-            </p>
-
-        </div>
+        <div
+            class="absolute top-1/3 left-1/2
+            w-[300px] h-[300px]
+            bg-white/10 blur-3xl
+            animate-pulse
+            rounded-full"
+        ></div>
 
     </div>
 
-    <!-- RIGHT SIDE -->
-    <div
-        class="relative flex items-center justify-center
-        bg-gray-100 p-6 min-h-[60vh] md:min-h-screen overflow-hidden"
+    <!-- Watermark -->
+    <img
+        :src="logo"
+        class="absolute w-[780px] opacity-[0.04] pointer-events-none"
+        alt="Watermark"
+    />
+
+    <!-- Header -->
+    <div class="relative z-10 flex flex-col items-center text-center">
+
+        <!-- Logo -->
+        <div
+            class="backdrop-blur-md bg-white/10
+            border border-white/20
+            rounded-full
+            p-3
+            shadow-2xl"
+        >
+            <img
+                :src="logo"
+                alt="Municipality Logo"
+                class="w-30 h-30 object-contain"
+            />
+        </div>
+
+        <!-- Title -->
+        <h1
+            class="mt-3 text-5xl md:text-5xl
+            font-black text-white tracking-wide"
+        >
+            Document Tracking System
+        </h1>
+
+        <!-- Subtitle -->
+        <p
+            class="mt-3 text-2xl md:text-3xl
+            text-cyan-100 font-semibold"
+        >
+            Local Government Unit of Tuao
+        </p>
+
+        <!-- Description -->
+        <p
+            class="mt-2 max-w-2xl
+            text-blue-100/90
+            leading-relaxed
+            text-base md:text-lg"
+        >
+            Secure • Fast • Reliable Document Routing
+        </p>
+
+    </div>
+
+    <!-- Login Card -->
+    <Card
+        class="relative z-10
+        mt-3
+        w-full max-w-md
+        rounded-4xl
+        border border-white/30
+        bg-white/85
+        backdrop-blur-xl
+        shadow-2xl"
     >
 
-        <!-- Background Glow -->
-        <div
-            class="absolute w-[400px] h-[400px]
-            bg-cyan-200/40 blur-3xl rounded-full"
-        ></div>
+        <CardContent class="p-6">
 
-        <!-- Login Card -->
-        <Card
-            class="relative z-10 w-full max-w-md
-            backdrop-blur-xl bg-white/80
-            shadow-2xl border border-white/40
-            rounded-3xl"
-        >
+            <div class="text-center mb-5">
 
-            <CardContent class="p-8">
+                <h2
+                    class="text-3xl font-black text-gray-800"
+                >
+                    Welcome Back
+                </h2>
 
-                <!-- Header -->
-                <div class="mb-8 text-center">
+                <p class="mt-2 text-gray-500">
+                    Please login to continue
+                </p>
 
-                    <h2
-                        class="text-3xl md:text-4xl font-black text-gray-800"
+            </div>
+
+            <form class="space-y-2">
+
+                <!-- Email -->
+                <div>
+
+                    <label
+                        class="block mb-1 text-sm font-semibold text-black-700"
                     >
-                        Welcome Back
-                    </h2>
+                        Email Address
+                    </label>
 
-                    <p
-                        class="text-gray-500 mt-3"
-                    >
-                        Please Login to continue 
-                
-                    </p>
+                    <Input
+                        v-model="email"
+                        type="email"
+                        placeholder="Enter your email"
+                        class="h-12 rounded-xl"
+                    />
 
                 </div>
 
-                <!-- Form -->
-                <form class="space-y-5">
+                <!-- Password -->
+                <div>
 
-                    <!-- Email -->
-                    <div>
-
-                        <label
-                            class="text-sm font-semibold text-gray-700 mb-2 block"
-                        >
-                            Email Address
-                        </label>
-
-                        <Input
-                            v-model="email"
-                            type="email"
-                            placeholder="Enter your email"
-                            class="h-12 rounded-xl border-gray-300"
-                        />
-
-                    </div>
-
-                    <!-- Password -->
-                    <div>
-
-                        <label
-                            class="text-sm font-semibold text-gray-700 mb-2 block"
-                        >
-                            Password
-                        </label>
-
-                        <Input
-                            v-model="password"
-                            type="password"
-                            placeholder="Enter your password"
-                            class="h-12 rounded-xl border-gray-300"
-                        />
-
-                    </div>
-
-                    <!-- Forgot Password -->
-                    <div class="flex justify-end">
-
-                        <a
-                            href="#"
-                            class="text-sm text-cyan-700 hover:text-cyan-900 transition"
-                        >
-                            Forgot password?
-                        </a>
-
-                    </div>
-
-                    <!-- Button -->
-                    <Button
-                        class="w-full h-12 rounded-xl text-base font-bold
-                        bg-gradient-to-r from-cyan-600 to-blue-700
-                        hover:from-cyan-700 hover:to-blue-800"
+                    <label
+                        class="block mb-1 text-sm font-semibold text-black-800"
                     >
-                        Login
-                    </Button>
+                        Password
+                    </label>
 
-                </form>
+                    <Input
+                        v-model="password"
+                        type="password"
+                        placeholder="Enter your password"
+                        class="h-12 rounded-xl"
+                    />
 
-            </CardContent>
+                </div>
 
-        </Card>
+                <div class="flex justify-end">
 
+                    <a
+                        href="#"
+                        class="text-sm text-cyan-700 hover:text-cyan-900"
+                    >
+                        Forgot Password?
+                    </a>
+
+                </div>
+
+                <Button
+                    class="w-full h-12 rounded-xl
+                    text-base font-bold
+                    bg-gradient-to-r from-cyan-600 to-blue-700
+                    hover:from-cyan-700 hover:to-blue-800"
+                >
+                    Login
+                </Button>
+
+            </form>
+
+        </CardContent>
+
+    </Card>
+
+    <!-- Footer -->
+    <div
+        class="relative z-10
+        mt-5
+        text-center
+        text-sm
+        text-blue-100/70"
+    >
+        © 2026 Municipality of Tuao • Document Tracking System
     </div>
 
 </div>
-
 </template>
