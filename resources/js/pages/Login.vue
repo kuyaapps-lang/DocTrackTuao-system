@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 
 import logo from '@/assets/tuao-logo.png'
 
+
 const email = ref('')
 const password = ref('')
 </script>
@@ -60,15 +61,15 @@ const password = ref('')
         <!-- Logo -->
         <div
             class="backdrop-blur-md bg-white/10
-            border border-white/20
+            border border-white/30
             rounded-full
-            p-3
+            p-2
             shadow-2xl"
         >
             <img
                 :src="logo"
                 alt="Municipality Logo"
-                class="w-30 h-30 object-contain"
+                class="w-40 h-40 object-contain"
             />
         </div>
 
@@ -89,14 +90,14 @@ const password = ref('')
         </p>
 
         <!-- Description -->
-        <p
+        <!-- <p
             class="mt-2 max-w-2xl
             text-blue-100/90
             leading-relaxed
             text-base md:text-lg"
         >
             Secure • Fast • Reliable Document Routing
-        </p>
+        </p> -->
 
     </div>
 
@@ -166,17 +167,6 @@ const password = ref('')
 
                 </div>
 
-                <div class="flex justify-end">
-
-                    <a
-                        href="#"
-                        class="text-sm text-cyan-700 hover:text-cyan-900"
-                    >
-                        Forgot Password?
-                    </a>
-
-                </div>
-
                 <Button
                     class="w-full h-12 rounded-xl
                     text-base font-bold
@@ -185,6 +175,17 @@ const password = ref('')
                 >
                     Login
                 </Button>
+
+                <div class="flex justify-end">
+
+                    <a
+                        href="#"
+                        class="text-sm text-cyan-700 hover:text-cyan-900 hover:underline"
+                    >
+                        Forgot Password?
+                    </a>
+
+                </div>
 
             </form>
 

@@ -13,7 +13,6 @@ class Office extends Model
         'office_name',
         'office_code',
         'description',
-        'is_active'
     ];
 
     public function department(): BelongsTo
@@ -21,13 +20,8 @@ class Office extends Model
         return $this->belongsTo(Department::class);
     }
 
-    public function incomingRoutes(): HasMany
+    public function users(): HasMany
     {
-        return $this->hasMany(DocumentRoute::class, 'to_office_id');
-    }
-
-    public function outgoingRoutes(): HasMany
-    {
-        return $this->hasMany(DocumentRoute::class, 'from_office_id');
+        return $this->hasMany(User::class);
     }
 }
