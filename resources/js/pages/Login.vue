@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -7,12 +8,69 @@ import { Button } from '@/components/ui/button'
 
 import logo from '@/assets/tuao-logo.png'
 
-
 const email = ref('')
 const password = ref('')
+
+const router = useRouter()
+
+const loading = ref(false)
+const error = ref('')
+const success = ref('')
+
+const login = async () => {
+    error.value = ''
+    success.value = ''
+
+    if (!email.value || !password.value) {
+        error.value = 'Please enter your email and password.'
+        return
+    }
+
+    loading.value = true
+
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                email: email.value,
+                password: password.value,
+            }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Login failed.')
+        }
+
+        // Save authentication information
+        localStorage.setItem('auth_token', data.token)
+        localStorage.setItem(
+            'auth_user',
+            JSON.stringify(data.user)
+        )
+
+        success.value = 'Login successful!'
+
+        console.log('Authenticated user:', data.user)
+        console.log('Token received:', data.token)
+
+        router.push('/dashboard')
+
+    } catch (err) {
+        error.value = err.message || 'Unable to login.'
+    } finally {
+        loading.value = false
+    }
+}
 </script>
 
 <template>
+
 <div
     class="relative min-h-screen overflow-hidden
     bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-800
@@ -89,16 +147,6 @@ const password = ref('')
             Local Government Unit of Tuao
         </p>
 
-        <!-- Description -->
-        <!-- <p
-            class="mt-2 max-w-2xl
-            text-blue-100/90
-            leading-relaxed
-            text-base md:text-lg"
-        >
-            Secure • Fast • Reliable Document Routing
-        </p> -->
-
     </div>
 
     <!-- Login Card -->
@@ -115,6 +163,7 @@ const password = ref('')
 
         <CardContent class="p-6">
 
+            <!-- Login Header -->
             <div class="text-center mb-5">
 
                 <h2
@@ -129,7 +178,11 @@ const password = ref('')
 
             </div>
 
-            <form class="space-y-2">
+            <!-- Login Form -->
+            <form
+                class="space-y-2"
+                @submit.prevent="login"
+            >
 
                 <!-- Email -->
                 <div>
@@ -167,20 +220,42 @@ const password = ref('')
 
                 </div>
 
+                <!-- Error Message -->
+                <div
+                    v-if="error"
+                    class="text-sm text-red-600 font-semibold"
+                >
+                    {{ error }}
+                </div>
+
+                <!-- Success Message -->
+                <div
+                    v-if="success"
+                    class="text-sm text-green-600 font-semibold"
+                >
+                    {{ success }}
+                </div>
+
+                <!-- Login Button -->
                 <Button
+                    type="submit"
+                    :disabled="loading"
                     class="w-full h-12 rounded-xl
                     text-base font-bold
                     bg-gradient-to-r from-cyan-600 to-blue-700
                     hover:from-cyan-700 hover:to-blue-800"
                 >
-                    Login
+                    {{ loading ? 'Logging in...' : 'Login' }}
                 </Button>
 
+                <!-- Forgot Password -->
                 <div class="flex justify-end">
 
                     <a
                         href="#"
-                        class="text-sm text-cyan-700 hover:text-cyan-900 hover:underline"
+                        class="text-sm text-cyan-700
+                        hover:text-cyan-900
+                        hover:underline"
                     >
                         Forgot Password?
                     </a>
@@ -201,8 +276,10 @@ const password = ref('')
         text-sm
         text-blue-100/70"
     >
-        © 2026 Municipality of Tuao • Document Tracking System
+        © 2026 Municipality of Tuao
+        • Document Tracking System
     </div>
 
 </div>
+
 </template>

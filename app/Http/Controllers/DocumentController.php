@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Document;
+use App\Models\DocumentStatus;
 use Illuminate\Http\Request;
 
 class DocumentController extends Controller
@@ -12,7 +13,17 @@ class DocumentController extends Controller
      */
     public function index()
     {
-        return response()->json(Document::all());
+        $documents = Document::with([
+            'type',
+            'status',
+            'originOffice',
+            'currentOffice',
+            'creator',
+        ])
+        ->latest()
+        ->get();
+
+        return response()->json($documents);
     }
 
     /**
@@ -25,16 +36,41 @@ class DocumentController extends Controller
             'description' => 'nullable|string',
         ]);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Get default Pending status
+        |--------------------------------------------------------------------------
+        */
+
+        $pendingStatus = DocumentStatus::where(
+            'status_name',
+            'Pending'
+        )->firstOrFail();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create document
+        |--------------------------------------------------------------------------
+        */
+
         $document = Document::create([
             'tracking_no' => 'DOC-' . now()->format('YmdHis') . rand(100, 999),
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
-            'status' => 'pending',
+            'status_id' => $pendingStatus->id,
+        ]);
+
+        $document->load([
+            'type',
+            'status',
+            'originOffice',
+            'currentOffice',
+            'creator',
         ]);
 
         return response()->json([
             'message' => 'Document created successfully',
-            'document' => $document
+            'document' => $document,
         ], 201);
     }
 
@@ -43,7 +79,16 @@ class DocumentController extends Controller
      */
     public function show($id)
     {
-        $document = Document::findOrFail($id);
+        $document = Document::with([
+            'type',
+            'status',
+            'originOffice',
+            'currentOffice',
+            'creator',
+            'routes',
+            'attachments',
+            'comments',
+        ])->findOrFail($id);
 
         return response()->json($document);
     }
@@ -55,15 +100,25 @@ class DocumentController extends Controller
     {
         $document = Document::findOrFail($id);
 
-        $document->update($request->only([
-            'title',
-            'description',
-            'status'
-        ]));
+        $validated = $request->validate([
+            'title' => 'sometimes|required|string|max:255',
+            'description' => 'nullable|string',
+            'status_id' => 'sometimes|exists:document_statuses,id',
+        ]);
+
+        $document->update($validated);
+
+        $document->load([
+            'type',
+            'status',
+            'originOffice',
+            'currentOffice',
+            'creator',
+        ]);
 
         return response()->json([
             'message' => 'Document updated successfully',
-            'document' => $document
+            'document' => $document,
         ]);
     }
 
@@ -77,7 +132,7 @@ class DocumentController extends Controller
         $document->delete();
 
         return response()->json([
-            'message' => 'Document deleted successfully'
+            'message' => 'Document deleted successfully',
         ]);
     }
 }
