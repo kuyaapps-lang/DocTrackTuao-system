@@ -23,7 +23,7 @@ class AuthController extends Controller
         ], 401);
     }
 
-    // 🔥 FIX: get user AFTER login success
+    // FIX: get user AFTER login success
     $user = Auth::user();
 
     $token = $user->createToken('auth-token')->plainTextToken;

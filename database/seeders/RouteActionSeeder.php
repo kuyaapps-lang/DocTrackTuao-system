@@ -9,14 +9,21 @@ class RouteActionSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('route_actions')->insert([
-            ['action_name'=>'Forward'],
-            ['action_name'=>'Receive'],
-            ['action_name'=>'Return'],
-            ['action_name'=>'Approve'],
-            ['action_name'=>'Reject'],
-            ['action_name'=>'Archive'],
-            ['action_name'=>'Complete'],
-        ]);
+        $actions = [
+            'Forward',
+            'Receive',
+            'Return',
+            'Approve',
+            'Reject',
+            'Archive',
+            'Complete',
+        ];
+
+        foreach ($actions as $action) {
+            DB::table('route_actions')->updateOrInsert(
+                ['action_name' => $action],
+                ['action_name' => $action]
+            );
+        }
     }
 }

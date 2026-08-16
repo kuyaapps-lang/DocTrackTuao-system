@@ -1,7 +1,9 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory } from 'vue-router'
 
-import Login from '../pages/Login.vue';
-import Dashboard from '../pages/Dashboard.vue';
+import Login from '../pages/Login.vue'
+import Dashboard from '../pages/Dashboard.vue'
+import Documents from '../pages/Documents.vue'
+import Offices from '../pages/Offices.vue'
 
 const routes = [
 
@@ -20,11 +22,21 @@ const routes = [
         component: Dashboard,
     },
 
-];
+    {
+        path: '/documents',
+        component: Documents,
+    },
+
+    {
+        path: '/offices',
+        component: Offices,
+    },
+
+]
 
 const router = createRouter({
     history: createWebHistory(),
     routes,
-});
+})
 
-export default router;
+export default router

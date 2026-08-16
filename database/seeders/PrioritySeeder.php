@@ -9,11 +9,18 @@ class PrioritySeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('priorities')->insert([
-            ['priority_name'=>'Low'],
-            ['priority_name'=>'Normal'],
-            ['priority_name'=>'High'],
-            ['priority_name'=>'Urgent'],
-        ]);
+        $priorities = [
+            'Low',
+            'Normal',
+            'High',
+            'Urgent',
+        ];
+
+        foreach ($priorities as $priority) {
+            DB::table('priorities')->updateOrInsert(
+                ['priority_name' => $priority],
+                ['priority_name' => $priority]
+            );
+        }
     }
 }

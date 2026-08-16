@@ -9,10 +9,17 @@ class ConfidentialityLevelSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('confidentiality_levels')->insert([
-            ['level_name'=>'Public'],
-            ['level_name'=>'Confidential'],
-            ['level_name'=>'Restricted'],
-        ]);
+        $levels = [
+            'Public',
+            'Confidential',
+            'Restricted',
+        ];
+
+        foreach ($levels as $level) {
+            DB::table('confidentiality_levels')->updateOrInsert(
+                ['level_name' => $level],
+                ['level_name' => $level]
+            );
+        }
     }
 }
