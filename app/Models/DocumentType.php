@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class DocumentType extends Model
 {
     protected $fillable = [
-        'name',
+        'type_name',
         'description',
     ];
 

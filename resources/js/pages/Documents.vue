@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import {
     Card,
@@ -20,51 +21,290 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
+const router = useRouter()
+
+/*
+|--------------------------------------------------------------------------
+| Document List
+|--------------------------------------------------------------------------
+*/
+
 const documents = ref([])
 const loading = ref(true)
 const error = ref('')
+
+const activeTab = ref('all')
+
+const tabs = [
+    {
+        key: 'all',
+        label: 'All Documents',
+    },
+    {
+        key: 'incoming',
+        label: 'Incoming',
+    },
+    {
+        key: 'outgoing',
+        label: 'Outgoing',
+    },
+]
+
+/*
+|--------------------------------------------------------------------------
+| Form Options
+|--------------------------------------------------------------------------
+*/
+
+const documentTypes = ref([])
+const priorities = ref([])
+const confidentialityLevels = ref([])
+const offices = ref([])
+
+const optionsLoading = ref(false)
+
+/*
+|--------------------------------------------------------------------------
+| Create Document
+|--------------------------------------------------------------------------
+*/
 
 const showCreateForm = ref(false)
 const creating = ref(false)
 const createError = ref('')
 const createSuccess = ref('')
 
-const title = ref('')
-const description = ref('')
+const form = ref({
+    title: '',
+    description: '',
+    document_type_id: '',
+    priority_id: '',
+    confidentiality_level_id: '',
+    origin_office_id: '',
+    document_date: '',
+    due_date: '',
+})
+
+/*
+|--------------------------------------------------------------------------
+| Authentication
+|--------------------------------------------------------------------------
+*/
+
+const getToken = () => {
+    return localStorage.getItem('auth_token')
+}
+
+/*
+|--------------------------------------------------------------------------
+| Document List API
+|--------------------------------------------------------------------------
+*/
+
+const getDocumentEndpoint = () => {
+    if (activeTab.value === 'incoming') {
+        return '/api/documents/incoming'
+    }
+
+    if (activeTab.value === 'outgoing') {
+        return '/api/documents/outgoing'
+    }
+
+    return '/api/documents'
+}
 
 const fetchDocuments = async () => {
     loading.value = true
     error.value = ''
 
     try {
-        const token = localStorage.getItem('auth_token')
+        const response = await fetch(
+            getDocumentEndpoint(),
+            {
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            }
+        )
 
-        const response = await fetch('/api/documents', {
-            headers: {
-                Accept: 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-        })
+        const data = await response.json()
 
         if (!response.ok) {
-            throw new Error('Unable to load documents.')
+            throw new Error(
+                data.message ||
+                'Unable to load documents.'
+            )
         }
 
-        documents.value = await response.json()
+        documents.value = Array.isArray(data)
+            ? data
+            : []
+
     } catch (err) {
-        error.value = err.message || 'Unable to load documents.'
+        documents.value = []
+
+        error.value =
+            err.message ||
+            'Unable to load documents.'
     } finally {
         loading.value = false
     }
 }
 
-const openCreateForm = () => {
-    title.value = ''
-    description.value = ''
+/*
+|--------------------------------------------------------------------------
+| Change Document Tab
+|--------------------------------------------------------------------------
+*/
+
+const changeTab = async (tab) => {
+    if (
+        activeTab.value === tab ||
+        loading.value
+    ) {
+        return
+    }
+
+    activeTab.value = tab
+
+    await fetchDocuments()
+}
+
+/*
+|--------------------------------------------------------------------------
+| Form Options API
+|--------------------------------------------------------------------------
+*/
+
+const fetchFormOptions = async () => {
+    optionsLoading.value = true
+    createError.value = ''
+
+    try {
+        const response = await fetch(
+            '/api/document-form-options',
+            {
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            }
+        )
+
+        const data = await response.json()
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                'Unable to load document form options.'
+            )
+        }
+
+        documentTypes.value =
+            data.document_types || []
+
+        priorities.value =
+            data.priorities || []
+
+        confidentialityLevels.value =
+            data.confidentiality_levels || []
+
+        offices.value =
+            data.offices || []
+
+    } catch (err) {
+        createError.value =
+            err.message ||
+            'Unable to load document form options.'
+    } finally {
+        optionsLoading.value = false
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Reset Registration Form
+|--------------------------------------------------------------------------
+*/
+
+const resetForm = () => {
+    form.value = {
+        title: '',
+        description: '',
+        document_type_id: '',
+        priority_id: '',
+        confidentiality_level_id: '',
+        origin_office_id: '',
+        document_date:
+            new Date().toISOString().slice(0, 10),
+        due_date: '',
+    }
+
     createError.value = ''
     createSuccess.value = ''
-    showCreateForm.value = true
 }
+
+/*
+|--------------------------------------------------------------------------
+| Open Registration Form
+|--------------------------------------------------------------------------
+*/
+
+const openCreateForm = async () => {
+    resetForm()
+
+    showCreateForm.value = true
+
+    if (
+        documentTypes.value.length === 0 ||
+        priorities.value.length === 0 ||
+        confidentialityLevels.value.length === 0 ||
+        offices.value.length === 0
+    ) {
+        await fetchFormOptions()
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Priority = Normal
+    |--------------------------------------------------------------------------
+    */
+
+    const normalPriority =
+        priorities.value.find(
+            priority =>
+                priority.priority_name === 'Normal'
+        )
+
+    if (normalPriority) {
+        form.value.priority_id =
+            normalPriority.id
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Confidentiality = Public
+    |--------------------------------------------------------------------------
+    */
+
+    const publicLevel =
+        confidentialityLevels.value.find(
+            level =>
+                level.level_name === 'Public'
+        )
+
+    if (publicLevel) {
+        form.value.confidentiality_level_id =
+            publicLevel.id
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Close Registration Form
+|--------------------------------------------------------------------------
+*/
 
 const closeCreateForm = () => {
     if (creating.value) {
@@ -72,62 +312,336 @@ const closeCreateForm = () => {
     }
 
     showCreateForm.value = false
+
+    resetForm()
 }
+
+/*
+|--------------------------------------------------------------------------
+| Register Document
+|--------------------------------------------------------------------------
+*/
 
 const createDocument = async () => {
     createError.value = ''
     createSuccess.value = ''
 
-    if (!title.value.trim()) {
-        createError.value = 'Document title is required.'
+    if (!form.value.title.trim()) {
+        createError.value =
+            'Document title is required.'
+
+        return
+    }
+
+    if (!form.value.document_type_id) {
+        createError.value =
+            'Document type is required.'
+
+        return
+    }
+
+    if (!form.value.priority_id) {
+        createError.value =
+            'Priority is required.'
+
+        return
+    }
+
+    if (!form.value.confidentiality_level_id) {
+        createError.value =
+            'Confidentiality level is required.'
+
+        return
+    }
+
+    if (!form.value.origin_office_id) {
+        createError.value =
+            'Origin office is required.'
+
+        return
+    }
+
+    if (!form.value.document_date) {
+        createError.value =
+            'Document date is required.'
+
         return
     }
 
     creating.value = true
 
     try {
-        const token = localStorage.getItem('auth_token')
+        const response = await fetch(
+            '/api/documents',
+            {
+                method: 'POST',
 
-        const response = await fetch('/api/documents', {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-                title: title.value,
-                description: description.value || null,
-            }),
-        })
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+
+                body: JSON.stringify({
+                    title:
+                        form.value.title.trim(),
+
+                    description:
+                        form.value.description.trim() ||
+                        null,
+
+                    document_type_id:
+                        Number(
+                            form.value.document_type_id
+                        ),
+
+                    priority_id:
+                        Number(
+                            form.value.priority_id
+                        ),
+
+                    confidentiality_level_id:
+                        Number(
+                            form.value
+                                .confidentiality_level_id
+                        ),
+
+                    origin_office_id:
+                        Number(
+                            form.value.origin_office_id
+                        ),
+
+                    document_date:
+                        form.value.document_date,
+
+                    due_date:
+                        form.value.due_date ||
+                        null,
+                }),
+            }
+        )
 
         const data = await response.json()
 
         if (!response.ok) {
+            if (data.errors) {
+                const firstError =
+                    Object.values(
+                        data.errors
+                    )[0]
+
+                throw new Error(
+                    Array.isArray(firstError)
+                        ? firstError[0]
+                        : firstError
+                )
+            }
+
             throw new Error(
-                data.message || 'Unable to create document.'
+                data.message ||
+                'Unable to register document.'
             )
         }
 
-        createSuccess.value = 'Document created successfully.'
+        createSuccess.value =
+            'Document registered successfully.'
 
-        title.value = ''
-        description.value = ''
+        /*
+        |--------------------------------------------------------------------------
+        | Refresh current tab
+        |--------------------------------------------------------------------------
+        */
 
         await fetchDocuments()
 
-        setTimeout(() => {
-            showCreateForm.value = false
-            createSuccess.value = ''
-        }, 1000)
+        /*
+        |--------------------------------------------------------------------------
+        | Open Newly Registered Document
+        |--------------------------------------------------------------------------
+        */
+
+        if (data.document?.id) {
+            setTimeout(() => {
+                showCreateForm.value = false
+
+                router.push(
+                    `/documents/${data.document.id}`
+                )
+            }, 700)
+        }
 
     } catch (err) {
         createError.value =
-            err.message || 'Unable to create document.'
+            err.message ||
+            'Unable to register document.'
     } finally {
         creating.value = false
     }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Open Document
+|--------------------------------------------------------------------------
+*/
+
+const openDocument = (document) => {
+    router.push(
+        `/documents/${document.id}`
+    )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Relevant Route
+|--------------------------------------------------------------------------
+|
+| Incoming/outgoing endpoints return the routes relevant to the user's
+| office ordered newest first.
+|
+*/
+
+const getRelevantRoute = (document) => {
+    if (
+        !document.routes ||
+        document.routes.length === 0
+    ) {
+        return null
+    }
+
+    return document.routes[0]
+}
+
+/*
+|--------------------------------------------------------------------------
+| Incoming From Office
+|--------------------------------------------------------------------------
+*/
+
+const getFromOffice = (document) => {
+    const route =
+        getRelevantRoute(document)
+
+    return (
+        route?.from_office?.office_name ||
+        'N/A'
+    )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Outgoing To Office
+|--------------------------------------------------------------------------
+*/
+
+const getToOffice = (document) => {
+    const route =
+        getRelevantRoute(document)
+
+    return (
+        route?.to_office?.office_name ||
+        'N/A'
+    )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Route Status
+|--------------------------------------------------------------------------
+*/
+
+const getRouteStatus = (document) => {
+    const route =
+        getRelevantRoute(document)
+
+    if (!route) {
+        return (
+            document.status?.status_name ||
+            'N/A'
+        )
+    }
+
+    if (route.received_at) {
+        return 'Received'
+    }
+
+    return 'Awaiting Receipt'
+}
+
+/*
+|--------------------------------------------------------------------------
+| Status Badge
+|--------------------------------------------------------------------------
+*/
+
+const statusClass = (status) => {
+    switch (
+        String(status)
+            .toLowerCase()
+    ) {
+        case 'received':
+            return 'bg-blue-100 text-blue-700'
+
+        case 'forwarded':
+        case 'awaiting receipt':
+            return 'bg-indigo-100 text-indigo-700'
+
+        case 'pending':
+            return 'bg-yellow-100 text-yellow-700'
+
+        case 'approved':
+            return 'bg-green-100 text-green-700'
+
+        case 'completed':
+            return 'bg-emerald-100 text-emerald-700'
+
+        case 'returned':
+            return 'bg-orange-100 text-orange-700'
+
+        case 'cancelled':
+            return 'bg-red-100 text-red-700'
+
+        case 'archived':
+            return 'bg-slate-100 text-slate-700'
+
+        default:
+            return 'bg-gray-100 text-gray-700'
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Priority Badge
+|--------------------------------------------------------------------------
+*/
+
+const priorityClass = (priority) => {
+    switch (
+        String(priority)
+            .toLowerCase()
+    ) {
+        case 'urgent':
+            return 'bg-red-100 text-red-700'
+
+        case 'high':
+            return 'bg-orange-100 text-orange-700'
+
+        case 'normal':
+            return 'bg-blue-100 text-blue-700'
+
+        case 'low':
+            return 'bg-gray-100 text-gray-700'
+
+        default:
+            return 'bg-gray-100 text-gray-700'
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Date Formatting
+|--------------------------------------------------------------------------
+*/
 
 const formatDate = (date) => {
     if (!date) {
@@ -136,6 +650,30 @@ const formatDate = (date) => {
 
     return new Date(date).toLocaleString()
 }
+
+/*
+|--------------------------------------------------------------------------
+| Empty State Text
+|--------------------------------------------------------------------------
+*/
+
+const emptyMessage = () => {
+    if (activeTab.value === 'incoming') {
+        return 'No incoming documents found.'
+    }
+
+    if (activeTab.value === 'outgoing') {
+        return 'No outgoing documents found.'
+    }
+
+    return 'No documents found.'
+}
+
+/*
+|--------------------------------------------------------------------------
+| Page Load
+|--------------------------------------------------------------------------
+*/
 
 onMounted(() => {
     fetchDocuments()
@@ -148,16 +686,19 @@ onMounted(() => {
         <!-- Header -->
         <div
             class="bg-white border-b px-6 py-4
-            flex items-center justify-between"
+                   flex items-center justify-between"
         >
-
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">
+                <h1
+                    class="text-2xl font-bold text-gray-800"
+                >
                     Documents
                 </h1>
 
-                <p class="text-sm text-gray-500 mt-1">
-                    Document Management
+                <p
+                    class="text-sm text-gray-500 mt-1"
+                >
+                    Document Registration and Management
                 </p>
             </div>
 
@@ -165,9 +706,8 @@ onMounted(() => {
                 @click="openCreateForm"
                 class="bg-blue-600 hover:bg-blue-700"
             >
-                + New Document
+                + Register Document
             </Button>
-
         </div>
 
         <!-- Main Content -->
@@ -175,10 +715,44 @@ onMounted(() => {
 
             <Card>
 
-                <CardHeader>
-                    <CardTitle>
-                        Document List
-                    </CardTitle>
+                <CardHeader
+                    class="space-y-4"
+                >
+                    <div>
+                        <CardTitle>
+                            Document Management
+                        </CardTitle>
+
+                        <p
+                            class="text-sm text-gray-500 mt-1"
+                        >
+                            View and manage registered,
+                            incoming, and outgoing documents.
+                        </p>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div
+                        class="flex flex-wrap gap-2
+                               border-b border-gray-200"
+                    >
+                        <button
+                            v-for="tab in tabs"
+                            :key="tab.key"
+                            type="button"
+                            @click="changeTab(tab.key)"
+                            class="px-4 py-3 text-sm
+                                   font-semibold border-b-2
+                                   transition-colors"
+                            :class="
+                                activeTab === tab.key
+                                    ? 'border-blue-600 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                            "
+                        >
+                            {{ tab.label }}
+                        </button>
+                    </div>
                 </CardHeader>
 
                 <CardContent>
@@ -186,7 +760,7 @@ onMounted(() => {
                     <!-- Loading -->
                     <div
                         v-if="loading"
-                        class="py-8 text-center text-gray-500"
+                        class="py-10 text-center text-gray-500"
                     >
                         Loading documents...
                     </div>
@@ -194,72 +768,262 @@ onMounted(() => {
                     <!-- Error -->
                     <div
                         v-else-if="error"
-                        class="py-8 text-center text-red-500"
+                        class="rounded-md border border-red-200
+                               bg-red-50 p-4 text-center
+                               text-red-600"
                     >
                         {{ error }}
                     </div>
 
-                    <!-- No documents -->
+                    <!-- Empty -->
                     <div
                         v-else-if="documents.length === 0"
-                        class="py-8 text-center text-gray-500"
+                        class="py-10 text-center text-gray-500"
                     >
-                        No documents found.
+                        {{ emptyMessage() }}
                     </div>
 
-                    <!-- Documents -->
-                    <Table v-else>
+                    <!-- Document Table -->
+                    <div
+                        v-else
+                        class="overflow-x-auto"
+                    >
+                        <Table>
 
-                        <TableHeader>
-                            <TableRow>
+                            <TableHeader>
+                                <TableRow>
 
-                                <TableHead>
-                                    Tracking No.
-                                </TableHead>
+                                    <TableHead>
+                                        Tracking No.
+                                    </TableHead>
 
-                                <TableHead>
-                                    Title
-                                </TableHead>
+                                    <TableHead>
+                                        Type
+                                    </TableHead>
 
-                                <TableHead>
-                                    Status
-                                </TableHead>
+                                    <TableHead>
+                                        Title / Subject
+                                    </TableHead>
 
-                                <TableHead>
-                                    Date
-                                </TableHead>
+                                    <!-- Incoming -->
+                                    <TableHead
+                                        v-if="activeTab === 'incoming'"
+                                    >
+                                        From Office
+                                    </TableHead>
 
-                            </TableRow>
-                        </TableHeader>
+                                    <!-- Outgoing -->
+                                    <TableHead
+                                        v-if="activeTab === 'outgoing'"
+                                    >
+                                        To Office
+                                    </TableHead>
 
-                        <TableBody>
+                                    <!-- All -->
+                                    <TableHead
+                                        v-if="activeTab === 'all'"
+                                    >
+                                        Priority
+                                    </TableHead>
 
-                            <TableRow
-                                v-for="document in documents"
-                                :key="document.id"
-                            >
+                                    <TableHead>
+                                        Status
+                                    </TableHead>
 
-                                <TableCell class="font-medium">
-                                    {{ document.tracking_no }}
-                                </TableCell>
+                                    <!-- All -->
+                                    <TableHead
+                                        v-if="activeTab === 'all'"
+                                    >
+                                        Current Office
+                                    </TableHead>
 
-                                <TableCell>
-                                    {{ document.title }}
-                                </TableCell>
+                                    <TableHead>
+                                        {{
+                                            activeTab === 'incoming'
+                                                ? 'Received'
+                                                : activeTab === 'outgoing'
+                                                    ? 'Forwarded'
+                                                    : 'Date'
+                                        }}
+                                    </TableHead>
 
-                                <TableCell>
-                                    {{ document.status?.status_name || 'N/A' }}
-                                </TableCell>
+                                </TableRow>
+                            </TableHeader>
 
-                                <TableCell>
-                                    {{ formatDate(document.created_at) }}
-                                </TableCell>
+                            <TableBody>
 
-                            </TableRow>
+                                <TableRow
+                                    v-for="document in documents"
+                                    :key="document.id"
+                                    class="cursor-pointer hover:bg-gray-50"
+                                    @click="openDocument(document)"
+                                >
 
-                        </TableBody>
+                                    <!-- Tracking -->
+                                    <TableCell
+                                        class="font-medium"
+                                    >
+                                        {{ document.tracking_no }}
+                                    </TableCell>
 
-                    </Table>
+                                    <!-- Type -->
+                                    <TableCell>
+                                        {{
+                                            document.type?.type_name
+                                            || 'N/A'
+                                        }}
+                                    </TableCell>
+
+                                    <!-- Title -->
+                                    <TableCell>
+                                        <div
+                                            class="max-w-xs"
+                                        >
+                                            <p
+                                                class="font-medium
+                                                       text-gray-800"
+                                            >
+                                                {{ document.title }}
+                                            </p>
+                                        </div>
+                                    </TableCell>
+
+                                    <!-- Incoming From -->
+                                    <TableCell
+                                        v-if="activeTab === 'incoming'"
+                                    >
+                                        {{ getFromOffice(document) }}
+                                    </TableCell>
+
+                                    <!-- Outgoing To -->
+                                    <TableCell
+                                        v-if="activeTab === 'outgoing'"
+                                    >
+                                        {{ getToOffice(document) }}
+                                    </TableCell>
+
+                                    <!-- Priority -->
+                                    <TableCell
+                                        v-if="activeTab === 'all'"
+                                    >
+                                        <span
+                                            class="inline-flex rounded-full
+                                                   px-2.5 py-1 text-xs
+                                                   font-semibold"
+                                            :class="
+                                                priorityClass(
+                                                    document.priority
+                                                        ?.priority_name
+                                                )
+                                            "
+                                        >
+                                            {{
+                                                document.priority
+                                                    ?.priority_name
+                                                || 'N/A'
+                                            }}
+                                        </span>
+                                    </TableCell>
+
+                                    <!-- Status -->
+                                    <TableCell>
+                                        <span
+                                            class="inline-flex rounded-full
+                                                   px-2.5 py-1 text-xs
+                                                   font-semibold"
+                                            :class="
+                                                statusClass(
+                                                    activeTab === 'all'
+                                                        ? document.status
+                                                            ?.status_name
+                                                        : getRouteStatus(
+                                                            document
+                                                        )
+                                                )
+                                            "
+                                        >
+                                            {{
+                                                activeTab === 'all'
+                                                    ? (
+                                                        document.status
+                                                            ?.status_name
+                                                        || 'N/A'
+                                                    )
+                                                    : getRouteStatus(
+                                                        document
+                                                    )
+                                            }}
+                                        </span>
+                                    </TableCell>
+
+                                    <!-- Current Office -->
+                                    <TableCell
+                                        v-if="activeTab === 'all'"
+                                    >
+                                        {{
+                                            document.current_office
+                                                ?.office_name
+                                            || 'N/A'
+                                        }}
+                                    </TableCell>
+
+                                    <!-- Date -->
+                                    <TableCell>
+
+                                        <!-- Incoming -->
+                                        <template
+                                            v-if="
+                                                activeTab ===
+                                                'incoming'
+                                            "
+                                        >
+                                            {{
+                                                getRelevantRoute(document)
+                                                    ?.received_at
+                                                    ? formatDate(
+                                                        getRelevantRoute(
+                                                            document
+                                                        ).received_at
+                                                    )
+                                                    : 'Awaiting Receipt'
+                                            }}
+                                        </template>
+
+                                        <!-- Outgoing -->
+                                        <template
+                                            v-else-if="
+                                                activeTab ===
+                                                'outgoing'
+                                            "
+                                        >
+                                            {{
+                                                formatDate(
+                                                    getRelevantRoute(
+                                                        document
+                                                    )?.forwarded_at
+                                                )
+                                            }}
+                                        </template>
+
+                                        <!-- All -->
+                                        <template
+                                            v-else
+                                        >
+                                            {{
+                                                formatDate(
+                                                    document.created_at
+                                                )
+                                            }}
+                                        </template>
+
+                                    </TableCell>
+
+                                </TableRow>
+
+                            </TableBody>
+
+                        </Table>
+                    </div>
 
                 </CardContent>
 
@@ -267,85 +1031,299 @@ onMounted(() => {
 
         </div>
 
-        <!-- Create Document Modal -->
+        <!-- Register Document Modal -->
         <div
             v-if="showCreateForm"
-            class="fixed inset-0 z-50
-            flex items-center justify-center
-            bg-black/50 px-4"
+            class="fixed inset-0 z-50 flex
+                   items-center justify-center
+                   bg-black/50 px-4 py-6"
         >
 
-            <Card class="w-full max-w-lg">
+            <Card
+                class="w-full max-w-3xl max-h-[90vh]
+                       overflow-y-auto bg-white"
+            >
 
                 <CardHeader>
 
                     <CardTitle>
-                        Create New Document
+                        Register New Document
                     </CardTitle>
+
+                    <p
+                        class="text-sm text-gray-500"
+                    >
+                        Enter the document information below.
+                        Tracking number will be generated
+                        automatically.
+                    </p>
 
                 </CardHeader>
 
                 <CardContent>
 
+                    <!-- Options Loading -->
+                    <div
+                        v-if="optionsLoading"
+                        class="py-10 text-center text-gray-500"
+                    >
+                        Loading form options...
+                    </div>
+
+                    <!-- Registration Form -->
                     <form
+                        v-else
                         @submit.prevent="createDocument"
                         class="space-y-5"
                     >
 
+                        <!-- Type + Priority -->
+                        <div
+                            class="grid grid-cols-1
+                                   md:grid-cols-2 gap-4"
+                        >
+
+                            <div>
+                                <label
+                                    class="block mb-2 text-sm
+                                           font-semibold
+                                           text-gray-700"
+                                >
+                                    Document Type *
+                                </label>
+
+                                <select
+                                    v-model="form.document_type_id"
+                                    :disabled="creating"
+                                    class="w-full h-11 rounded-md
+                                           border border-gray-300
+                                           bg-white px-3 text-sm
+                                           outline-none
+                                           focus:border-blue-500
+                                           focus:ring-1
+                                           focus:ring-blue-500"
+                                >
+                                    <option value="">
+                                        Select Document Type
+                                    </option>
+
+                                    <option
+                                        v-for="type in documentTypes"
+                                        :key="type.id"
+                                        :value="type.id"
+                                    >
+                                        {{ type.type_name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label
+                                    class="block mb-2 text-sm
+                                           font-semibold
+                                           text-gray-700"
+                                >
+                                    Priority *
+                                </label>
+
+                                <select
+                                    v-model="form.priority_id"
+                                    :disabled="creating"
+                                    class="w-full h-11 rounded-md
+                                           border border-gray-300
+                                           bg-white px-3 text-sm
+                                           outline-none
+                                           focus:border-blue-500
+                                           focus:ring-1
+                                           focus:ring-blue-500"
+                                >
+                                    <option value="">
+                                        Select Priority
+                                    </option>
+
+                                    <option
+                                        v-for="priority in priorities"
+                                        :key="priority.id"
+                                        :value="priority.id"
+                                    >
+                                        {{ priority.priority_name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                        </div>
+
                         <!-- Title -->
                         <div>
-
                             <label
-                                class="block mb-2
-                                text-sm font-semibold
-                                text-gray-700"
+                                class="block mb-2 text-sm
+                                       font-semibold text-gray-700"
                             >
-                                Document Title
+                                Title / Subject *
                             </label>
 
                             <Input
-                                v-model="title"
+                                v-model="form.title"
                                 type="text"
-                                placeholder="Enter document title"
+                                placeholder="Enter document title or subject"
                                 class="h-11"
                                 :disabled="creating"
                             />
-
                         </div>
 
                         <!-- Description -->
                         <div>
-
                             <label
-                                class="block mb-2
-                                text-sm font-semibold
-                                text-gray-700"
+                                class="block mb-2 text-sm
+                                       font-semibold text-gray-700"
                             >
-                                Description
+                                Document Details
                             </label>
 
                             <textarea
-                                v-model="description"
-                                rows="5"
-                                placeholder="Enter document description"
+                                v-model="form.description"
+                                rows="4"
+                                placeholder="Enter document details"
                                 :disabled="creating"
                                 class="w-full rounded-md
-                                border border-gray-300
-                                px-3 py-2 text-sm
-                                focus:outline-none
-                                focus:ring-2
-                                focus:ring-blue-500"
+                                       border border-gray-300
+                                       px-3 py-2 text-sm
+                                       focus:outline-none
+                                       focus:ring-2
+                                       focus:ring-blue-500"
                             ></textarea>
+                        </div>
+
+                        <!-- Confidentiality + Origin -->
+                        <div
+                            class="grid grid-cols-1
+                                   md:grid-cols-2 gap-4"
+                        >
+
+                            <div>
+                                <label
+                                    class="block mb-2 text-sm
+                                           font-semibold
+                                           text-gray-700"
+                                >
+                                    Confidentiality *
+                                </label>
+
+                                <select
+                                    v-model="
+                                        form.confidentiality_level_id
+                                    "
+                                    :disabled="creating"
+                                    class="w-full h-11 rounded-md
+                                           border border-gray-300
+                                           bg-white px-3 text-sm
+                                           outline-none
+                                           focus:border-blue-500
+                                           focus:ring-1
+                                           focus:ring-blue-500"
+                                >
+                                    <option value="">
+                                        Select Confidentiality
+                                    </option>
+
+                                    <option
+                                        v-for="
+                                            level in
+                                            confidentialityLevels
+                                        "
+                                        :key="level.id"
+                                        :value="level.id"
+                                    >
+                                        {{ level.level_name }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label
+                                    class="block mb-2 text-sm
+                                           font-semibold
+                                           text-gray-700"
+                                >
+                                    Origin Office *
+                                </label>
+
+                                <select
+                                    v-model="form.origin_office_id"
+                                    :disabled="creating"
+                                    class="w-full h-11 rounded-md
+                                           border border-gray-300
+                                           bg-white px-3 text-sm
+                                           outline-none
+                                           focus:border-blue-500
+                                           focus:ring-1
+                                           focus:ring-blue-500"
+                                >
+                                    <option value="">
+                                        Select Origin Office
+                                    </option>
+
+                                    <option
+                                        v-for="office in offices"
+                                        :key="office.id"
+                                        :value="office.id"
+                                    >
+                                        {{ office.office_name }}
+                                        ({{ office.office_code }})
+                                    </option>
+                                </select>
+                            </div>
+
+                        </div>
+
+                        <!-- Dates -->
+                        <div
+                            class="grid grid-cols-1
+                                   md:grid-cols-2 gap-4"
+                        >
+
+                            <div>
+                                <label
+                                    class="block mb-2 text-sm
+                                           font-semibold
+                                           text-gray-700"
+                                >
+                                    Document Date *
+                                </label>
+
+                                <Input
+                                    v-model="form.document_date"
+                                    type="date"
+                                    class="h-11"
+                                    :disabled="creating"
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    class="block mb-2 text-sm
+                                           font-semibold
+                                           text-gray-700"
+                                >
+                                    Due Date
+                                </label>
+
+                                <Input
+                                    v-model="form.due_date"
+                                    type="date"
+                                    class="h-11"
+                                    :disabled="creating"
+                                />
+                            </div>
 
                         </div>
 
                         <!-- Error -->
                         <div
                             v-if="createError"
-                            class="rounded-md
-                            bg-red-50
-                            border border-red-200
-                            p-3 text-sm text-red-600"
+                            class="rounded-md bg-red-50
+                                   border border-red-200 p-3
+                                   text-sm text-red-600"
                         >
                             {{ createError }}
                         </div>
@@ -353,10 +1331,10 @@ onMounted(() => {
                         <!-- Success -->
                         <div
                             v-if="createSuccess"
-                            class="rounded-md
-                            bg-green-50
-                            border border-green-200
-                            p-3 text-sm text-green-600"
+                            class="rounded-md bg-green-50
+                                   border border-green-200 p-3
+                                   text-sm font-semibold
+                                   text-green-700"
                         >
                             {{ createSuccess }}
                         </div>
@@ -365,7 +1343,6 @@ onMounted(() => {
                         <div
                             class="flex justify-end gap-3 pt-2"
                         >
-
                             <Button
                                 type="button"
                                 variant="outline"
@@ -377,17 +1354,15 @@ onMounted(() => {
 
                             <Button
                                 type="submit"
-                                class="bg-blue-600
-                                hover:bg-blue-700"
+                                class="bg-blue-600 hover:bg-blue-700"
                                 :disabled="creating"
                             >
                                 {{
                                     creating
-                                        ? 'Creating...'
-                                        : 'Create Document'
+                                        ? 'Registering...'
+                                        : 'Register Document'
                                 }}
                             </Button>
-
                         </div>
 
                     </form>

@@ -8,8 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Priority extends Model
 {
     protected $fillable = [
-        'name',
-        'description',
+        'priority_name',
     ];
 
     public function documents(): HasMany
