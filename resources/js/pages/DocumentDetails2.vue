@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
@@ -11,16 +11,6 @@ import {
 } from '@/components/ui/card'
 
 import { Button } from '@/components/ui/button'
-
-import {
-    ArrowLeft,
-    ArrowRight,
-    Send,
-    Paperclip,
-    Upload,
-} from 'lucide-vue-next'
-
-import { can } from '@/lib/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -397,17 +387,10 @@ const fetchAttachments = async () => {
 */
 
 const canManageAttachments = computed(() => {
-    return (
-        can('attachments.manage') &&
-        routingOptions.value?.can_act === true
-    )
+    return routingOptions.value?.can_act === true
 })
 
 const canAccessAttachments = computed(() => {
-    if (!can('attachments.view')) {
-        return false
-    }
-
     const userOfficeId =
         Number(
             routingOptions.value?.user?.office_id
@@ -891,17 +874,17 @@ const fetchProcessing = async () => {
 
 const canUpdateProcessing = computed(() => {
     return (
-        can('documents.process') &&
-        processingInfo.value?.can_update === true
+        processingInfo.value?.can_update ===
+        true
     )
 })
 
 const processingEventLabel = (eventType) => {
     const labels = {
-        registered: 'Registration',
-        action_updated: 'Processing Update',
-        forwarded: 'Route Forward',
-        received: 'Route Receive',
+        registered: 'Registered',
+        action_updated: 'Action Updated',
+        forwarded: 'Forwarded',
+        received: 'Received',
     }
 
     return (
@@ -1106,7 +1089,7 @@ const historyRows = computed(() => {
                 status = 'Forwarded'
 
                 actionTaken =
-                    actionTaken = actionName
+                    `${actionName} → ${toOffice}`
 
                 detail =
                     linkedRoute?.remarks ||
@@ -1153,11 +1136,6 @@ const historyRows = computed(() => {
 
                 action_taken:
                     actionTaken,
-
-                    forward_to_office:
-                        item?.event_type === 'forwarded'
-                            ? toOffice
-                            : null,
 
                 detail,
 
@@ -1220,7 +1198,9 @@ const historyRows = computed(() => {
                     'Forwarded',
 
                 action:
-                    'Route Forward',
+                    routeItem?.action
+                        ?.action_name ||
+                    'Forwarded',
 
                 from_office:
                     fromOffice,
@@ -1228,7 +1208,7 @@ const historyRows = computed(() => {
                 action_taken:
                     routeItem?.received_at
                         ? `To ${toOffice}`
-                        : `To ${toOffice} â€” Awaiting Receipt`,
+                        : `To ${toOffice} — Awaiting Receipt`,
 
                 detail:
                     routeItem?.remarks ||
@@ -1259,7 +1239,7 @@ const historyRows = computed(() => {
                     'Received',
 
                 action:
-                    'Route Receive',
+                    'Received',
 
                 from_office:
                     fromOffice,
@@ -1524,7 +1504,6 @@ const pendingRoute = computed(() => {
 
 const canReceive = computed(() => {
     if (
-        !can('documents.route') ||
         !pendingRoute.value ||
         !routingOptions.value?.user
     ) {
@@ -1543,7 +1522,6 @@ const canReceive = computed(() => {
 
 const canForward = computed(() => {
     if (
-        !can('documents.route') ||
         !routingOptions.value?.can_act
     ) {
         return false
@@ -1772,35 +1750,6 @@ const formatDate = (date) => {
     ).toLocaleString()
 }
 
-const formatHistoryDateOnly = (date) => {
-    if (!date) {
-        return 'N/A'
-    }
-
-    return new Date(date).toLocaleDateString(
-        'en-US',
-        {
-            month: '2-digit',
-            day: '2-digit',
-            year: '2-digit',
-        }
-    )
-}
-
-const formatHistoryTimeOnly = (date) => {
-    if (!date) {
-        return ''
-    }
-
-    return new Date(date).toLocaleTimeString(
-        'en-US',
-        {
-            hour: 'numeric',
-            minute: '2-digit',
-        }
-    )
-}
-
 const formatSimpleDate = (date) => {
     if (!date) {
         return 'N/A'
@@ -1850,12 +1799,11 @@ onMounted(() => {
                 </div>
 
                 <Button
-                        variant="outline"
-                        @click="goBack"
-                    >
-                        <ArrowLeft class="mr-2 h-4 w-4" />
-                        Back to Documents
-                    </Button>
+                    variant="outline"
+                    @click="goBack"
+                >
+                    ← Back to Documents
+                </Button>
 
             </div>
 
@@ -1933,8 +1881,7 @@ onMounted(() => {
                                     class="bg-blue-600 text-white hover:bg-blue-700"
                                     @click="openForwardModal"
                                 >
-                                    <Send class="mr-2 h-4 w-4" />
-                                        Forward Document        
+                                    Forward Document
                                 </Button>
 
                             </div>
@@ -2189,7 +2136,7 @@ onMounted(() => {
                                     <div
                                         class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
                                     >
-                                        Registered QR â€¢ Linked to this document
+                                        Registered QR • Linked to this document
                                     </div>
 
                                     <Button
@@ -2562,7 +2509,7 @@ onMounted(() => {
                         >
 
                             <table
-                                class="w-full min-w-[900px] border-collapse text-left text-sm"
+                                class="w-full min-w-[1100px] border-collapse text-left text-sm"
                             >
 
                                 <thead
@@ -2572,37 +2519,37 @@ onMounted(() => {
                                     <tr>
 
                                         <th
-                                            class="border-b px-4 py-3 text-center"
+                                            class="border-b px-4 py-3"
                                         >
                                             Status
                                         </th>
 
                                         <th
-                                            class="border-b px-4 py-3 text-center"
+                                            class="border-b px-4 py-3"
                                         >
-                                            Event
+                                            Action
                                         </th>
 
                                         <th
-                                            class="border-b px-4 py-3 text-center"
+                                            class="border-b px-4 py-3"
                                         >
                                             From Office
                                         </th>
 
                                         <th
-                                            class="border-b px-4 py-3 text-center"
+                                            class="border-b px-4 py-3"
                                         >
                                             Action Taken / To Office
                                         </th>
 
                                         <th
-                                            class="w-[100px] border-b px-2 py-3 text-center"
+                                            class="border-b px-4 py-3"
                                         >
                                             Date
                                         </th>
 
                                         <th
-                                            class="border-b px-4 py-3 text-center"
+                                            class="border-b px-4 py-3"
                                         >
                                             By / Office
                                         </th>
@@ -2659,21 +2606,9 @@ onMounted(() => {
                                         >
 
                                             <p
-                                                class="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900"
+                                                class="font-semibold text-gray-900"
                                             >
-                                                <span>
-                                                    {{ row.action_taken }}
-                                                </span>
-
-                                                <template v-if="row.forward_to_office">
-                                                    <ArrowRight
-                                                        class="h-4 w-4 shrink-0 text-blue-600"
-                                                    />
-
-                                                    <span>
-                                                        {{ row.forward_to_office }}
-                                                    </span>
-                                                </template>
+                                                {{ row.action_taken }}
                                             </p>
 
                                             <p
@@ -2686,23 +2621,9 @@ onMounted(() => {
                                         </td>
 
                                         <td
-                                            class="w-[100px] px-2 py-4 text-center text-gray-600"
+                                            class="whitespace-nowrap px-4 py-4 text-gray-600"
                                         >
-                                            <div
-                                                class="mx-auto flex w-fit flex-col items-center leading-tight"
-                                            >
-                                                <span
-                                                    class="whitespace-nowrap text-xs font-medium"
-                                                >
-                                                    {{ formatHistoryDateOnly(row.date) }}
-                                                </span>
-
-                                                <span
-                                                    class="mt-1 whitespace-nowrap text-xs text-gray-500"
-                                                >
-                                                    {{ formatHistoryTimeOnly(row.date) }}
-                                                </span>
-                                            </div>
+                                            {{ formatDate(row.date) }}
                                         </td>
 
                                         <td
@@ -2823,8 +2744,6 @@ onMounted(() => {
                                                 +
                                             </span>
 
-                                            <Paperclip class="mr-2 h-4 w-4" />
-
                                             {{
                                                 selectedFiles.length === 0
                                                     ? 'Add Attachment'
@@ -2835,14 +2754,11 @@ onMounted(() => {
                                         <Button
                                             class="bg-blue-600 text-white hover:bg-blue-700"
                                             :disabled="
-
                                                 uploadingAttachment ||
                                                 selectedFiles.length === 0
                                             "
                                             @click="uploadAttachments"
                                         >
-                                            <Upload class="mr-2 h-4 w-4" />
-                                            
                                             {{
                                                 uploadingAttachment
                                                     ? 'Uploading...'
@@ -2908,7 +2824,7 @@ onMounted(() => {
                                         :disabled="uploadingAttachment"
                                         @click="removeSelectedFile(index)"
                                     >
-                                        Ã—
+                                        ×
                                     </button>
 
                                 </div>

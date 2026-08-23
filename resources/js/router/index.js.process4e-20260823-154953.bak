@@ -12,7 +12,6 @@ import QrResolver from '../pages/QrResolver.vue'
 import QrCodes from '../pages/QrCodes.vue'
 import Offices from '../pages/Offices.vue'
 import DocumentTypes from '../pages/DocumentTypes.vue'
-import Users from '../pages/Users.vue'
 
 import {
     can,
@@ -119,14 +118,6 @@ const routes = [
             permission: 'master_data.view',
         },
     },
-
-    {
-        path: '/users',
-        component: Users,
-        meta: {
-            permission: 'users.manage',
-        },
-    },
 ]
 
 const router = createRouter({
@@ -139,25 +130,35 @@ const router = createRouter({
 | Permission-Aware Navigation Guard
 |--------------------------------------------------------------------------
 |
-| Backend authorization remains authoritative. This guard improves the UI by
-| stopping an already-authenticated user from opening a page that their role
-| does not permit.
+| Backend authorization remains authoritative.
 |
-| If no token is present, the guard deliberately leaves the existing login / QR
-| redirect behavior untouched. We will integrate the login page more tightly in
-| the next frontend step after inspecting its current QR redirect logic.
+| This prevents an authenticated user from opening pages their
+| assigned role does not allow.
 |
 */
 
 router.beforeEach(async (to) => {
     const permission = to.meta?.permission
+
     const authenticated =
         to.meta?.authenticated === true ||
         Boolean(permission)
 
-    if (!authenticated || to.meta?.public) {
+    if (
+        !authenticated ||
+        to.meta?.public
+    ) {
         return true
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | No token
+    |--------------------------------------------------------------------------
+    |
+    | Leave the existing login/QR workflow untouched for now.
+    |
+    */
 
     if (!getToken()) {
         return true
@@ -166,14 +167,28 @@ router.beforeEach(async (to) => {
     try {
         await ensureCurrentUser()
     } catch {
-        // API authentication/error handling on the destination page remains
-        // the fallback. Do not disturb the existing login/QR workflow here.
+        /*
+        |--------------------------------------------------------------------------
+        | Let destination API handle authentication failure
+        |--------------------------------------------------------------------------
+        */
+
         return true
     }
 
-    if (permission && !can(permission)) {
+    /*
+    |--------------------------------------------------------------------------
+    | Permission check
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        permission &&
+        !can(permission)
+    ) {
         return {
             path: '/dashboard',
+
             query: {
                 forbidden: '1',
             },

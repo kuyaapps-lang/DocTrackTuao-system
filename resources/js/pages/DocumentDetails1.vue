@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
@@ -11,16 +11,6 @@ import {
 } from '@/components/ui/card'
 
 import { Button } from '@/components/ui/button'
-
-import {
-    ArrowLeft,
-    ArrowRight,
-    Send,
-    Paperclip,
-    Upload,
-} from 'lucide-vue-next'
-
-import { can } from '@/lib/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -40,22 +30,6 @@ const actionLoading = ref(false)
 
 const error = ref('')
 const successMessage = ref('')
-
-/*
-|--------------------------------------------------------------------------
-| Current Processing
-|--------------------------------------------------------------------------
-*/
-
-const processingInfo = ref(null)
-const processingLoading = ref(false)
-const processingSaving = ref(false)
-const processingError = ref('')
-
-const processingForm = ref({
-    current_action_id: '',
-    processing_note: '',
-})
 
 /*
 |--------------------------------------------------------------------------
@@ -170,29 +144,26 @@ const generateQRCode = async () => {
         return
     }
 
-    const qrToken =
-        document.value.qr_code?.qr_token
-
-    /*
-    |--------------------------------------------------------------------------
-    | Canonical issued QR only
-    |--------------------------------------------------------------------------
-    |
-    | Do not create a second QR from the tracking number. The QR shown here is
-    | the same issued token that was printed on the ORIGINAL and RECORD COPY.
-    |
-    */
-
-    if (!qrToken) {
-        return
-    }
-
     try {
-        const documentUrl =
-            `${window.location.origin}/q/${encodeURIComponent(
-                qrToken
-            )}`
+        /*
+        |--------------------------------------------------------------------------
+        | Current QR destination
+        |--------------------------------------------------------------------------
+        |
+        | For now QR opens the authenticated Document Details page.
+        |
+        | Later during Document Status / Inquiry sprint,
+        | this can be changed to:
+        |
+        | /track/{tracking_no}
+        |
+        */
 
+        const documentUrl =
+    `${window.location.origin}/track/${encodeURIComponent(
+        document.value.tracking_no
+    )}`
+    
         qrDataUrl.value =
             await QRCode.toDataURL(
                 documentUrl,
@@ -205,7 +176,7 @@ const generateQRCode = async () => {
 
     } catch (err) {
         qrError.value =
-            'Unable to generate the issued QR code.'
+            'Unable to generate QR code.'
     }
 }
 
@@ -218,8 +189,7 @@ const generateQRCode = async () => {
 const printQRCode = () => {
     if (
         !qrDataUrl.value ||
-        !document.value ||
-        !document.value.qr_code?.qr_token
+        !document.value
     ) {
         return
     }
@@ -237,9 +207,6 @@ const printQRCode = () => {
         return
     }
 
-    const qrToken =
-        document.value.qr_code.qr_token
-
     const trackingNo =
         document.value.tracking_no || ''
 
@@ -250,7 +217,7 @@ const printQRCode = () => {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Issued QR - ${qrToken}</title>
+            <title>Document QR - ${trackingNo}</title>
 
             <style>
                 body {
@@ -276,17 +243,10 @@ const printQRCode = () => {
                     margin-bottom: 5px;
                 }
 
-                .token {
-                    font-family: monospace;
-                    font-size: 20px;
+                .tracking {
+                    font-size: 18px;
                     font-weight: bold;
                     margin-top: 15px;
-                }
-
-                .tracking {
-                    margin-top: 8px;
-                    font-size: 14px;
-                    color: #4b5563;
                 }
 
                 .title {
@@ -312,12 +272,8 @@ const printQRCode = () => {
 
                 <img
                     src="${qrDataUrl.value}"
-                    alt="Issued Document QR Code"
+                    alt="Document QR Code"
                 >
-
-                <div class="token">
-                    ${qrToken}
-                </div>
 
                 <div class="tracking">
                     ${trackingNo}
@@ -328,7 +284,7 @@ const printQRCode = () => {
                 </div>
 
                 <div class="instruction">
-                    This is the issued QR linked to this document.
+                    Scan this QR code to view the document record.
                 </div>
 
             </div>
@@ -397,17 +353,10 @@ const fetchAttachments = async () => {
 */
 
 const canManageAttachments = computed(() => {
-    return (
-        can('attachments.manage') &&
-        routingOptions.value?.can_act === true
-    )
+    return routingOptions.value?.can_act === true
 })
 
 const canAccessAttachments = computed(() => {
-    if (!can('attachments.view')) {
-        return false
-    }
-
     const userOfficeId =
         Number(
             routingOptions.value?.user?.office_id
@@ -829,568 +778,6 @@ const formatFileSize = (bytes) => {
 
 /*
 |--------------------------------------------------------------------------
-| Fetch Current Processing
-|--------------------------------------------------------------------------
-*/
-
-const fetchProcessing = async () => {
-    processingLoading.value = true
-    processingError.value = ''
-
-    try {
-        const response = await fetch(
-            `/api/documents/${route.params.id}/processing`,
-            {
-                headers: {
-                    Accept: 'application/json',
-                    Authorization: `Bearer ${getToken()}`,
-                },
-            }
-        )
-
-        const data = await response.json()
-
-        if (!response.ok) {
-            throw new Error(
-                data.message ||
-                'Unable to load current processing information.'
-            )
-        }
-
-        processingInfo.value = data
-
-        processingForm.value = {
-            current_action_id:
-                data.current_action?.id
-                    ? String(
-                        data.current_action.id
-                    )
-                    : '',
-
-            processing_note:
-                data.processing_note || '',
-        }
-
-    } catch (err) {
-        processingError.value =
-            err.message ||
-            'Unable to load current processing information.'
-
-        throw err
-
-    } finally {
-        processingLoading.value = false
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
-| Can Update Current Processing
-|--------------------------------------------------------------------------
-*/
-
-const canUpdateProcessing = computed(() => {
-    return (
-        can('documents.process') &&
-        processingInfo.value?.can_update === true
-    )
-})
-
-const processingEventLabel = (eventType) => {
-    const labels = {
-        registered: 'Registration',
-        action_updated: 'Processing Update',
-        forwarded: 'Route Forward',
-        received: 'Route Receive',
-    }
-
-    return (
-        labels[eventType] ||
-        'Processing Update'
-    )
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Consolidated Document History
-|--------------------------------------------------------------------------
-|
-| Processing logs are the authoritative source for Process 3 events.
-| Older movement routes created before Processing History existed are
-| converted into table rows so legacy document movements remain visible.
-| A route already represented by a processing log is not added again.
-|
-*/
-
-const findRouteForProcessingLog = (item) => {
-    const routeId = Number(
-        item?.document_route_id ||
-        item?.route?.id ||
-        0
-    )
-
-    if (!routeId) {
-        return item?.route || null
-    }
-
-    return (
-        history.value.find(
-            routeItem =>
-                Number(routeItem.id) === routeId
-        ) ||
-        item?.route ||
-        null
-    )
-}
-
-const historyTimestamp = (date) => {
-    if (!date) {
-        return 0
-    }
-
-    const value = new Date(date).getTime()
-
-    return Number.isNaN(value)
-        ? 0
-        : value
-}
-
-/*
-|--------------------------------------------------------------------------
-| Reconstruct Document Status At A Historical Time
-|--------------------------------------------------------------------------
-|
-| Processing logs currently store the action and event, but not a separate
-| document-status snapshot. For manual processing updates we reconstruct the
-| status from the latest routing movement that happened before the log time.
-|
-*/
-
-const statusAtDate = (date) => {
-    const targetTime =
-        historyTimestamp(date)
-
-    let latestStatus =
-        'Registered'
-
-    let latestTime = 0
-
-    for (const routeItem of history.value) {
-        const forwardedTime =
-            historyTimestamp(
-                routeItem?.forwarded_at
-            )
-
-        if (
-            forwardedTime &&
-            forwardedTime <= targetTime &&
-            forwardedTime >= latestTime
-        ) {
-            latestStatus = 'Forwarded'
-            latestTime = forwardedTime
-        }
-
-        const receivedTime =
-            historyTimestamp(
-                routeItem?.received_at
-            )
-
-        if (
-            receivedTime &&
-            receivedTime <= targetTime &&
-            receivedTime >= latestTime
-        ) {
-            latestStatus = 'Received'
-            latestTime = receivedTime
-        }
-    }
-
-    return latestStatus
-}
-
-const historyRows = computed(() => {
-    const processingLogs =
-        Array.isArray(
-            processingInfo.value?.history
-        )
-            ? processingInfo.value.history
-            : []
-
-    /*
-    |--------------------------------------------------------------------------
-    | Route IDs already represented in Processing History
-    |--------------------------------------------------------------------------
-    */
-
-    const representedRouteIds =
-        new Set(
-            processingLogs
-                .map(item =>
-                    Number(
-                        item?.document_route_id ||
-                        item?.route?.id ||
-                        0
-                    )
-                )
-                .filter(Boolean)
-        )
-
-    /*
-    |--------------------------------------------------------------------------
-    | Process 3 processing rows
-    |--------------------------------------------------------------------------
-    */
-
-    const processingRows =
-        processingLogs.map(item => {
-            const linkedRoute =
-                findRouteForProcessingLog(
-                    item
-                )
-
-            const fromOffice =
-                linkedRoute?.from_office
-                    ?.office_name ||
-                item?.office
-                    ?.office_name ||
-                document.value
-                    ?.origin_office
-                    ?.office_name ||
-                'N/A'
-
-            const toOffice =
-                linkedRoute?.to_office
-                    ?.office_name ||
-                item?.office
-                    ?.office_name ||
-                'N/A'
-
-            const actionName =
-                item?.action?.action_name ||
-                'N/A'
-
-            let status =
-                statusAtDate(
-                    item?.created_at
-                )
-
-            let actionTaken =
-                actionName
-
-            let detail =
-                item?.processing_note ||
-                item?.event_note ||
-                ''
-
-            let byOffice =
-                item?.office
-                    ?.office_name ||
-                'N/A'
-
-            if (
-                item?.event_type ===
-                'registered'
-            ) {
-                status = 'Registered'
-                actionTaken =
-                    actionName !== 'N/A'
-                        ? actionName
-                        : 'Registered'
-            }
-
-            if (
-                item?.event_type ===
-                'forwarded'
-            ) {
-                status = 'Forwarded'
-
-                actionTaken =
-                    actionTaken = actionName
-
-                detail =
-                    linkedRoute?.remarks ||
-                    item?.event_note ||
-                    ''
-
-                byOffice =
-                    linkedRoute
-                        ?.from_office
-                        ?.office_name ||
-                    item?.office
-                        ?.office_name ||
-                    'N/A'
-            }
-
-            if (
-                item?.event_type ===
-                'received'
-            ) {
-                status = 'Received'
-
-                actionTaken =
-                    actionName !== 'N/A'
-                        ? actionName
-                        : 'For Action'
-
-                byOffice =
-                    toOffice
-            }
-
-            return {
-                key:
-                    `processing-${item.id}`,
-
-                status,
-
-                action:
-                    processingEventLabel(
-                        item?.event_type
-                    ),
-
-                from_office:
-                    fromOffice,
-
-                action_taken:
-                    actionTaken,
-
-                    forward_to_office:
-                        item?.event_type === 'forwarded'
-                            ? toOffice
-                            : null,
-
-                detail,
-
-                date:
-                    item?.created_at ||
-                    null,
-
-                by_name:
-                    item?.user?.name ||
-                    'N/A',
-
-                by_office:
-                    byOffice,
-
-                source:
-                    'processing',
-            }
-        })
-
-    /*
-    |--------------------------------------------------------------------------
-    | Legacy movement rows
-    |--------------------------------------------------------------------------
-    |
-    | Routes created before Process 3 have no processing log. Each old route
-    | contributes a Forwarded row and, when applicable, a Received row.
-    |
-    */
-
-    const legacyMovementRows = []
-
-    for (
-        const routeItem of
-        history.value
-    ) {
-        if (
-            representedRouteIds.has(
-                Number(routeItem.id)
-            )
-        ) {
-            continue
-        }
-
-        const fromOffice =
-            routeItem?.from_office
-                ?.office_name ||
-            'N/A'
-
-        const toOffice =
-            routeItem?.to_office
-                ?.office_name ||
-            'N/A'
-
-        if (routeItem?.forwarded_at) {
-            legacyMovementRows.push({
-                key:
-                    `route-${routeItem.id}-forwarded`,
-
-                status:
-                    'Forwarded',
-
-                action:
-                    'Route Forward',
-
-                from_office:
-                    fromOffice,
-
-                action_taken:
-                    routeItem?.received_at
-                        ? `To ${toOffice}`
-                        : `To ${toOffice} â€” Awaiting Receipt`,
-
-                detail:
-                    routeItem?.remarks ||
-                    '',
-
-                date:
-                    routeItem.forwarded_at,
-
-                by_name:
-                    routeItem?.forwarded_by
-                        ?.name ||
-                    'N/A',
-
-                by_office:
-                    fromOffice,
-
-                source:
-                    'movement',
-            })
-        }
-
-        if (routeItem?.received_at) {
-            legacyMovementRows.push({
-                key:
-                    `route-${routeItem.id}-received`,
-
-                status:
-                    'Received',
-
-                action:
-                    'Route Receive',
-
-                from_office:
-                    fromOffice,
-
-                action_taken:
-                    `Received by ${toOffice}`,
-
-                detail:
-                    '',
-
-                date:
-                    routeItem.received_at,
-
-                by_name:
-                    routeItem?.received_by
-                        ?.name ||
-                    'N/A',
-
-                by_office:
-                    toOffice,
-
-                source:
-                    'movement',
-            })
-        }
-    }
-
-    return [
-        ...processingRows,
-        ...legacyMovementRows,
-    ].sort(
-        (a, b) =>
-            historyTimestamp(b.date) -
-            historyTimestamp(a.date)
-    )
-})
-
-/*
-|--------------------------------------------------------------------------
-| Save Current Processing
-|--------------------------------------------------------------------------
-*/
-
-const saveProcessing = async () => {
-    processingError.value = ''
-    successMessage.value = ''
-
-    if (
-        !processingForm.value
-            .current_action_id
-    ) {
-        processingError.value =
-            'Please select a current action.'
-
-        return
-    }
-
-    processingSaving.value = true
-
-    try {
-        const response = await fetch(
-            `/api/documents/${route.params.id}/processing`,
-            {
-                method: 'PUT',
-
-                headers: {
-                    Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getToken()}`,
-                },
-
-                body: JSON.stringify({
-                    current_action_id:
-                        Number(
-                            processingForm.value
-                                .current_action_id
-                        ),
-
-                    processing_note:
-                        processingForm.value
-                            .processing_note
-                            .trim() ||
-                        null,
-                }),
-            }
-        )
-
-        const data =
-            await response.json()
-
-        if (!response.ok) {
-            if (data.errors) {
-                const firstError =
-                    Object.values(
-                        data.errors
-                    )[0]
-
-                throw new Error(
-                    Array.isArray(firstError)
-                        ? firstError[0]
-                        : firstError
-                )
-            }
-
-            throw new Error(
-                data.message ||
-                'Unable to update current processing.'
-            )
-        }
-
-        successMessage.value =
-            data.message ||
-            'Current processing updated successfully.'
-
-        await Promise.all([
-            fetchProcessing(),
-            fetchDocument(),
-        ])
-
-    } catch (err) {
-        processingError.value =
-            err.message ||
-            'Unable to update current processing.'
-
-    } finally {
-        processingSaving.value = false
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
 | Fetch Routing Options
 |--------------------------------------------------------------------------
 */
@@ -1482,7 +869,6 @@ const loadPage = async () => {
             fetchRoutingOptions(),
             fetchHistory(),
             fetchAttachments(),
-            fetchProcessing(),
         ])
 
     } catch (err) {
@@ -1524,7 +910,6 @@ const pendingRoute = computed(() => {
 
 const canReceive = computed(() => {
     if (
-        !can('documents.route') ||
         !pendingRoute.value ||
         !routingOptions.value?.user
     ) {
@@ -1543,7 +928,6 @@ const canReceive = computed(() => {
 
 const canForward = computed(() => {
     if (
-        !can('documents.route') ||
         !routingOptions.value?.can_act
     ) {
         return false
@@ -1772,35 +1156,6 @@ const formatDate = (date) => {
     ).toLocaleString()
 }
 
-const formatHistoryDateOnly = (date) => {
-    if (!date) {
-        return 'N/A'
-    }
-
-    return new Date(date).toLocaleDateString(
-        'en-US',
-        {
-            month: '2-digit',
-            day: '2-digit',
-            year: '2-digit',
-        }
-    )
-}
-
-const formatHistoryTimeOnly = (date) => {
-    if (!date) {
-        return ''
-    }
-
-    return new Date(date).toLocaleTimeString(
-        'en-US',
-        {
-            hour: 'numeric',
-            minute: '2-digit',
-        }
-    )
-}
-
 const formatSimpleDate = (date) => {
     if (!date) {
         return 'N/A'
@@ -1850,12 +1205,11 @@ onMounted(() => {
                 </div>
 
                 <Button
-                        variant="outline"
-                        @click="goBack"
-                    >
-                        <ArrowLeft class="mr-2 h-4 w-4" />
-                        Back to Documents
-                    </Button>
+                    variant="outline"
+                    @click="goBack"
+                >
+                    ← Back to Documents
+                </Button>
 
             </div>
 
@@ -1933,8 +1287,7 @@ onMounted(() => {
                                     class="bg-blue-600 text-white hover:bg-blue-700"
                                     @click="openForwardModal"
                                 >
-                                    <Send class="mr-2 h-4 w-4" />
-                                        Forward Document        
+                                    Forward Document
                                 </Button>
 
                             </div>
@@ -2146,7 +1499,7 @@ onMounted(() => {
 
                             </div>
 
-                            <!-- Canonical Issued QR Card -->
+                            <!-- QR Card -->
                             <div
                                 class="rounded-xl border bg-gray-50 p-5 text-center"
                             >
@@ -2154,49 +1507,37 @@ onMounted(() => {
                                 <h3
                                     class="font-bold text-gray-900"
                                 >
-                                    Issued Document QR
+                                    Document QR
                                 </h3>
 
                                 <p
                                     class="mt-1 text-xs text-gray-500"
                                 >
-                                    Permanent QR assigned to this physical document
+                                    Scan to open this document
                                 </p>
 
                                 <div
-                                    v-if="qrDataUrl && document.qr_code?.qr_token"
+                                    v-if="qrDataUrl"
                                     class="mt-4"
                                 >
 
                                     <img
                                         :src="qrDataUrl"
-                                        alt="Issued Document QR Code"
+                                        alt="Document QR Code"
                                         class="mx-auto h-48 w-48 rounded-md bg-white p-2"
                                     >
 
                                     <p
-                                        class="mt-3 font-mono text-sm font-bold text-gray-800"
-                                    >
-                                        {{ document.qr_code.qr_token }}
-                                    </p>
-
-                                    <p
-                                        class="mt-1 break-all text-xs text-gray-500"
+                                        class="mt-3 break-all text-xs font-semibold text-gray-700"
                                     >
                                         {{ document.tracking_no }}
                                     </p>
-
-                                    <div
-                                        class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
-                                    >
-                                        Registered QR â€¢ Linked to this document
-                                    </div>
 
                                     <Button
                                         class="mt-4 w-full bg-gray-900 text-white hover:bg-black"
                                         @click="printQRCode"
                                     >
-                                        Print Linked QR
+                                        Print QR
                                     </Button>
 
                                 </div>
@@ -2210,532 +1551,14 @@ onMounted(() => {
 
                                 <div
                                     v-else
-                                    class="mt-4 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-500"
+                                    class="mt-4 text-sm text-gray-500"
                                 >
-                                    No issued QR is linked to this document.
-                                    This may be a legacy or manually registered record.
+                                    Generating QR...
                                 </div>
 
                             </div>
 
                         </div>
-
-                    </CardContent>
-
-                </Card>
-
-                <!-- Current Processing -->
-                <Card class="mt-6">
-
-                    <CardHeader>
-
-                        <div
-                            class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
-                        >
-
-                            <div>
-
-                                <CardTitle>
-                                    Current Processing
-                                </CardTitle>
-
-                                <p
-                                    class="mt-1 text-sm text-gray-500"
-                                >
-                                    Shows what the office currently holding the document is doing with it.
-                                </p>
-
-                            </div>
-
-                            <div
-                                v-if="processingInfo?.current_action"
-                                class="inline-flex self-start rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700"
-                            >
-                                {{
-                                    processingInfo
-                                        .current_action
-                                        .action_name
-                                }}
-                            </div>
-
-                        </div>
-
-                    </CardHeader>
-
-                    <CardContent>
-
-                        <div
-                            v-if="processingLoading"
-                            class="py-6 text-center text-sm text-gray-500"
-                        >
-                            Loading current processing...
-                        </div>
-
-                        <div v-else class="space-y-5">
-
-                            <!-- Current Summary -->
-                            <div
-                                class="grid grid-cols-1 gap-4 md:grid-cols-3"
-                            >
-
-                                <div
-                                    class="rounded-lg border bg-gray-50 p-4"
-                                >
-                                    <p
-                                        class="text-xs font-semibold uppercase text-gray-500"
-                                    >
-                                        Current Office
-                                    </p>
-
-                                    <p
-                                        class="mt-1 font-semibold text-gray-900"
-                                    >
-                                        {{
-                                            processingInfo
-                                                ?.current_office
-                                                ?.office_name
-                                            || document
-                                                .current_office
-                                                ?.office_name
-                                            || 'N/A'
-                                        }}
-                                    </p>
-                                </div>
-
-                                <div
-                                    class="rounded-lg border bg-gray-50 p-4"
-                                >
-                                    <p
-                                        class="text-xs font-semibold uppercase text-gray-500"
-                                    >
-                                        Current Action
-                                    </p>
-
-                                    <p
-                                        class="mt-1 font-semibold text-blue-700"
-                                    >
-                                        {{
-                                            processingInfo
-                                                ?.current_action
-                                                ?.action_name
-                                            || 'Not set yet'
-                                        }}
-                                    </p>
-                                </div>
-
-                                <div
-                                    class="rounded-lg border bg-gray-50 p-4"
-                                >
-                                    <p
-                                        class="text-xs font-semibold uppercase text-gray-500"
-                                    >
-                                        Last Updated
-                                    </p>
-
-                                    <p
-                                        class="mt-1 text-sm font-medium text-gray-900"
-                                    >
-                                        {{
-                                            processingInfo
-                                                ?.current_action_updated_at
-                                                ? formatDate(
-                                                    processingInfo
-                                                        .current_action_updated_at
-                                                )
-                                                : 'N/A'
-                                        }}
-                                    </p>
-
-                                    <p
-                                        v-if="processingInfo?.current_action_updated_by"
-                                        class="mt-1 text-xs text-gray-500"
-                                    >
-                                        By
-                                        {{
-                                            processingInfo
-                                                .current_action_updated_by
-                                                .name
-                                        }}
-                                    </p>
-                                </div>
-
-                            </div>
-
-                            <!-- Existing Internal Note -->
-                            <div
-                                v-if="processingInfo?.processing_note"
-                                class="rounded-lg border border-amber-200 bg-amber-50 p-4"
-                            >
-                                <p
-                                    class="text-xs font-semibold uppercase text-amber-700"
-                                >
-                                    Internal Processing Note
-                                </p>
-
-                                <p
-                                    class="mt-2 whitespace-pre-line text-sm text-amber-900"
-                                >
-                                    {{
-                                        processingInfo
-                                            .processing_note
-                                    }}
-                                </p>
-                            </div>
-
-                            <!-- Permission / Restriction -->
-                            <div
-                                v-if="processingInfo && !canUpdateProcessing"
-                                class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600"
-                            >
-                                {{
-                                    processingInfo
-                                        .restriction_reason
-                                    || 'You cannot update the processing action for this document.'
-                                }}
-                            </div>
-
-                            <!-- Processing Form -->
-                            <form
-                                v-if="canUpdateProcessing"
-                                class="rounded-xl border bg-white p-5"
-                                @submit.prevent="saveProcessing"
-                            >
-
-                                <div
-                                    class="grid grid-cols-1 gap-5 md:grid-cols-2"
-                                >
-
-                                    <div>
-
-                                        <label
-                                            class="mb-2 block text-sm font-semibold text-gray-700"
-                                        >
-                                            Current Action
-                                        </label>
-
-                                        <select
-                                            v-model="processingForm.current_action_id"
-                                            class="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                            :disabled="processingSaving"
-                                        >
-                                            <option value="">
-                                                Select current action
-                                            </option>
-
-                                            <option
-                                                v-for="action in processingInfo?.available_actions || []"
-                                                :key="action.id"
-                                                :value="String(action.id)"
-                                            >
-                                                {{ action.action_name }}
-                                            </option>
-                                        </select>
-
-                                        <p
-                                            class="mt-2 text-xs text-gray-500"
-                                        >
-                                            Choose the actual work currently being performed on the document.
-                                        </p>
-
-                                    </div>
-
-                                    <div>
-
-                                        <label
-                                            class="mb-2 block text-sm font-semibold text-gray-700"
-                                        >
-                                            Processing Note
-                                            <span
-                                                class="font-normal text-gray-400"
-                                            >
-                                                (Internal)
-                                            </span>
-                                        </label>
-
-                                        <textarea
-                                            v-model="processingForm.processing_note"
-                                            rows="4"
-                                            maxlength="2000"
-                                            placeholder="Example: For signature of the Municipal Mayor."
-                                            class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                            :disabled="processingSaving"
-                                        ></textarea>
-
-                                        <p
-                                            class="mt-1 text-right text-xs text-gray-400"
-                                        >
-                                            {{
-                                                processingForm
-                                                    .processing_note
-                                                    .length
-                                            }}/2000
-                                        </p>
-
-                                    </div>
-
-                                </div>
-
-                                <div
-                                    v-if="processingError"
-                                    class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
-                                >
-                                    {{ processingError }}
-                                </div>
-
-                                <div
-                                    class="mt-5 flex justify-end"
-                                >
-                                    <Button
-                                        type="submit"
-                                        :disabled="processingSaving"
-                                        class="bg-blue-600 text-white hover:bg-blue-700"
-                                    >
-                                        {{
-                                            processingSaving
-                                                ? 'Saving...'
-                                                : 'Save Current Processing'
-                                        }}
-                                    </Button>
-                                </div>
-
-                            </form>
-
-                            <div
-                                v-else-if="processingError"
-                                class="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
-                            >
-                                {{ processingError }}
-                            </div>
-
-                        </div>
-
-                    </CardContent>
-
-                </Card>
-
-                <!-- Consolidated Document History -->
-                <Card class="mt-6">
-
-                    <CardHeader>
-
-                        <div
-                            class="flex flex-col gap-1 md:flex-row md:items-center md:justify-between"
-                        >
-
-                            <div>
-
-                                <CardTitle>
-                                    Document History
-                                </CardTitle>
-
-                                <p
-                                    class="mt-1 text-sm text-gray-500"
-                                >
-                                    Consolidated chronological view of processing actions and document movements.
-                                </p>
-
-                            </div>
-
-                            <span
-                                class="inline-flex self-start rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600"
-                            >
-                                {{ historyRows.length }}
-                                records
-                            </span>
-
-                        </div>
-
-                    </CardHeader>
-
-                    <CardContent>
-
-                        <div
-                            v-if="historyRows.length === 0"
-                            class="rounded-lg border border-dashed bg-gray-50 px-5 py-8 text-center text-sm text-gray-500"
-                        >
-                            No document history has been recorded yet.
-                        </div>
-
-                        <div
-                            v-else
-                            class="overflow-x-auto rounded-lg border"
-                        >
-
-                            <table
-                                class="w-full min-w-[900px] border-collapse text-left text-sm"
-                            >
-
-                                <thead
-                                    class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600"
-                                >
-
-                                    <tr>
-
-                                        <th
-                                            class="border-b px-4 py-3 text-center"
-                                        >
-                                            Status
-                                        </th>
-
-                                        <th
-                                            class="border-b px-4 py-3 text-center"
-                                        >
-                                            Event
-                                        </th>
-
-                                        <th
-                                            class="border-b px-4 py-3 text-center"
-                                        >
-                                            From Office
-                                        </th>
-
-                                        <th
-                                            class="border-b px-4 py-3 text-center"
-                                        >
-                                            Action Taken / To Office
-                                        </th>
-
-                                        <th
-                                            class="w-[100px] border-b px-2 py-3 text-center"
-                                        >
-                                            Date
-                                        </th>
-
-                                        <th
-                                            class="border-b px-4 py-3 text-center"
-                                        >
-                                            By / Office
-                                        </th>
-
-                                    </tr>
-
-                                </thead>
-
-                                <tbody
-                                    class="divide-y bg-white"
-                                >
-
-                                    <tr
-                                        v-for="row in historyRows"
-                                        :key="row.key"
-                                        class="align-top hover:bg-gray-50"
-                                    >
-
-                                        <td
-                                            class="whitespace-nowrap px-4 py-4"
-                                        >
-
-                                            <span
-                                                :class="[
-                                                    'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold',
-                                                    row.status === 'Received'
-                                                        ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-200'
-                                                        : row.status === 'Forwarded'
-                                                            ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
-                                                            : row.status === 'Registered'
-                                                                ? 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200'
-                                                                : 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
-                                                ]"
-                                            >
-                                                {{ row.status }}
-                                            </span>
-
-                                        </td>
-
-                                        <td
-                                            class="px-4 py-4 font-medium text-gray-900"
-                                        >
-                                            {{ row.action }}
-                                        </td>
-
-                                        <td
-                                            class="px-4 py-4 text-gray-700"
-                                        >
-                                            {{ row.from_office }}
-                                        </td>
-
-                                        <td
-                                            class="px-4 py-4"
-                                        >
-
-                                            <p
-                                                class="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900"
-                                            >
-                                                <span>
-                                                    {{ row.action_taken }}
-                                                </span>
-
-                                                <template v-if="row.forward_to_office">
-                                                    <ArrowRight
-                                                        class="h-4 w-4 shrink-0 text-blue-600"
-                                                    />
-
-                                                    <span>
-                                                        {{ row.forward_to_office }}
-                                                    </span>
-                                                </template>
-                                            </p>
-
-                                            <p
-                                                v-if="row.detail"
-                                                class="mt-1 max-w-md whitespace-pre-line text-xs leading-5 text-gray-500"
-                                            >
-                                                {{ row.detail }}
-                                            </p>
-
-                                        </td>
-
-                                        <td
-                                            class="w-[100px] px-2 py-4 text-center text-gray-600"
-                                        >
-                                            <div
-                                                class="mx-auto flex w-fit flex-col items-center leading-tight"
-                                            >
-                                                <span
-                                                    class="whitespace-nowrap text-xs font-medium"
-                                                >
-                                                    {{ formatHistoryDateOnly(row.date) }}
-                                                </span>
-
-                                                <span
-                                                    class="mt-1 whitespace-nowrap text-xs text-gray-500"
-                                                >
-                                                    {{ formatHistoryTimeOnly(row.date) }}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        <td
-                                            class="px-4 py-4"
-                                        >
-
-                                            <p
-                                                class="font-medium text-gray-900"
-                                            >
-                                                {{ row.by_name }}
-                                            </p>
-
-                                            <p
-                                                class="mt-1 text-xs text-gray-500"
-                                            >
-                                                {{ row.by_office }}
-                                            </p>
-
-                                        </td>
-
-                                    </tr>
-
-                                </tbody>
-
-                            </table>
-
-                        </div>
-
-                        <p
-                            class="mt-3 text-xs text-gray-500"
-                        >
-                            Older routes created before Processing History was introduced are included from Movement History automatically.
-                        </p>
 
                     </CardContent>
 
@@ -2823,8 +1646,6 @@ onMounted(() => {
                                                 +
                                             </span>
 
-                                            <Paperclip class="mr-2 h-4 w-4" />
-
                                             {{
                                                 selectedFiles.length === 0
                                                     ? 'Add Attachment'
@@ -2835,14 +1656,11 @@ onMounted(() => {
                                         <Button
                                             class="bg-blue-600 text-white hover:bg-blue-700"
                                             :disabled="
-
                                                 uploadingAttachment ||
                                                 selectedFiles.length === 0
                                             "
                                             @click="uploadAttachments"
                                         >
-                                            <Upload class="mr-2 h-4 w-4" />
-                                            
                                             {{
                                                 uploadingAttachment
                                                     ? 'Uploading...'
@@ -2908,7 +1726,7 @@ onMounted(() => {
                                         :disabled="uploadingAttachment"
                                         @click="removeSelectedFile(index)"
                                     >
-                                        Ã—
+                                        ×
                                     </button>
 
                                 </div>
@@ -3010,6 +1828,178 @@ onMounted(() => {
                                     >
                                         Delete
                                     </Button>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </CardContent>
+
+                </Card>
+
+                <!-- Movement History -->
+                <Card class="mt-6">
+
+                    <CardHeader>
+
+                        <CardTitle>
+                            Movement History
+                        </CardTitle>
+
+                    </CardHeader>
+
+                    <CardContent>
+
+                        <div
+                            v-if="history.length === 0"
+                            class="py-8 text-center text-gray-500"
+                        >
+                            This document has not been routed yet.
+                        </div>
+
+                        <div
+                            v-else
+                            class="space-y-5"
+                        >
+
+                            <div
+                                v-for="item in history"
+                                :key="item.id"
+                                class="rounded-lg border bg-white p-5"
+                            >
+
+                                <!-- Route -->
+                                <div
+                                    class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+                                >
+
+                                    <div>
+
+                                        <p
+                                            class="font-semibold text-gray-900"
+                                        >
+                                            {{
+                                                item.from_office
+                                                    ?.office_name
+                                                || 'Unknown Office'
+                                            }}
+
+                                            <span
+                                                class="mx-2 text-gray-400"
+                                            >
+                                                →
+                                            </span>
+
+                                            {{
+                                                item.to_office
+                                                    ?.office_name
+                                                || 'Unknown Office'
+                                            }}
+                                        </p>
+
+                                        <p
+                                            v-if="item.remarks"
+                                            class="mt-1 text-sm text-gray-600"
+                                        >
+                                            {{ item.remarks }}
+                                        </p>
+
+                                    </div>
+
+                                    <span
+                                        class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700"
+                                    >
+                                        {{
+                                            item.status
+                                                ?.status_name
+                                            || 'N/A'
+                                        }}
+                                    </span>
+
+                                </div>
+
+                                <div
+                                    class="mt-4 grid grid-cols-1 gap-4 border-t pt-4 md:grid-cols-2"
+                                >
+
+                                    <!-- Forwarded -->
+                                    <div>
+
+                                        <p
+                                            class="text-xs font-semibold uppercase text-gray-500"
+                                        >
+                                            Forwarded
+                                        </p>
+
+                                        <p
+                                            class="mt-1 text-sm text-gray-800"
+                                        >
+                                            By:
+                                            {{
+                                                item.forwarded_by
+                                                    ?.name
+                                                || 'N/A'
+                                            }}
+                                        </p>
+
+                                        <p
+                                            class="text-sm text-gray-500"
+                                        >
+                                            {{
+                                                formatDate(
+                                                    item.forwarded_at
+                                                )
+                                            }}
+                                        </p>
+
+                                    </div>
+
+                                    <!-- Received -->
+                                    <div>
+
+                                        <p
+                                            class="text-xs font-semibold uppercase text-gray-500"
+                                        >
+                                            Received
+                                        </p>
+
+                                        <template
+                                            v-if="item.received_at"
+                                        >
+
+                                            <p
+                                                class="mt-1 text-sm text-gray-800"
+                                            >
+                                                By:
+                                                {{
+                                                    item.received_by
+                                                        ?.name
+                                                    || 'N/A'
+                                                }}
+                                            </p>
+
+                                            <p
+                                                class="text-sm text-gray-500"
+                                            >
+                                                {{
+                                                    formatDate(
+                                                        item.received_at
+                                                    )
+                                                }}
+                                            </p>
+
+                                        </template>
+
+                                        <p
+                                            v-else
+                                            class="mt-1 text-sm font-medium text-yellow-600"
+                                        >
+                                            Awaiting receipt
+                                        </p>
+
+                                    </div>
 
                                 </div>
 

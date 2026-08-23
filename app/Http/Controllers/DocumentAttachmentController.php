@@ -1,0 +1,234 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Document;
+use App\Models\DocumentAttachment;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+class DocumentAttachmentController extends Controller
+{
+    /**
+     * List attachments for a document.
+     */
+    public function index(Request $request, $documentId)
+    {
+        $document = Document::findOrFail($documentId);
+
+        $attachments = DocumentAttachment::with('uploadedBy')
+            ->where('document_id', $document->id)
+            ->latest()
+            ->get();
+
+        return response()->json($attachments);
+    }
+
+    /**
+     * Upload a new attachment.
+     */
+    public function store(Request $request, $documentId)
+    {
+        $document = Document::findOrFail($documentId);
+        $user = $request->user();
+
+        if (!$user->office_id) {
+            return response()->json([
+                'message' => 'Your user account is not assigned to an office.',
+            ], 403);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Only users from the current office may upload attachments.
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            (int) $user->office_id !==
+            (int) $document->current_office_id
+        ) {
+            return response()->json([
+                'message' =>
+                    'You cannot upload attachments because this document is not currently assigned to your office.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'file' => [
+                'required',
+                'file',
+                'max:10240',
+                'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png',
+            ],
+        ]);
+
+        $file = $validated['file'];
+
+        /*
+        |--------------------------------------------------------------------------
+        | Store securely outside the public directory.
+        |--------------------------------------------------------------------------
+        */
+
+        $extension =
+            strtolower(
+                $file->getClientOriginalExtension()
+            );
+
+        $storedFilename =
+            Str::uuid()->toString() .
+            ($extension ? '.' . $extension : '');
+
+        $directory =
+            'document_attachments/' . $document->id;
+
+        $path = $file->storeAs(
+            $directory,
+            $storedFilename,
+            'local'
+        );
+
+        $attachment = DocumentAttachment::create([
+            'document_id' =>
+                $document->id,
+
+            'original_filename' =>
+                $file->getClientOriginalName(),
+
+            'stored_filename' =>
+                $storedFilename,
+
+            'file_path' =>
+                $path,
+
+            'mime_type' =>
+                $file->getMimeType(),
+
+            'file_size' =>
+                $file->getSize(),
+
+            'uploaded_by' =>
+                $user->id,
+        ]);
+
+        $attachment->load('uploadedBy');
+
+        return response()->json([
+            'message' =>
+                'Attachment uploaded successfully.',
+
+            'attachment' =>
+                $attachment,
+        ], 201);
+    }
+
+    /**
+     * Download an attachment.
+     */
+    public function download(Request $request, $attachmentId)
+    {
+        $attachment =
+            DocumentAttachment::with('document')
+                ->findOrFail($attachmentId);
+
+        $user = $request->user();
+
+        if (!$user->office_id) {
+            return response()->json([
+                'message' => 'Your user account is not assigned to an office.',
+            ], 403);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Current sprint access rule:
+        | Current office or origin office may access the attachment.
+        |--------------------------------------------------------------------------
+        */
+
+        $allowedOfficeIds = array_filter([
+            $attachment->document->current_office_id,
+            $attachment->document->origin_office_id,
+        ]);
+
+        if (
+            !in_array(
+                (int) $user->office_id,
+                array_map('intval', $allowedOfficeIds),
+                true
+            )
+        ) {
+            return response()->json([
+                'message' =>
+                    'You are not authorized to access this attachment.',
+            ], 403);
+        }
+
+        if (
+            !Storage::disk('local')
+                ->exists($attachment->file_path)
+        ) {
+            return response()->json([
+                'message' =>
+                    'Attachment file could not be found.',
+            ], 404);
+        }
+
+        return Storage::disk('local')
+            ->download(
+                $attachment->file_path,
+                $attachment->original_filename
+            );
+    }
+
+    /**
+     * Delete an attachment.
+     */
+    public function destroy(Request $request, $attachmentId)
+    {
+        $attachment =
+            DocumentAttachment::with('document')
+                ->findOrFail($attachmentId);
+
+        $user = $request->user();
+
+        if (!$user->office_id) {
+            return response()->json([
+                'message' => 'Your user account is not assigned to an office.',
+            ], 403);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Only current office may delete attachments.
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            (int) $user->office_id !==
+            (int) $attachment->document->current_office_id
+        ) {
+            return response()->json([
+                'message' =>
+                    'You cannot delete this attachment because the document is not currently assigned to your office.',
+            ], 403);
+        }
+
+        if (
+            Storage::disk('local')
+                ->exists($attachment->file_path)
+        ) {
+            Storage::disk('local')
+                ->delete($attachment->file_path);
+        }
+
+        $attachment->delete();
+
+        return response()->json([
+            'message' =>
+                'Attachment deleted successfully.',
+        ]);
+    }
+}

@@ -21,11 +21,30 @@ class Document extends Model
         'origin_office_id',
         'current_office_id',
 
+        'current_action_id',
+        'processing_note',
+        'current_action_updated_by',
+        'current_action_updated_at',
+
         'created_by',
 
         'document_date',
         'due_date',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'document_date' =>
+                'date',
+
+            'due_date' =>
+                'date',
+
+            'current_action_updated_at' =>
+                'datetime',
+        ];
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -35,17 +54,26 @@ class Document extends Model
 
     public function type(): BelongsTo
     {
-        return $this->belongsTo(DocumentType::class, 'document_type_id');
+        return $this->belongsTo(
+            DocumentType::class,
+            'document_type_id'
+        );
     }
 
     public function status(): BelongsTo
     {
-        return $this->belongsTo(DocumentStatus::class);
+        return $this->belongsTo(
+            DocumentStatus::class,
+            'status_id'
+        );
     }
 
     public function priority(): BelongsTo
     {
-        return $this->belongsTo(Priority::class);
+        return $this->belongsTo(
+            Priority::class,
+            'priority_id'
+        );
     }
 
     public function confidentiality(): BelongsTo
@@ -53,6 +81,14 @@ class Document extends Model
         return $this->belongsTo(
             ConfidentialityLevel::class,
             'confidentiality_level_id'
+        );
+    }
+
+    public function currentAction(): BelongsTo
+    {
+        return $this->belongsTo(
+            ProcessingAction::class,
+            'current_action_id'
         );
     }
 
@@ -92,6 +128,14 @@ class Document extends Model
         );
     }
 
+    public function currentActionUpdatedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'current_action_updated_by'
+        );
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Child Tables
@@ -100,16 +144,29 @@ class Document extends Model
 
     public function routes(): HasMany
     {
-        return $this->hasMany(DocumentRoute::class);
+        return $this->hasMany(
+            DocumentRoute::class
+        );
     }
 
     public function attachments(): HasMany
     {
-        return $this->hasMany(DocumentAttachment::class);
+        return $this->hasMany(
+            DocumentAttachment::class
+        );
     }
 
     public function comments(): HasMany
     {
-        return $this->hasMany(DocumentComment::class);
+        return $this->hasMany(
+            DocumentComment::class
+        );
+    }
+
+    public function processingLogs(): HasMany
+    {
+        return $this->hasMany(
+            DocumentProcessingLog::class
+        );
     }
 }

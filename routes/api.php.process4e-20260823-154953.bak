@@ -12,7 +12,6 @@ use App\Http\Controllers\DocumentRoutingController;
 use App\Http\Controllers\DocumentTrackingController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\OfficeController;
-use App\Http\Controllers\UserManagementController;
 
 /*
 |--------------------------------------------------------------------------
@@ -93,38 +92,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
         return response()->json($data);
     });
-
-    /*
-    |--------------------------------------------------------------------------
-    | USER MANAGEMENT
-    |--------------------------------------------------------------------------
-    |
-    | Administrator-only. Role assignment controls capabilities while office
-    | assignment controls document scope. Department is synchronized from the
-    | selected office by UserManagementController.
-    |
-    */
-
-    Route::get(
-        'users/form-options',
-        [UserManagementController::class, 'formOptions']
-    )->middleware('can:users.manage');
-
-    Route::get(
-        'users',
-        [UserManagementController::class, 'index']
-    )->middleware('can:users.manage');
-
-    Route::post(
-        'users',
-        [UserManagementController::class, 'store']
-    )->middleware('can:users.manage');
-
-    Route::match(
-        ['put', 'patch'],
-        'users/{user}',
-        [UserManagementController::class, 'update']
-    )->middleware('can:users.manage');
 
     /*
     |--------------------------------------------------------------------------

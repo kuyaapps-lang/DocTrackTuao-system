@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import {
     Card,
@@ -18,10 +18,15 @@ import {
 } from '@/components/ui/table'
 
 import { Button } from '@/components/ui/button'
+import { can } from '@/lib/auth'
 
 const offices = ref([])
 const loading = ref(true)
 const error = ref('')
+
+const canManageMasterData = computed(() => {
+    return can('master_data.manage')
+})
 
 const fetchOffices = async () => {
     loading.value = true
@@ -71,7 +76,9 @@ onMounted(() => {
                     </p>
                 </div>
 
-                <Button>
+                <Button
+                    v-if="canManageMasterData"
+                >
                     Add Office
                 </Button>
 
@@ -137,7 +144,9 @@ onMounted(() => {
                                     Description
                                 </TableHead>
 
-                                <TableHead>
+                                <TableHead
+                                    v-if="canManageMasterData"
+                                >
                                     Actions
                                 </TableHead>
 
@@ -167,7 +176,9 @@ onMounted(() => {
                                     {{ office.description || 'N/A' }}
                                 </TableCell>
 
-                                <TableCell>
+                                <TableCell
+                                    v-if="canManageMasterData"
+                                >
                                     <div class="flex gap-2">
 
                                         <Button

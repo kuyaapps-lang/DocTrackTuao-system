@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Document;
+use App\Models\DocumentProcessingLog;
 use App\Models\DocumentRoute;
 use App\Models\DocumentStatus;
 use App\Models\Office;
+use App\Models\ProcessingAction;
 use App\Models\RouteAction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,12 +17,15 @@ class DocumentRoutingController extends Controller
     /**
      * Return routing information/options for a document.
      */
-    public function options(Request $request, $documentId)
-    {
+    public function options(
+        Request $request,
+        $documentId
+    ) {
         $document = Document::with([
             'currentOffice',
             'originOffice',
             'status',
+            'currentAction',
         ])->findOrFail($documentId);
 
         $user = $request->user();
@@ -28,18 +33,26 @@ class DocumentRoutingController extends Controller
         return response()->json([
             'document' => $document,
 
-            'offices' => Office::where(
-                'id',
-                '!=',
-                $document->current_office_id
-            )
-                ->orderBy('office_name')
-                ->get(),
+            'offices' =>
+                Office::where(
+                    'id',
+                    '!=',
+                    $document->current_office_id
+                )
+                    ->orderBy(
+                        'office_name'
+                    )
+                    ->get(),
 
             'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'office_id' => $user->office_id,
+                'id' =>
+                    $user->id,
+
+                'name' =>
+                    $user->name,
+
+                'office_id' =>
+                    $user->office_id,
             ],
 
             'can_act' =>
@@ -52,27 +65,35 @@ class DocumentRoutingController extends Controller
     /**
      * Forward / release a document to another office.
      */
-    public function forward(Request $request, $documentId)
-    {
-        $validated = $request->validate([
-            'to_office_id' => [
-                'required',
-                'exists:offices,id',
-            ],
+    public function forward(
+        Request $request,
+        $documentId
+    ) {
+        $validated =
+            $request->validate([
+                'to_office_id' => [
+                    'required',
+                    'exists:offices,id',
+                ],
 
-            'remarks' => [
-                'nullable',
-                'string',
-                'max:2000',
-            ],
-        ]);
+                'remarks' => [
+                    'nullable',
+                    'string',
+                    'max:2000',
+                ],
+            ]);
 
-        $document = Document::findOrFail($documentId);
-        $user = $request->user();
+        $document =
+            Document::findOrFail(
+                $documentId
+            );
+
+        $user =
+            $request->user();
 
         /*
         |--------------------------------------------------------------------------
-        | Authorization by current office
+        | User must belong to an office
         |--------------------------------------------------------------------------
         */
 
@@ -83,6 +104,12 @@ class DocumentRoutingController extends Controller
             ], 403);
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Only current office can forward
+        |--------------------------------------------------------------------------
+        */
+
         if (
             (int) $user->office_id !==
             (int) $document->current_office_id
@@ -92,6 +119,12 @@ class DocumentRoutingController extends Controller
                     'You cannot forward this document because it is not currently assigned to your office.',
             ], 403);
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cannot forward to same office
+        |--------------------------------------------------------------------------
+        */
 
         if (
             (int) $validated['to_office_id'] ===
@@ -109,13 +142,16 @@ class DocumentRoutingController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $pendingRoute = DocumentRoute::where(
-            'document_id',
-            $document->id
-        )
-            ->whereNull('received_at')
-            ->latest('id')
-            ->first();
+        $pendingRoute =
+            DocumentRoute::where(
+                'document_id',
+                $document->id
+            )
+                ->whereNull(
+                    'received_at'
+                )
+                ->latest('id')
+                ->first();
 
         if ($pendingRoute) {
             return response()->json([
@@ -124,59 +160,208 @@ class DocumentRoutingController extends Controller
             ], 409);
         }
 
-        $forwardedStatus = DocumentStatus::where(
-            'status_name',
-            'Forwarded'
-        )->firstOrFail();
+        /*
+        |--------------------------------------------------------------------------
+        | Lookup routing status/action
+        |--------------------------------------------------------------------------
+        */
 
-        $forwardAction = RouteAction::where(
-            'action_name',
-            'Forward'
-        )->firstOrFail();
+        $forwardedStatus =
+            DocumentStatus::where(
+                'status_name',
+                'Forwarded'
+            )->firstOrFail();
 
-        $route = DB::transaction(function () use (
-            $document,
-            $user,
-            $validated,
-            $forwardedStatus,
-            $forwardAction
-        ) {
-            $route = DocumentRoute::create([
-                'document_id' =>
-                    $document->id,
+        $forwardAction =
+            RouteAction::where(
+                'action_name',
+                'Forward'
+            )->firstOrFail();
 
-                'from_office_id' =>
-                    $document->current_office_id,
+        /*
+        |--------------------------------------------------------------------------
+        | Automatic processing action
+        |--------------------------------------------------------------------------
+        */
 
-                'to_office_id' =>
-                    $validated['to_office_id'],
+        $awaitingReceiptAction =
+            ProcessingAction::where(
+                'action_code',
+                'AWAITING_RECEIPT'
+            )
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->firstOrFail();
 
-                'forwarded_by' =>
-                    $user->id,
+        /*
+        |--------------------------------------------------------------------------
+        | Forward transaction
+        |--------------------------------------------------------------------------
+        */
 
-                'forwarded_at' =>
-                    now(),
+        $route =
+            DB::transaction(
+                function () use (
+                    $document,
+                    $user,
+                    $validated,
+                    $forwardedStatus,
+                    $forwardAction,
+                    $awaitingReceiptAction
+                ) {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Remember source office before current office changes
+                    |--------------------------------------------------------------------------
+                    */
 
-                'status_id' =>
-                    $forwardedStatus->id,
+                    $fromOfficeId =
+                        $document->current_office_id;
 
-                'action_id' =>
-                    $forwardAction->id,
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Create routing record
+                    |--------------------------------------------------------------------------
+                    */
 
-                'remarks' =>
-                    $validated['remarks'] ?? null,
-            ]);
+                    $route =
+                        DocumentRoute::create([
+                            'document_id' =>
+                                $document->id,
 
-            $document->update([
-                'current_office_id' =>
-                    $validated['to_office_id'],
+                            'from_office_id' =>
+                                $fromOfficeId,
 
-                'status_id' =>
-                    $forwardedStatus->id,
-            ]);
+                            'to_office_id' =>
+                                $validated[
+                                    'to_office_id'
+                                ],
 
-            return $route;
-        });
+                            'forwarded_by' =>
+                                $user->id,
+
+                            'forwarded_at' =>
+                                now(),
+
+                            'status_id' =>
+                                $forwardedStatus->id,
+
+                            'action_id' =>
+                                $forwardAction->id,
+
+                            'remarks' =>
+                                $validated[
+                                    'remarks'
+                                ] ?? null,
+                        ]);
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Move document to destination office
+                    |--------------------------------------------------------------------------
+                    |
+                    | The destination becomes current_office_id so the receiving office
+                    | becomes responsible for accepting it.
+                    |
+                    */
+
+                    $document->update([
+                        'current_office_id' =>
+                            $validated[
+                                'to_office_id'
+                            ],
+
+                        'status_id' =>
+                            $forwardedStatus->id,
+
+                        'current_action_id' =>
+                            $awaitingReceiptAction->id,
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | Previous processing note belongs to previous processing stage
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'processing_note' =>
+                            null,
+
+                        'current_action_updated_by' =>
+                            $user->id,
+
+                        'current_action_updated_at' =>
+                            now(),
+                    ]);
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Processing history
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $fromOffice =
+                        Office::find(
+                            $fromOfficeId
+                        );
+
+                    $toOffice =
+                        Office::find(
+                            $validated[
+                                'to_office_id'
+                            ]
+                        );
+
+                    DocumentProcessingLog::create([
+                        'document_id' =>
+                            $document->id,
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | Awaiting Receipt belongs to destination office
+                        |--------------------------------------------------------------------------
+                        */
+
+                        'office_id' =>
+                            $validated[
+                                'to_office_id'
+                            ],
+
+                        'user_id' =>
+                            $user->id,
+
+                        'processing_action_id' =>
+                            $awaitingReceiptAction->id,
+
+                        'document_route_id' =>
+                            $route->id,
+
+                        'event_type' =>
+                            'forwarded',
+
+                        'processing_note' =>
+                            null,
+
+                        'event_note' =>
+                            'Forwarded from ' .
+                            (
+                                $fromOffice
+                                    ?->office_name
+                                ?? 'previous office'
+                            ) .
+                            ' to ' .
+                            (
+                                $toOffice
+                                    ?->office_name
+                                ?? 'destination office'
+                            ) .
+                            '.',
+                    ]);
+
+                    return $route;
+                }
+            );
 
         $route->load([
             'fromOffice',
@@ -191,17 +376,31 @@ class DocumentRoutingController extends Controller
             'message' =>
                 'Document forwarded successfully.',
 
-            'route' => $route,
+            'route' =>
+                $route,
         ], 201);
     }
 
     /**
      * Receive the current pending route.
      */
-    public function receive(Request $request, $documentId)
-    {
-        $document = Document::findOrFail($documentId);
-        $user = $request->user();
+    public function receive(
+        Request $request,
+        $documentId
+    ) {
+        $document =
+            Document::findOrFail(
+                $documentId
+            );
+
+        $user =
+            $request->user();
+
+        /*
+        |--------------------------------------------------------------------------
+        | User must belong to an office
+        |--------------------------------------------------------------------------
+        */
 
         if (!$user->office_id) {
             return response()->json([
@@ -216,13 +415,16 @@ class DocumentRoutingController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $route = DocumentRoute::where(
-            'document_id',
-            $document->id
-        )
-            ->whereNull('received_at')
-            ->latest('id')
-            ->first();
+        $route =
+            DocumentRoute::where(
+                'document_id',
+                $document->id
+            )
+                ->whereNull(
+                    'received_at'
+                )
+                ->latest('id')
+                ->first();
 
         if (!$route) {
             return response()->json([
@@ -247,45 +449,125 @@ class DocumentRoutingController extends Controller
             ], 403);
         }
 
-        $receivedStatus = DocumentStatus::where(
-            'status_name',
-            'Received'
-        )->firstOrFail();
+        /*
+        |--------------------------------------------------------------------------
+        | Lookup Received status
+        |--------------------------------------------------------------------------
+        */
 
-        DB::transaction(function () use (
-            $route,
-            $document,
-            $user,
-            $receivedStatus
-        ) {
-            /*
-            |--------------------------------------------------------------------------
-            | Keep action_id as Forward.
-            |
-            | The route itself represents one transfer.
-            | received_at / received_by indicate completion of that transfer.
-            |--------------------------------------------------------------------------
-            */
+        $receivedStatus =
+            DocumentStatus::where(
+                'status_name',
+                'Received'
+            )->firstOrFail();
 
-            $route->update([
-                'received_by' =>
-                    $user->id,
+        /*
+        |--------------------------------------------------------------------------
+        | Automatic processing action after receipt
+        |--------------------------------------------------------------------------
+        */
 
-                'received_at' =>
-                    now(),
+        $forAction =
+            ProcessingAction::where(
+                'action_code',
+                'FOR_ACTION'
+            )
+                ->where(
+                    'is_active',
+                    true
+                )
+                ->firstOrFail();
 
-                'status_id' =>
-                    $receivedStatus->id,
-            ]);
+        /*
+        |--------------------------------------------------------------------------
+        | Receive transaction
+        |--------------------------------------------------------------------------
+        */
 
-            $document->update([
-                'current_office_id' =>
-                    $route->to_office_id,
+        DB::transaction(
+            function () use (
+                $route,
+                $document,
+                $user,
+                $receivedStatus,
+                $forAction
+            ) {
+                /*
+                |--------------------------------------------------------------------------
+                | Complete route
+                |--------------------------------------------------------------------------
+                */
 
-                'status_id' =>
-                    $receivedStatus->id,
-            ]);
-        });
+                $route->update([
+                    'received_by' =>
+                        $user->id,
+
+                    'received_at' =>
+                        now(),
+
+                    'status_id' =>
+                        $receivedStatus->id,
+                ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | Update document
+                |--------------------------------------------------------------------------
+                */
+
+                $document->update([
+                    'current_office_id' =>
+                        $route->to_office_id,
+
+                    'status_id' =>
+                        $receivedStatus->id,
+
+                    'current_action_id' =>
+                        $forAction->id,
+
+                    'processing_note' =>
+                        null,
+
+                    'current_action_updated_by' =>
+                        $user->id,
+
+                    'current_action_updated_at' =>
+                        now(),
+                ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | Processing history
+                |--------------------------------------------------------------------------
+                */
+
+                DocumentProcessingLog::create([
+                    'document_id' =>
+                        $document->id,
+
+                    'office_id' =>
+                        $route->to_office_id,
+
+                    'user_id' =>
+                        $user->id,
+
+                    'processing_action_id' =>
+                        $forAction->id,
+
+                    'document_route_id' =>
+                        $route->id,
+
+                    'event_type' =>
+                        'received',
+
+                    'processing_note' =>
+                        null,
+
+                    'event_note' =>
+                        'Document received and ready for action.',
+                ]);
+            }
+        );
 
         $route->load([
             'fromOffice',
@@ -300,32 +582,39 @@ class DocumentRoutingController extends Controller
             'message' =>
                 'Document received successfully.',
 
-            'route' => $route,
+            'route' =>
+                $route,
         ]);
     }
 
     /**
      * Display complete routing history.
      */
-    public function history($documentId)
-    {
-        Document::findOrFail($documentId);
+    public function history(
+        $documentId
+    ) {
+        Document::findOrFail(
+            $documentId
+        );
 
-        $routes = DocumentRoute::with([
-            'fromOffice',
-            'toOffice',
-            'forwardedBy',
-            'receivedBy',
-            'status',
-            'action',
-        ])
-            ->where(
-                'document_id',
-                $documentId
-            )
-            ->orderBy('id')
-            ->get();
+        $routes =
+            DocumentRoute::with([
+                'fromOffice',
+                'toOffice',
+                'forwardedBy',
+                'receivedBy',
+                'status',
+                'action',
+            ])
+                ->where(
+                    'document_id',
+                    $documentId
+                )
+                ->orderBy('id')
+                ->get();
 
-        return response()->json($routes);
+        return response()->json(
+            $routes
+        );
     }
 }

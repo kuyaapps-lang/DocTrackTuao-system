@@ -1,6 +1,6 @@
-﻿<script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+<script setup>
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import {
     Card,
@@ -20,9 +20,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { can } from '@/lib/auth'
 
-const route = useRoute()
 const router = useRouter()
 
 /*
@@ -76,20 +74,6 @@ const creating = ref(false)
 const createError = ref('')
 const createSuccess = ref('')
 
-/*
-|--------------------------------------------------------------------------
-| QR Registration Mode
-|--------------------------------------------------------------------------
-*/
-
-const qrToken = ref('')
-const qrResolving = ref(false)
-const qrStateError = ref('')
-
-const isQrRegistration = () => {
-    return Boolean(qrToken.value)
-}
-
 const form = ref({
     title: '',
     description: '',
@@ -110,10 +94,6 @@ const form = ref({
 const getToken = () => {
     return localStorage.getItem('auth_token')
 }
-
-const canCreateDocuments = computed(() => {
-    return can('documents.create')
-})
 
 /*
 |--------------------------------------------------------------------------
@@ -189,80 +169,6 @@ const changeTab = async (tab) => {
     activeTab.value = tab
 
     await fetchDocuments()
-}
-
-/*
-|--------------------------------------------------------------------------
-| Resolve Scanned QR
-|--------------------------------------------------------------------------
-*/
-
-const resolveQrForRegistration = async (token) => {
-    qrResolving.value = true
-    qrStateError.value = ''
-
-    try {
-        const response = await fetch(
-            `/api/q/${encodeURIComponent(token)}`,
-            {
-                headers: {
-                    Accept: 'application/json',
-                },
-            }
-        )
-
-        const data = await response.json()
-
-        if (!response.ok) {
-            throw new Error(
-                data.message ||
-                'Unable to verify this QR code.'
-            )
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | UNUSED = allow registration
-        |--------------------------------------------------------------------------
-        */
-
-        if (data.state === 'unused') {
-            qrToken.value = token
-
-            await openCreateForm()
-
-            return
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | REGISTERED = redirect to tracking
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            data.state === 'registered' &&
-            data.tracking_path
-        ) {
-            router.replace(
-                data.tracking_path
-            )
-
-            return
-        }
-
-        throw new Error(
-            data.message ||
-            'This QR code cannot be used for document registration.'
-        )
-
-    } catch (err) {
-        qrStateError.value =
-            err.message ||
-            'Unable to verify this QR code.'
-    } finally {
-        qrResolving.value = false
-    }
 }
 
 /*
@@ -346,10 +252,6 @@ const resetForm = () => {
 */
 
 const openCreateForm = async () => {
-    if (!canCreateDocuments.value) {
-        return
-    }
-
     resetForm()
 
     showCreateForm.value = true
@@ -412,14 +314,6 @@ const closeCreateForm = () => {
     showCreateForm.value = false
 
     resetForm()
-
-    if (qrToken.value) {
-        qrToken.value = ''
-
-        if (route.name === 'qr-document-registration') {
-            router.replace('/documents')
-        }
-    }
 }
 
 /*
@@ -429,12 +323,6 @@ const closeCreateForm = () => {
 */
 
 const createDocument = async () => {
-    if (!canCreateDocuments.value) {
-        createError.value =
-            'You do not have permission to register documents.'
-        return
-    }
-
     createError.value = ''
     createSuccess.value = ''
 
@@ -529,10 +417,6 @@ const createDocument = async () => {
                     due_date:
                         form.value.due_date ||
                         null,
-
-                    qr_token:
-                        qrToken.value ||
-                        null,
                 }),
             }
         )
@@ -560,7 +444,6 @@ const createDocument = async () => {
         }
 
         createSuccess.value =
-            data.message ||
             'Document registered successfully.'
 
         /*
@@ -792,17 +675,8 @@ const emptyMessage = () => {
 |--------------------------------------------------------------------------
 */
 
-onMounted(async () => {
-    await fetchDocuments()
-
-    const scannedToken =
-        route.params.qrToken
-
-    if (scannedToken) {
-        await resolveQrForRegistration(
-            String(scannedToken)
-        )
-    }
+onMounted(() => {
+    fetchDocuments()
 })
 </script>
 
@@ -829,7 +703,6 @@ onMounted(async () => {
             </div>
 
             <Button
-                v-if="canCreateDocuments"
                 @click="openCreateForm"
                 class="bg-blue-600 hover:bg-blue-700"
             >
@@ -839,21 +712,6 @@ onMounted(async () => {
 
         <!-- Main Content -->
         <div class="p-6">
-
-            <!-- QR Verification -->
-            <div
-                v-if="qrResolving"
-                class="mb-5 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-700"
-            >
-                Verifying scanned QR code...
-            </div>
-
-            <div
-                v-if="qrStateError"
-                class="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-            >
-                {{ qrStateError }}
-            </div>
 
             <Card>
 
@@ -1175,7 +1033,7 @@ onMounted(async () => {
 
         <!-- Register Document Modal -->
         <div
-            v-if="showCreateForm && canCreateDocuments"
+            v-if="showCreateForm"
             class="fixed inset-0 z-50 flex
                    items-center justify-center
                    bg-black/50 px-4 py-6"
@@ -1189,50 +1047,20 @@ onMounted(async () => {
                 <CardHeader>
 
                     <CardTitle>
-                        {{
-                            isQrRegistration()
-                                ? 'Register Scanned Document'
-                                : 'Register New Document'
-                        }}
+                        Register New Document
                     </CardTitle>
 
                     <p
                         class="text-sm text-gray-500"
                     >
-                        {{
-                            isQrRegistration()
-                                ? 'Enter the document information below. Saving will activate and permanently link this QR code to the document.'
-                                : 'Enter the document information below. Tracking number will be generated automatically.'
-                        }}
+                        Enter the document information below.
+                        Tracking number will be generated
+                        automatically.
                     </p>
 
                 </CardHeader>
 
                 <CardContent>
-
-                    <!-- Scanned QR Token -->
-                    <div
-                        v-if="isQrRegistration()"
-                        class="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4"
-                    >
-                        <p
-                            class="text-xs font-semibold uppercase tracking-wide text-blue-600"
-                        >
-                            Scanned QR Token
-                        </p>
-
-                        <p
-                            class="mt-1 font-mono text-lg font-bold text-blue-900"
-                        >
-                            {{ qrToken }}
-                        </p>
-
-                        <p
-                            class="mt-1 text-xs text-blue-700"
-                        >
-                            This QR is currently unused and will become registered after this form is saved successfully.
-                        </p>
-                    </div>
 
                     <!-- Options Loading -->
                     <div

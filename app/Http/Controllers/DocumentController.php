@@ -6,9 +6,14 @@ use App\Models\ConfidentialityLevel;
 use App\Models\Document;
 use App\Models\DocumentStatus;
 use App\Models\DocumentType;
+use App\Models\DocumentQrCode;
+use App\Models\DocumentProcessingLog;
 use App\Models\Office;
 use App\Models\Priority;
+use App\Models\ProcessingAction;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class DocumentController extends Controller
 {
@@ -24,6 +29,8 @@ class DocumentController extends Controller
             'confidentiality',
             'originOffice',
             'currentOffice',
+            'currentAction',
+            'currentActionUpdatedBy',
             'creator',
         ])
             ->latest()
@@ -52,6 +59,8 @@ class DocumentController extends Controller
             'confidentiality',
             'originOffice',
             'currentOffice',
+            'currentAction',
+            'currentActionUpdatedBy',
             'creator',
 
             'routes' => function ($query) use ($user) {
@@ -103,6 +112,8 @@ class DocumentController extends Controller
             'confidentiality',
             'originOffice',
             'currentOffice',
+            'currentAction',
+            'currentActionUpdatedBy',
             'creator',
 
             'routes' => function ($query) use ($user) {
@@ -185,83 +196,224 @@ class DocumentController extends Controller
 
             'due_date' =>
                 'nullable|date|after_or_equal:document_date',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Optional QR token
+            |--------------------------------------------------------------------------
+            |
+            | Normal manual registration may omit this field.
+            | QR-based registration supplies the issued token.
+            |
+            */
+
+            'qr_token' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Default document status
-        |--------------------------------------------------------------------------
-        */
+        $document = DB::transaction(
+            function () use (
+                $validated,
+                $request
+            ) {
+                /*
+                |--------------------------------------------------------------------------
+                | Validate and lock issued QR when supplied
+                |--------------------------------------------------------------------------
+                |
+                | lockForUpdate prevents two users from registering the same QR at
+                | nearly the same time.
+                |
+                */
 
-        $pendingStatus = DocumentStatus::where(
-            'status_name',
-            'Pending'
-        )->firstOrFail();
+                $qrCode = null;
 
-        /*
-        |--------------------------------------------------------------------------
-        | Generate unique tracking number
-        |--------------------------------------------------------------------------
-        */
+                if (!empty($validated['qr_token'])) {
+                    $qrCode =
+                        DocumentQrCode::where(
+                            'qr_token',
+                            $validated['qr_token']
+                        )
+                            ->lockForUpdate()
+                            ->first();
 
-        do {
-            $trackingNumber =
-                'DOC-' .
-                now()->format('YmdHis') .
-                random_int(100, 999);
-        } while (
-            Document::where(
-                'tracking_no',
-                $trackingNumber
-            )->exists()
+                    if (!$qrCode) {
+                        throw ValidationException::withMessages([
+                            'qr_token' =>
+                                'The QR code is invalid or does not exist.',
+                        ]);
+                    }
+
+                    if ($qrCode->status === 'void') {
+                        throw ValidationException::withMessages([
+                            'qr_token' =>
+                                'This QR code has been voided and can no longer be used.',
+                        ]);
+                    }
+
+                    if (
+                        $qrCode->status !== 'unused' ||
+                        $qrCode->document_id
+                    ) {
+                        throw ValidationException::withMessages([
+                            'qr_token' =>
+                                'This QR code has already been registered to a document.',
+                        ]);
+                    }
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | Default document status
+                |--------------------------------------------------------------------------
+                */
+
+                $pendingStatus =
+                    DocumentStatus::where(
+                        'status_name',
+                        'Pending'
+                    )->firstOrFail();
+
+                $registeredAction =
+                    ProcessingAction::where(
+                        'action_code',
+                        'REGISTERED'
+                    )
+                        ->where(
+                            'is_active',
+                            true
+                        )
+                        ->firstOrFail();
+
+                /*
+                |--------------------------------------------------------------------------
+                | Generate unique tracking number
+                |--------------------------------------------------------------------------
+                */
+
+                do {
+                    $trackingNumber =
+                        'DOC-' .
+                        now()->format('YmdHis') .
+                        random_int(100, 999);
+
+                } while (
+                    Document::where(
+                        'tracking_no',
+                        $trackingNumber
+                    )->exists()
+                );
+
+                /*
+                |--------------------------------------------------------------------------
+                | Create document
+                |--------------------------------------------------------------------------
+                */
+
+                $document = Document::create([
+                    'tracking_no' =>
+                        $trackingNumber,
+
+                    'title' =>
+                        $validated['title'],
+
+                    'description' =>
+                        $validated['description'] ?? null,
+
+                    'document_type_id' =>
+                        $validated['document_type_id'],
+
+                    'status_id' =>
+                        $pendingStatus->id,
+
+                    'priority_id' =>
+                        $validated['priority_id'],
+
+                    'confidentiality_level_id' =>
+                        $validated['confidentiality_level_id'],
+
+                    'origin_office_id' =>
+                        $validated['origin_office_id'],
+
+                    'current_office_id' =>
+                        $validated['origin_office_id'],
+
+                    'current_action_id' =>
+                        $registeredAction->id,
+
+                    'processing_note' =>
+                        null,
+
+                    'current_action_updated_by' =>
+                        $request->user()->id,
+
+                    'current_action_updated_at' =>
+                        now(),
+
+                    'created_by' =>
+                        $request->user()->id,
+
+                    'document_date' =>
+                        $validated['document_date'],
+
+                    'due_date' =>
+                        $validated['due_date'] ?? null,
+                ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | Processing history: registered
+                |--------------------------------------------------------------------------
+                */
+
+                DocumentProcessingLog::create([
+                    'document_id' =>
+                        $document->id,
+
+                    'office_id' =>
+                        $document->current_office_id,
+
+                    'user_id' =>
+                        $request->user()->id,
+
+                    'processing_action_id' =>
+                        $registeredAction->id,
+
+                    'event_type' =>
+                        'registered',
+
+                    'processing_note' =>
+                        null,
+
+                    'event_note' =>
+                        'Document registered.',
+                ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | Activate / link QR
+                |--------------------------------------------------------------------------
+                */
+
+                if ($qrCode) {
+                    $qrCode->update([
+                        'document_id' =>
+                            $document->id,
+
+                        'status' =>
+                            'registered',
+
+                        'registered_at' =>
+                            now(),
+                    ]);
+                }
+
+                return $document;
+            }
         );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Create document
-        |--------------------------------------------------------------------------
-        |
-        | A newly registered document starts at its origin office.
-        |
-        */
-
-        $document = Document::create([
-            'tracking_no' =>
-                $trackingNumber,
-
-            'title' =>
-                $validated['title'],
-
-            'description' =>
-                $validated['description'] ?? null,
-
-            'document_type_id' =>
-                $validated['document_type_id'],
-
-            'status_id' =>
-                $pendingStatus->id,
-
-            'priority_id' =>
-                $validated['priority_id'],
-
-            'confidentiality_level_id' =>
-                $validated['confidentiality_level_id'],
-
-            'origin_office_id' =>
-                $validated['origin_office_id'],
-
-            'current_office_id' =>
-                $validated['origin_office_id'],
-
-            'created_by' =>
-                $request->user()->id,
-
-            'document_date' =>
-                $validated['document_date'],
-
-            'due_date' =>
-                $validated['due_date'] ?? null,
-        ]);
 
         $document->load([
             'type',
@@ -270,15 +422,22 @@ class DocumentController extends Controller
             'confidentiality',
             'originOffice',
             'currentOffice',
+            'currentAction',
+            'currentActionUpdatedBy',
             'creator',
         ]);
 
         return response()->json([
             'message' =>
-                'Document registered successfully',
+                !empty($validated['qr_token'])
+                    ? 'Document registered and QR code activated successfully'
+                    : 'Document registered successfully',
 
             'document' =>
                 $document,
+
+            'qr_linked' =>
+                !empty($validated['qr_token']),
         ], 201);
     }
 
@@ -294,6 +453,8 @@ class DocumentController extends Controller
             'confidentiality',
             'originOffice',
             'currentOffice',
+            'currentAction',
+            'currentActionUpdatedBy',
             'creator',
 
             'routes' => function ($query) {
@@ -313,7 +474,32 @@ class DocumentController extends Controller
             'comments',
         ])->findOrFail($id);
 
-        return response()->json($document);
+        /*
+        |--------------------------------------------------------------------------
+        | Canonical issued QR
+        |--------------------------------------------------------------------------
+        |
+        | A document may have been created through the pre-issued QR workflow.
+        | Return that registered QR record so DocumentDetails.vue can display the
+        | same permanent QR token instead of creating a second tracking-number QR.
+        |
+        */
+
+        $qrCode = DocumentQrCode::where(
+            'document_id',
+            $document->id
+        )
+            ->where(
+                'status',
+                'registered'
+            )
+            ->latest('id')
+            ->first();
+
+        return response()->json([
+            ...$document->toArray(),
+            'qr_code' => $qrCode,
+        ]);
     }
 
     /**
@@ -364,6 +550,8 @@ class DocumentController extends Controller
             'confidentiality',
             'originOffice',
             'currentOffice',
+            'currentAction',
+            'currentActionUpdatedBy',
             'creator',
         ]);
 

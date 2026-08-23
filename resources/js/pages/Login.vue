@@ -1,68 +1,174 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import {
+    useRoute,
+    useRouter,
+} from 'vue-router'
 
-import { Card, CardContent } from '@/components/ui/card'
+import {
+    Card,
+    CardContent,
+} from '@/components/ui/card'
+
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+
+import {
+    Eye,
+    EyeOff,
+} from 'lucide-vue-next'
 
 import logo from '@/assets/tuao-logo.png'
 
 const email = ref('')
 const password = ref('')
+const showPassword = ref(false)
 
+const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
 const error = ref('')
 const success = ref('')
 
+/*
+|--------------------------------------------------------------------------
+| Safe Redirect
+|--------------------------------------------------------------------------
+|
+| Used when an unauthenticated user scans an UNUSED QR.
+|
+| Example:
+|
+| /login?redirect=/register-document/ABCDE-1234567
+|
+*/
+
+const getRedirectPath = () => {
+    const redirect =
+        typeof route.query.redirect === 'string'
+            ? route.query.redirect
+            : ''
+
+    /*
+    |--------------------------------------------------------------------------
+    | Only permit local application paths
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        redirect.startsWith('/') &&
+        !redirect.startsWith('//')
+    ) {
+        return redirect
+    }
+
+    return '/dashboard'
+}
+
+/*
+|--------------------------------------------------------------------------
+| Login
+|--------------------------------------------------------------------------
+*/
+
 const login = async () => {
     error.value = ''
     success.value = ''
 
     if (!email.value || !password.value) {
-        error.value = 'Please enter your email and password.'
+        error.value =
+            'Please enter your email and password.'
+
         return
     }
 
     loading.value = true
 
     try {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify({
-                email: email.value,
-                password: password.value,
-            }),
-        })
+        const response = await fetch(
+            '/api/login',
+            {
+                method: 'POST',
 
-        const data = await response.json()
+                headers: {
+                    'Content-Type':
+                        'application/json',
 
-        if (!response.ok) {
-            throw new Error(data.message || 'Login failed.')
-        }
+                    Accept:
+                        'application/json',
+                },
 
-        // Save authentication information
-        localStorage.setItem('auth_token', data.token)
-        localStorage.setItem(
-            'auth_user',
-            JSON.stringify(data.user)
+                body: JSON.stringify({
+                    email:
+                        email.value,
+
+                    password:
+                        password.value,
+                }),
+            }
         )
 
-        success.value = 'Login successful!'
+        const data =
+            await response.json()
 
-        console.log('Authenticated user:', data.user)
-        console.log('Token received:', data.token)
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                'Login failed.'
+            )
+        }
 
-        router.push('/dashboard')
+        /*
+        |--------------------------------------------------------------------------
+        | Save Authentication
+        |--------------------------------------------------------------------------
+        */
+
+        localStorage.setItem(
+            'auth_token',
+            data.token
+        )
+
+        localStorage.setItem(
+            'auth_user',
+            JSON.stringify(
+                data.user
+            )
+        )
+
+        success.value =
+            'Login successful!'
+
+        /*
+        |--------------------------------------------------------------------------
+        | Continue Previous Action
+        |--------------------------------------------------------------------------
+        |
+        | QR registration:
+        |
+        | QR
+        | → Login
+        | → Return to registration form
+        |
+        | Normal login:
+        |
+        | Login
+        | → Dashboard
+        |
+        */
+
+        const destination =
+            getRedirectPath()
+
+        router.replace(
+            destination
+        )
 
     } catch (err) {
-        error.value = err.message || 'Unable to login.'
+        error.value =
+            err.message ||
+            'Unable to login.'
     } finally {
         loading.value = false
     }
@@ -114,7 +220,11 @@ const login = async () => {
     />
 
     <!-- Header -->
-    <div class="relative z-10 flex flex-col items-center text-center">
+    <div
+        class="relative z-10
+               flex flex-col items-center
+               text-center"
+    >
 
         <!-- Logo -->
         <div
@@ -188,7 +298,9 @@ const login = async () => {
                 <div>
 
                     <label
-                        class="block mb-1 text-sm font-semibold text-black-700"
+                        class="block mb-1
+                               text-sm font-semibold
+                               text-gray-700"
                     >
                         Email Address
                     </label>
@@ -206,32 +318,67 @@ const login = async () => {
                 <div>
 
                     <label
-                        class="block mb-1 text-sm font-semibold text-black-800"
+                        class="block mb-1
+                               text-sm font-semibold
+                               text-gray-800"
                     >
                         Password
                     </label>
 
-                    <Input
-                        v-model="password"
-                        type="password"
-                        placeholder="Enter your password"
-                        class="h-12 rounded-xl"
-                    />
+                        <div class="relative">
+
+                            <Input
+                                v-model="password"
+                                :type="showPassword ? 'text' : 'password'"
+                                placeholder="Enter your password"
+                                class="h-12 rounded-xl pr-12"
+                            />
+
+                            <button
+                                type="button"
+                                class="absolute right-4 top-1/2
+                                    -translate-y-1/2
+                                    text-gray-500
+                                    hover:text-gray-800
+                                    focus:outline-none"
+                                @click="showPassword = !showPassword"
+                                :aria-label="
+                                    showPassword
+                                        ? 'Hide password'
+                                        : 'Show password'
+                                "
+                            >
+
+                                <EyeOff
+                                    v-if="showPassword"
+                                    class="h-5 w-5"
+                                />
+
+                                <Eye
+                                    v-else
+                                    class="h-5 w-5"
+                                />
+
+                            </button>
+
+                        </div>
 
                 </div>
 
-                <!-- Error Message -->
+                <!-- Error -->
                 <div
                     v-if="error"
-                    class="text-sm text-red-600 font-semibold"
+                    class="text-sm text-red-600
+                           font-semibold"
                 >
                     {{ error }}
                 </div>
 
-                <!-- Success Message -->
+                <!-- Success -->
                 <div
                     v-if="success"
-                    class="text-sm text-green-600 font-semibold"
+                    class="text-sm text-green-600
+                           font-semibold"
                 >
                     {{ success }}
                 </div>
@@ -242,10 +389,16 @@ const login = async () => {
                     :disabled="loading"
                     class="w-full h-12 rounded-xl
                     text-base font-bold
-                    bg-gradient-to-r from-cyan-600 to-blue-700
-                    hover:from-cyan-700 hover:to-blue-800"
+                    bg-gradient-to-r
+                    from-cyan-600 to-blue-700
+                    hover:from-cyan-700
+                    hover:to-blue-800"
                 >
-                    {{ loading ? 'Logging in...' : 'Login' }}
+                    {{
+                        loading
+                            ? 'Logging in...'
+                            : 'Login'
+                    }}
                 </Button>
 
                 <!-- Forgot Password -->

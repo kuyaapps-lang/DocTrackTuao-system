@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import {
     Card,
@@ -19,6 +19,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { can } from '@/lib/auth'
 
 const documentTypes = ref([])
 
@@ -44,6 +45,21 @@ const form = ref({
 
 const getToken = () => {
     return localStorage.getItem('auth_token')
+}
+
+const canManageMasterData = computed(() => {
+    return can('master_data.manage')
+})
+
+const ensureCanManageMasterData = () => {
+    if (canManageMasterData.value) {
+        return true
+    }
+
+    formError.value =
+        'You do not have permission to manage document types.'
+
+    return false
 }
 
 const fetchDocumentTypes = async () => {
@@ -83,12 +99,20 @@ const resetForm = () => {
 }
 
 const openAddForm = () => {
+    if (!ensureCanManageMasterData()) {
+        return
+    }
+
     resetForm()
     successMessage.value = ''
     showForm.value = true
 }
 
 const openEditForm = (documentType) => {
+    if (!ensureCanManageMasterData()) {
+        return
+    }
+
     editingId.value = documentType.id
 
     form.value = {
@@ -113,6 +137,10 @@ const closeForm = () => {
 const saveDocumentType = async () => {
     formError.value = ''
     successMessage.value = ''
+
+    if (!ensureCanManageMasterData()) {
+        return
+    }
 
     if (!form.value.type_name.trim()) {
         formError.value = 'Document type name is required.'
@@ -181,6 +209,10 @@ const saveDocumentType = async () => {
 }
 
 const openDeleteModal = (documentType) => {
+    if (!ensureCanManageMasterData()) {
+        return
+    }
+
     documentTypeToDelete.value = documentType
     showDeleteModal.value = true
     error.value = ''
@@ -197,6 +229,10 @@ const closeDeleteModal = () => {
 }
 
 const confirmDeleteDocumentType = async () => {
+    if (!ensureCanManageMasterData()) {
+        return
+    }
+
     if (!documentTypeToDelete.value) {
         return
     }
@@ -270,7 +306,10 @@ onMounted(() => {
                     </p>
                 </div>
 
-                <Button @click="openAddForm">
+                <Button
+                    v-if="canManageMasterData"
+                    @click="openAddForm"
+                >
                     + Add Document Type
                 </Button>
 
@@ -291,7 +330,7 @@ onMounted(() => {
 
             <!-- Add / Edit Form -->
             <Card
-                v-if="showForm"
+                v-if="showForm && canManageMasterData"
                 class="mb-6"
             >
 
@@ -441,7 +480,9 @@ onMounted(() => {
                                     Description
                                 </TableHead>
 
-                                <TableHead>
+                                <TableHead
+                                    v-if="canManageMasterData"
+                                >
                                     Actions
                                 </TableHead>
 
@@ -467,7 +508,9 @@ onMounted(() => {
                                     }}
                                 </TableCell>
 
-                                <TableCell>
+                                <TableCell
+                                    v-if="canManageMasterData"
+                                >
 
                                     <div class="flex gap-2">
 
@@ -510,7 +553,7 @@ onMounted(() => {
 
         <!-- Delete Confirmation Modal -->
         <div
-            v-if="showDeleteModal"
+            v-if="showDeleteModal && canManageMasterData"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
         >
 

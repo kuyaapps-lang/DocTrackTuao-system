@@ -22,13 +22,32 @@ class DocumentRoute extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | Casts
+    |--------------------------------------------------------------------------
+    */
+
+    protected function casts(): array
+    {
+        return [
+            'forwarded_at' =>
+                'datetime',
+
+            'received_at' =>
+                'datetime',
+        ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Document
     |--------------------------------------------------------------------------
     */
 
     public function document(): BelongsTo
     {
-        return $this->belongsTo(Document::class);
+        return $this->belongsTo(
+            Document::class
+        );
     }
 
     /*

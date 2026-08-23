@@ -1,5 +1,5 @@
-﻿<script setup>
-import { computed, onMounted, ref } from 'vue'
+<script setup>
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -20,7 +20,6 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { can } from '@/lib/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,10 +109,6 @@ const form = ref({
 const getToken = () => {
     return localStorage.getItem('auth_token')
 }
-
-const canCreateDocuments = computed(() => {
-    return can('documents.create')
-})
 
 /*
 |--------------------------------------------------------------------------
@@ -346,10 +341,6 @@ const resetForm = () => {
 */
 
 const openCreateForm = async () => {
-    if (!canCreateDocuments.value) {
-        return
-    }
-
     resetForm()
 
     showCreateForm.value = true
@@ -429,12 +420,6 @@ const closeCreateForm = () => {
 */
 
 const createDocument = async () => {
-    if (!canCreateDocuments.value) {
-        createError.value =
-            'You do not have permission to register documents.'
-        return
-    }
-
     createError.value = ''
     createSuccess.value = ''
 
@@ -829,7 +814,6 @@ onMounted(async () => {
             </div>
 
             <Button
-                v-if="canCreateDocuments"
                 @click="openCreateForm"
                 class="bg-blue-600 hover:bg-blue-700"
             >
@@ -1175,7 +1159,7 @@ onMounted(async () => {
 
         <!-- Register Document Modal -->
         <div
-            v-if="showCreateForm && canCreateDocuments"
+            v-if="showCreateForm"
             class="fixed inset-0 z-50 flex
                    items-center justify-center
                    bg-black/50 px-4 py-6"
