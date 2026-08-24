@@ -47,9 +47,9 @@ class DevelopmentSeeder extends Seeder
         );
 
         $accountingOffice = Office::updateOrCreate(
-            ['office_code' => 'MACCO'],
+            ['office_name' => 'Municipal Accounting Office'],
             [
-                'office_name' => 'Municipal Accounting Office',
+                'office_code' => 'MAO',
                 'department_id' => null,
                 'description' => 'Municipal Accounting Office',
             ]
@@ -104,3 +104,4 @@ class DevelopmentSeeder extends Seeder
         );
     }
 }
+
