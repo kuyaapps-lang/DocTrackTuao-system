@@ -14,6 +14,7 @@ use App\Models\ProcessingAction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Services\AuditLogger;
 
 class DocumentController extends Controller
 {
@@ -170,7 +171,10 @@ class DocumentController extends Controller
     /**
      * Store a new document.
      */
-    public function store(Request $request)
+    public function store(
+    Request $request,
+    AuditLogger $auditLogger)
+
     {
         $validated = $request->validate([
             'title' =>
@@ -217,7 +221,8 @@ class DocumentController extends Controller
         $document = DB::transaction(
             function () use (
                 $validated,
-                $request
+                $request,
+                $auditLogger
             ) {
                 /*
                 |--------------------------------------------------------------------------
@@ -411,6 +416,14 @@ class DocumentController extends Controller
                     ]);
                 }
 
+                $auditLogger->log(
+                    module: 'documents',
+                    action: 'created',
+                    recordId: $document->id,
+                    description: 'Document registered successfully.',
+                    userId: $request->user()->id
+                );
+
                 return $document;
             }
         );
@@ -505,7 +518,12 @@ class DocumentController extends Controller
     /**
      * Update a document.
      */
-    public function update(Request $request, $id)
+    public function update(
+    Request $request,
+    AuditLogger $auditLogger,
+    $id
+    )
+
     {
         $document = Document::findOrFail($id);
 
@@ -541,7 +559,24 @@ class DocumentController extends Controller
                 'sometimes|required|exists:document_statuses,id',
         ]);
 
-        $document->update($validated);
+            DB::transaction(
+                function () use (
+                    $document,
+                    $validated,
+                    $request,
+                    $auditLogger
+                ) {
+                    $document->update($validated);
+
+                    $auditLogger->log(
+                        module: 'documents',
+                        action: 'updated',
+                        recordId: $document->id,
+                        description: 'Document updated successfully.',
+                        userId: $request->user()->id
+                    );
+                }
+            );
 
         $document->load([
             'type',
@@ -567,15 +602,39 @@ class DocumentController extends Controller
     /**
      * Delete a document.
      */
-    public function destroy($id)
-    {
-        $document = Document::findOrFail($id);
+        public function destroy(
+            Request $request,
+            AuditLogger $auditLogger,
+            $id
+        ) {
+            $document = Document::findOrFail($id);
 
-        $document->delete();
+            DB::transaction(
+                function () use (
+                    $document,
+                    $request,
+                    $auditLogger
+                ) {
+                    $documentId = $document->id;
+                    $trackingNumber = $document->tracking_no;
 
-        return response()->json([
-            'message' =>
-                'Document deleted successfully',
-        ]);
-    }
+                    $document->delete();
+
+                    $auditLogger->log(
+                        module: 'documents',
+                        action: 'deleted',
+                        recordId: $documentId,
+                        description:
+                            'Document ' .
+                            $trackingNumber .
+                            ' was deleted.',
+                        userId: $request->user()->id
+                    );
+                }
+            );
+
+            return response()->json([
+                'message' => 'Document deleted successfully',
+            ]);
+        }
 }

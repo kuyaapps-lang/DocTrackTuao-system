@@ -9,6 +9,7 @@ use App\Models\DocumentStatus;
 use App\Models\Office;
 use App\Models\ProcessingAction;
 use App\Models\RouteAction;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -67,6 +68,7 @@ class DocumentRoutingController extends Controller
      */
     public function forward(
         Request $request,
+        AuditLogger $auditLogger,
         $documentId
     ) {
         $validated =
@@ -209,7 +211,8 @@ class DocumentRoutingController extends Controller
                     $validated,
                     $forwardedStatus,
                     $forwardAction,
-                    $awaitingReceiptAction
+                    $awaitingReceiptAction,
+                    $auditLogger
                 ) {
                     /*
                     |--------------------------------------------------------------------------
@@ -359,6 +362,25 @@ class DocumentRoutingController extends Controller
                             '.',
                     ]);
 
+                    $auditLogger->log(
+                        module: 'document_routing',
+                        action: 'forwarded',
+                        recordId: $document->id,
+                        description:
+                            'Document forwarded from ' .
+                            (
+                                $fromOffice?->office_name
+                                ?? 'previous office'
+                            ) .
+                            ' to ' .
+                            (
+                                $toOffice?->office_name
+                                ?? 'destination office'
+                            ) .
+                            '.',
+                        userId: $user->id
+                    );
+
                     return $route;
                 }
             );
@@ -386,6 +408,7 @@ class DocumentRoutingController extends Controller
      */
     public function receive(
         Request $request,
+        AuditLogger $auditLogger,
         $documentId
     ) {
         $document =
@@ -490,7 +513,8 @@ class DocumentRoutingController extends Controller
                 $document,
                 $user,
                 $receivedStatus,
-                $forAction
+                $forAction,
+                $auditLogger
             ) {
                 /*
                 |--------------------------------------------------------------------------
@@ -566,6 +590,20 @@ class DocumentRoutingController extends Controller
                     'event_note' =>
                         'Document received and ready for action.',
                 ]);
+
+                $auditLogger->log(
+                    module: 'document_routing',
+                    action: 'received',
+                    recordId: $document->id,
+                    description:
+                        'Document received by ' .
+                        $user->name .
+                        ' from office ID ' .
+                        $route->from_office_id .
+                        '.',
+                    userId: $user->id
+                );
+
             }
         );
 
