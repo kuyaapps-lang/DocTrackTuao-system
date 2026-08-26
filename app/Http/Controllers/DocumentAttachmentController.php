@@ -7,6 +7,7 @@ use App\Models\DocumentAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Throwable;
 
 class DocumentAttachmentController extends Controller
 {
@@ -118,34 +119,59 @@ class DocumentAttachmentController extends Controller
         $directory =
             'document_attachments/' . $document->id;
 
-        $path = $file->storeAs(
-            $directory,
-            $storedFilename,
-            'local'
-        );
+        try {
+            $path = Storage::disk('local')
+                ->putFileAs(
+                    $directory,
+                    $file,
+                    $storedFilename
+                );
+        } catch (Throwable) {
+            return response()->json([
+                'message' => 'Attachment could not be stored.',
+            ], 500);
+        }
 
-        $attachment = DocumentAttachment::create([
-            'document_id' =>
-                $document->id,
+        if ($path === false) {
+            return response()->json([
+                'message' => 'Attachment could not be stored.',
+            ], 500);
+        }
 
-            'original_filename' =>
-                $file->getClientOriginalName(),
+        try {
+            $attachment = DocumentAttachment::create([
+                'document_id' =>
+                    $document->id,
 
-            'stored_filename' =>
-                $storedFilename,
+                'original_filename' =>
+                    $file->getClientOriginalName(),
 
-            'file_path' =>
-                $path,
+                'stored_filename' =>
+                    $storedFilename,
 
-            'mime_type' =>
-                $file->getMimeType(),
+                'file_path' =>
+                    $path,
 
-            'file_size' =>
-                $file->getSize(),
+                'mime_type' =>
+                    $file->getMimeType(),
 
-            'uploaded_by' =>
-                $user->id,
-        ]);
+                'file_size' =>
+                    $file->getSize(),
+
+                'uploaded_by' =>
+                    $user->id,
+            ]);
+        } catch (Throwable) {
+            try {
+                Storage::disk('local')->delete($path);
+            } catch (Throwable) {
+                // The primary response must not expose storage details.
+            }
+
+            return response()->json([
+                'message' => 'Attachment could not be stored.',
+            ], 500);
+        }
 
         $attachment->load('uploadedBy');
 
@@ -250,12 +276,21 @@ class DocumentAttachmentController extends Controller
             ], 403);
         }
 
-        if (
-            Storage::disk('local')
-                ->exists($attachment->file_path)
-        ) {
-            Storage::disk('local')
-                ->delete($attachment->file_path);
+        try {
+            $disk = Storage::disk('local');
+
+            if (
+                $disk->exists($attachment->file_path) &&
+                !$disk->delete($attachment->file_path)
+            ) {
+                return response()->json([
+                    'message' => 'Attachment could not be deleted.',
+                ], 500);
+            }
+        } catch (Throwable) {
+            return response()->json([
+                'message' => 'Attachment could not be deleted.',
+            ], 500);
         }
 
         $attachment->delete();
