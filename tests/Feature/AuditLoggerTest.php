@@ -91,7 +91,13 @@ class AuditLoggerTest extends TestCase
                 && $context['module'] === AuditLog::MODULE_DOCUMENTS
                 && $context['action'] === AuditLog::ACTION_CREATED
                 && $context['record_id'] === 123
-                && $context['exception'] instanceof \Throwable
+                && $context['exception_class'] === \Illuminate\Database\QueryException::class
+                && array_keys($context) === [
+                    'module',
+                    'action',
+                    'record_id',
+                    'exception_class',
+                ]
             );
     }
 }

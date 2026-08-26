@@ -40,7 +40,7 @@ class AuditLogger
                 'module' => Str::limit($module, 100, ''),
                 'action' => Str::limit($action, 100, ''),
                 'record_id' => $recordId,
-                'exception' => $exception,
+                'exception_class' => $exception::class,
             ]);
 
             return null;
