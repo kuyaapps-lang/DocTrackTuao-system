@@ -526,6 +526,24 @@ class DocumentController extends Controller
 
     {
         $document = Document::findOrFail($id);
+        $user = $request->user();
+
+        if (!$user->office_id) {
+            return response()->json([
+                'message' =>
+                    'Your user account is not assigned to an office.',
+            ], 403);
+        }
+
+        if (
+            (int) $user->office_id !==
+            (int) $document->current_office_id
+        ) {
+            return response()->json([
+                'message' =>
+                    'You cannot update this document because it is not currently assigned to your office.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'title' =>
