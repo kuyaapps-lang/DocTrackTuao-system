@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\DocumentAttachmentController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentProcessingController;
@@ -93,6 +94,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
         return response()->json($data);
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUDIT LOGS
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        'audit-logs',
+        [AuditLogController::class, 'index']
+    )->middleware('can:audit.view');
 
     /*
     |--------------------------------------------------------------------------

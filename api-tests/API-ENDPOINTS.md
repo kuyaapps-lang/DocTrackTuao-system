@@ -695,6 +695,41 @@ deferred to Process 9 so rate limiting, audit retention, and lifecycle locking
 can be considered together. Process 5D does not audit QR list, show, or public
 scan requests.
 
+## Audit Logs
+
+### `GET /api/audit-logs`
+
+Requires an authenticated user with `audit.view`. Administrator and Records
+Officer roles currently have system-wide access. Office User and Viewer roles
+receive `403`; unauthenticated requests receive `401`.
+
+Results are ordered by descending audit ID and are always paginated. Supported
+query parameters are:
+
+- `page`: integer, minimum `1`;
+- `per_page`: exactly `10`, `25`, or `50` (default `25`);
+- `module`: an exact stable audit module value;
+- `action`: an exact stable audit action value.
+
+Each item contains only:
+
+```text
+id
+actor: { id, name } or null
+module
+action
+record_id
+description
+ip_address
+created_at
+```
+
+The response also includes Laravel pagination links and metadata. The endpoint
+does not expose raw `user_id`, user agent, updated timestamp, complete user
+records, credentials, tokens, request payloads, SQL, exceptions, filenames, or
+storage paths. It does not support unbounded results, arbitrary sorting,
+free-text search, export, or actor/IP/record/date filtering.
+
 Do not put these in this Git-tracked file:
 
 ```text

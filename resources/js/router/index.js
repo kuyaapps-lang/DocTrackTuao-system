@@ -13,6 +13,7 @@ import QrCodes from '../pages/QrCodes.vue'
 import Offices from '../pages/Offices.vue'
 import DocumentTypes from '../pages/DocumentTypes.vue'
 import Users from '../pages/Users.vue'
+import AuditLogs from '../pages/AuditLogs.vue'
 
 import {
     can,
@@ -125,6 +126,14 @@ const routes = [
         component: Users,
         meta: {
             permission: 'users.manage',
+        },
+    },
+
+    {
+        path: '/audit',
+        component: AuditLogs,
+        meta: {
+            permission: 'audit.view',
         },
     },
 ]
