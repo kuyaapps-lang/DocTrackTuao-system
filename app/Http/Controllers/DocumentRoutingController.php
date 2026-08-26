@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\DocumentProcessingLog;
 use App\Models\DocumentRoute;
@@ -363,8 +364,8 @@ class DocumentRoutingController extends Controller
                     ]);
 
                     $auditLogger->log(
-                        module: 'document_routing',
-                        action: 'forwarded',
+                        module: AuditLog::MODULE_DOCUMENT_ROUTING,
+                        action: AuditLog::ACTION_FORWARDED,
                         recordId: $document->id,
                         description:
                             'Document forwarded from ' .
@@ -592,8 +593,8 @@ class DocumentRoutingController extends Controller
                 ]);
 
                 $auditLogger->log(
-                    module: 'document_routing',
-                    action: 'received',
+                    module: AuditLog::MODULE_DOCUMENT_ROUTING,
+                    action: AuditLog::ACTION_RECEIVED,
                     recordId: $document->id,
                     description:
                         'Document received by ' .

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\DocumentRoute;
 use App\Models\DocumentProcessingLog;
 use App\Models\ProcessingAction;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -159,6 +161,7 @@ class DocumentProcessingController extends Controller
      */
     public function update(
         Request $request,
+        AuditLogger $auditLogger,
         $documentId
     ) {
         $validated = $request->validate([
@@ -305,7 +308,8 @@ class DocumentProcessingController extends Controller
                 $document,
                 $action,
                 $note,
-                $user
+                $user,
+                $auditLogger
             ) {
                 $document->update([
                     'current_action_id' =>
@@ -343,6 +347,21 @@ class DocumentProcessingController extends Controller
                     'event_note' =>
                         'Current processing action updated.',
                 ]);
+
+                $auditLogger->log(
+                    module: AuditLog::MODULE_DOCUMENT_PROCESSING,
+                    action: AuditLog::ACTION_PROCESSING_UPDATED,
+                    recordId: $document->id,
+                    description:
+                        'Processing updated to ' .
+                        $action->action_code .
+                        ' (' .
+                        $action->action_name .
+                        '); note supplied: ' .
+                        ($note !== null ? 'yes' : 'no') .
+                        '.',
+                    userId: $user->id
+                );
             }
         );
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\ConfidentialityLevel;
 use App\Models\Document;
 use App\Models\DocumentStatus;
@@ -417,8 +418,8 @@ class DocumentController extends Controller
                 }
 
                 $auditLogger->log(
-                    module: 'documents',
-                    action: 'created',
+                    module: AuditLog::MODULE_DOCUMENTS,
+                    action: AuditLog::ACTION_CREATED,
                     recordId: $document->id,
                     description: 'Document registered successfully.',
                     userId: $request->user()->id
@@ -587,8 +588,8 @@ class DocumentController extends Controller
                     $document->update($validated);
 
                     $auditLogger->log(
-                        module: 'documents',
-                        action: 'updated',
+                        module: AuditLog::MODULE_DOCUMENTS,
+                        action: AuditLog::ACTION_UPDATED,
                         recordId: $document->id,
                         description: 'Document updated successfully.',
                         userId: $request->user()->id
@@ -639,8 +640,8 @@ class DocumentController extends Controller
                     $document->delete();
 
                     $auditLogger->log(
-                        module: 'documents',
-                        action: 'deleted',
+                        module: AuditLog::MODULE_DOCUMENTS,
+                        action: AuditLog::ACTION_DELETED,
                         recordId: $documentId,
                         description:
                             'Document ' .
