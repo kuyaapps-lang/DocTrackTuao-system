@@ -415,6 +415,14 @@ class DocumentController extends Controller
                         'registered_at' =>
                             now(),
                     ]);
+
+                    $auditLogger->log(
+                        module: AuditLog::MODULE_QR_CODES,
+                        action: AuditLog::ACTION_REGISTERED,
+                        recordId: $qrCode->id,
+                        description: "QR linked to document ID {$document->id}.",
+                        userId: $request->user()->id
+                    );
                 }
 
                 $auditLogger->log(

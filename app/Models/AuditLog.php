@@ -12,6 +12,8 @@ class AuditLog extends Model
     public const MODULE_DOCUMENTS = 'documents';
     public const MODULE_DOCUMENT_ROUTING = 'document_routing';
     public const MODULE_DOCUMENT_PROCESSING = 'document_processing';
+    public const MODULE_QR_CODES = 'qr_codes';
+    public const MODULE_ATTACHMENTS = 'attachments';
 
     public const ACTION_LOGIN = 'login';
     public const ACTION_LOGOUT = 'logout';
@@ -21,6 +23,10 @@ class AuditLog extends Model
     public const ACTION_FORWARDED = 'forwarded';
     public const ACTION_RECEIVED = 'received';
     public const ACTION_PROCESSING_UPDATED = 'processing_updated';
+    public const ACTION_GENERATED = 'generated';
+    public const ACTION_REGISTERED = 'registered';
+    public const ACTION_VOIDED = 'voided';
+    public const ACTION_UPLOADED = 'uploaded';
 
     protected $fillable = [
         'user_id',

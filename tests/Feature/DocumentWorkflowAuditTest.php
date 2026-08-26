@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AuditLog;
 use App\Models\Document;
+use App\Models\DocumentQrCode;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
@@ -70,6 +71,125 @@ class DocumentWorkflowAuditTest extends TestCase
             $documentId,
             $user->id
         );
+    }
+
+    public function test_qr_registration_creates_document_and_safe_qr_audits(): void
+    {
+        $officeId = $this->createOffice('QRREGISTER');
+        $user = $this->createUser('Records Officer', $officeId);
+        $qrCode = DocumentQrCode::create([
+            'qr_token' => 'SECRET-QR-TOKEN',
+            'status' => 'unused',
+            'generated_by' => $user->id,
+            'generated_at' => now(),
+        ]);
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/documents', [
+            'title' => 'Sensitive QR document title',
+            'document_type_id' => $this->lookupId('document_types'),
+            'priority_id' => $this->lookupId('priorities'),
+            'confidentiality_level_id' =>
+                $this->lookupId('confidentiality_levels'),
+            'origin_office_id' => $officeId,
+            'document_date' => '2026-08-27',
+            'qr_token' => $qrCode->qr_token,
+        ])->assertCreated();
+
+        $documentId = $response->json('document.id');
+        $this->assertSame(2, AuditLog::count());
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => AuditLog::MODULE_DOCUMENTS,
+            'action' => AuditLog::ACTION_CREATED,
+            'record_id' => $documentId,
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => AuditLog::MODULE_QR_CODES,
+            'action' => AuditLog::ACTION_REGISTERED,
+            'record_id' => $qrCode->id,
+            'description' => "QR linked to document ID {$documentId}.",
+        ]);
+
+        $qrAudit = AuditLog::where('module', AuditLog::MODULE_QR_CODES)->sole();
+        foreach ([
+            $qrCode->qr_token,
+            'Sensitive QR document title',
+            $response->json('document.tracking_no'),
+            '/q/',
+            '/track/',
+        ] as $sensitiveValue) {
+            $this->assertStringNotContainsString(
+                $sensitiveValue,
+                $qrAudit->description
+            );
+        }
+    }
+
+    public function test_invalid_void_and_registered_qr_attempts_do_not_mutate_or_audit(): void
+    {
+        $officeId = $this->createOffice('QRINVALID');
+        $user = $this->createUser('Records Officer', $officeId);
+        $existingDocument = $this->createDocument($officeId);
+        $voidQr = DocumentQrCode::create([
+            'qr_token' => 'VOID-QR-TOKEN',
+            'status' => 'void',
+            'generated_by' => $user->id,
+        ]);
+        $registeredQr = DocumentQrCode::create([
+            'qr_token' => 'USED-QR-TOKEN',
+            'status' => 'registered',
+            'document_id' => $existingDocument->id,
+            'generated_by' => $user->id,
+        ]);
+        $initialDocumentCount = Document::count();
+        Sanctum::actingAs($user);
+
+        foreach (['MISSING-TOKEN', $voidQr->qr_token, $registeredQr->qr_token] as $token) {
+            $this->postJson('/api/documents', [
+                'title' => 'Rejected QR document',
+                'document_type_id' => $this->lookupId('document_types'),
+                'priority_id' => $this->lookupId('priorities'),
+                'confidentiality_level_id' =>
+                    $this->lookupId('confidentiality_levels'),
+                'origin_office_id' => $officeId,
+                'document_date' => '2026-08-27',
+                'qr_token' => $token,
+            ])->assertUnprocessable();
+        }
+
+        $this->assertSame($initialDocumentCount, Document::count());
+        $this->assertSame('void', $voidQr->fresh()->status);
+        $this->assertSame('registered', $registeredQr->fresh()->status);
+        $this->assertSame(0, AuditLog::count());
+    }
+
+    public function test_qr_registration_survives_audit_failure(): void
+    {
+        $officeId = $this->createOffice('QRFAILURE');
+        $user = $this->createUser('Records Officer', $officeId);
+        $qrCode = DocumentQrCode::create([
+            'qr_token' => 'FAILURE-TOKEN',
+            'status' => 'unused',
+            'generated_by' => $user->id,
+        ]);
+        Sanctum::actingAs($user);
+        Schema::drop('audit_logs');
+        Log::spy();
+
+        $this->postJson('/api/documents', [
+            'title' => 'Registration survives audit failure',
+            'document_type_id' => $this->lookupId('document_types'),
+            'priority_id' => $this->lookupId('priorities'),
+            'confidentiality_level_id' =>
+                $this->lookupId('confidentiality_levels'),
+            'origin_office_id' => $officeId,
+            'document_date' => '2026-08-27',
+            'qr_token' => $qrCode->qr_token,
+        ])->assertCreated();
+
+        $this->assertSame('registered', $qrCode->fresh()->status);
+        $this->assertNotNull($qrCode->fresh()->document_id);
+        Log::shouldHaveReceived('warning')->twice();
     }
 
     public function test_update_produces_exactly_one_expected_audit_row(): void

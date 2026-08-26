@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\DocumentQrCode;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -26,7 +28,7 @@ class DocumentQrCodeController extends Controller
     /**
      * Generate one or multiple QR codes.
      */
-    public function store(Request $request)
+    public function store(Request $request, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
             'quantity' => [
@@ -64,6 +66,16 @@ class DocumentQrCodeController extends Controller
             }
         );
 
+        foreach ($qrCodes as $qrCode) {
+            $auditLogger->log(
+                module: AuditLog::MODULE_QR_CODES,
+                action: AuditLog::ACTION_GENERATED,
+                recordId: $qrCode->id,
+                description: 'QR code generated successfully.',
+                userId: $user->id
+            );
+        }
+
         return response()->json([
             'message' =>
                 $quantity === 1
@@ -99,7 +111,11 @@ class DocumentQrCodeController extends Controller
     /**
      * Void an unused QR code.
      */
-    public function void(Request $request, $id)
+    public function void(
+        Request $request,
+        AuditLogger $auditLogger,
+        $id
+    )
     {
         $qrCode = DocumentQrCode::findOrFail($id);
 
@@ -120,6 +136,14 @@ class DocumentQrCodeController extends Controller
         $qrCode->update([
             'status' => 'void',
         ]);
+
+        $auditLogger->log(
+            module: AuditLog::MODULE_QR_CODES,
+            action: AuditLog::ACTION_VOIDED,
+            recordId: $qrCode->id,
+            description: 'QR code voided successfully.',
+            userId: $request->user()->id
+        );
 
         return response()->json([
             'message' => 'QR code voided successfully.',

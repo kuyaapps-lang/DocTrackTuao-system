@@ -690,6 +690,11 @@ together with authentication rate limiting and audit retention. Process 5C
 records successful login/logout events only; invalid credentials and validation
 failures must not create misleading successful-login rows.
 
+Public QR-scan auditing and the QR void/registration concurrency review are
+deferred to Process 9 so rate limiting, audit retention, and lifecycle locking
+can be considered together. Process 5D does not audit QR list, show, or public
+scan requests.
+
 Do not put these in this Git-tracked file:
 
 ```text

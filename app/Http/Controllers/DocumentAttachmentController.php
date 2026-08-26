@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\DocumentAttachment;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -63,7 +65,11 @@ class DocumentAttachmentController extends Controller
     /**
      * Upload a new attachment.
      */
-    public function store(Request $request, $documentId)
+    public function store(
+        Request $request,
+        AuditLogger $auditLogger,
+        $documentId
+    )
     {
         $document = Document::findOrFail($documentId);
         $user = $request->user();
@@ -175,6 +181,19 @@ class DocumentAttachmentController extends Controller
 
         $attachment->load('uploadedBy');
 
+        $auditLogger->log(
+            module: AuditLog::MODULE_ATTACHMENTS,
+            action: AuditLog::ACTION_UPLOADED,
+            recordId: $attachment->id,
+            description: sprintf(
+                'Attachment uploaded for document ID %d; MIME: %s; bytes: %d.',
+                $document->id,
+                $attachment->mime_type ?? 'unknown',
+                $attachment->file_size ?? 0
+            ),
+            userId: $user->id
+        );
+
         return response()->json([
             'message' =>
                 'Attachment uploaded successfully.',
@@ -246,7 +265,11 @@ class DocumentAttachmentController extends Controller
     /**
      * Delete an attachment.
      */
-    public function destroy(Request $request, $attachmentId)
+    public function destroy(
+        Request $request,
+        AuditLogger $auditLogger,
+        $attachmentId
+    )
     {
         $attachment =
             DocumentAttachment::with('document')
@@ -293,7 +316,18 @@ class DocumentAttachmentController extends Controller
             ], 500);
         }
 
+        $deletedAttachmentId = $attachment->id;
+        $documentId = $attachment->document_id;
+
         $attachment->delete();
+
+        $auditLogger->log(
+            module: AuditLog::MODULE_ATTACHMENTS,
+            action: AuditLog::ACTION_DELETED,
+            recordId: $deletedAttachmentId,
+            description: "Attachment deleted from document ID {$documentId}.",
+            userId: $user->id
+        );
 
         return response()->json([
             'message' =>
