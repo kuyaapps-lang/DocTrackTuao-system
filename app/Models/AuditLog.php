@@ -7,6 +7,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditLog extends Model
 {
+    public const MODULE_AUTHENTICATION = 'authentication';
+    public const MODULE_DOCUMENTS = 'documents';
+    public const MODULE_DOCUMENT_ROUTING = 'document_routing';
+
+    public const ACTION_LOGIN = 'login';
+    public const ACTION_LOGOUT = 'logout';
+    public const ACTION_CREATED = 'created';
+    public const ACTION_UPDATED = 'updated';
+    public const ACTION_DELETED = 'deleted';
+    public const ACTION_FORWARDED = 'forwarded';
+    public const ACTION_RECEIVED = 'received';
+
     protected $fillable = [
         'user_id',
         'module',

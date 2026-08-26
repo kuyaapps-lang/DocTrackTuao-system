@@ -7,6 +7,7 @@ use App\Services\AuditLogger;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class AuditLoggerTest extends TestCase
@@ -67,5 +68,30 @@ class AuditLoggerTest extends TestCase
             'ip_address' => '192.0.2.10',
             'user_agent' => 'DocTrack Test Agent',
         ]);
+    }
+
+    public function test_audit_failure_does_not_escape_to_the_primary_operation(): void
+    {
+        Schema::drop('audit_logs');
+        Log::spy();
+
+        $logger = new AuditLogger(Request::create('/audit-test', 'POST'));
+
+        $log = $logger->log(
+            module: AuditLog::MODULE_DOCUMENTS,
+            action: AuditLog::ACTION_CREATED,
+            recordId: 123
+        );
+
+        $this->assertNull($log);
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(fn (string $message, array $context): bool =>
+                $message === 'Unable to write audit log.'
+                && $context['module'] === AuditLog::MODULE_DOCUMENTS
+                && $context['action'] === AuditLog::ACTION_CREATED
+                && $context['record_id'] === 123
+                && $context['exception'] instanceof \Throwable
+            );
     }
 }
