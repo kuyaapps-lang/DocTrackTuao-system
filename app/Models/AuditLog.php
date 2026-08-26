@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AuditLog extends Model
 {
     public const MODULE_AUTHENTICATION = 'authentication';
+    public const MODULE_USERS = 'users';
     public const MODULE_DOCUMENTS = 'documents';
     public const MODULE_DOCUMENT_ROUTING = 'document_routing';
     public const MODULE_DOCUMENT_PROCESSING = 'document_processing';

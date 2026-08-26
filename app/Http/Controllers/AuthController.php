@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,8 +30,8 @@ class AuthController extends Controller
         $token = $user->createToken('auth-token')->plainTextToken;
 
         $auditLogger->log(
-            module: 'authentication',
-            action: 'login',
+            module: AuditLog::MODULE_AUTHENTICATION,
+            action: AuditLog::ACTION_LOGIN,
             recordId: $user->id,
             description: 'User logged in successfully.',
             userId: $user->id
@@ -54,8 +55,8 @@ class AuthController extends Controller
         $user->currentAccessToken()->delete();
 
         $auditLogger->log(
-            module: 'authentication',
-            action: 'logout',
+            module: AuditLog::MODULE_AUTHENTICATION,
+            action: AuditLog::ACTION_LOGOUT,
             recordId: $user->id,
             description: 'User logged out successfully.',
             userId: $user->id

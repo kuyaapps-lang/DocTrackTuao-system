@@ -685,6 +685,11 @@ Thunder Client itself does not need to be synchronized for this workflow. Recrea
 
 ## Security Rule
 
+Failed-login auditing is deferred to Process 9 so its design can be reviewed
+together with authentication rate limiting and audit retention. Process 5C
+records successful login/logout events only; invalid credentials and validation
+failures must not create misleading successful-login rows.
+
 Do not put these in this Git-tracked file:
 
 ```text
