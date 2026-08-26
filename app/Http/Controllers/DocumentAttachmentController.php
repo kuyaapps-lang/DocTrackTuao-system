@@ -16,11 +16,45 @@ class DocumentAttachmentController extends Controller
     public function index(Request $request, $documentId)
     {
         $document = Document::findOrFail($documentId);
+        $user = $request->user();
+
+        if (!$user->office_id) {
+            return response()->json([
+                'message' => 'Your user account is not assigned to an office.',
+            ], 403);
+        }
+
+        $allowedOfficeIds = array_filter([
+            $document->current_office_id,
+            $document->origin_office_id,
+        ]);
+
+        if (
+            !in_array(
+                (int) $user->office_id,
+                array_map('intval', $allowedOfficeIds),
+                true
+            )
+        ) {
+            return response()->json([
+                'message' =>
+                    'You are not authorized to access attachments for this document.',
+            ], 403);
+        }
 
         $attachments = DocumentAttachment::with('uploadedBy')
             ->where('document_id', $document->id)
             ->latest()
-            ->get();
+            ->get([
+                'id',
+                'document_id',
+                'original_filename',
+                'mime_type',
+                'file_size',
+                'uploaded_by',
+                'created_at',
+                'updated_at',
+            ]);
 
         return response()->json($attachments);
     }
