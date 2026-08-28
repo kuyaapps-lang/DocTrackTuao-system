@@ -38,6 +38,8 @@ const routes = [
         component: Login,
         meta: {
             public: true,
+            title: 'Login',
+            navKey: null,
         },
     },
 
@@ -47,6 +49,8 @@ const routes = [
         component: QrResolver,
         meta: {
             public: true,
+            title: 'QR Code',
+            navKey: null,
         },
     },
 
@@ -55,6 +59,8 @@ const routes = [
         component: DocumentTracking,
         meta: {
             public: true,
+            title: 'Document Tracking',
+            navKey: null,
         },
     },
 
@@ -70,6 +76,8 @@ const routes = [
         component: Documents,
         meta: {
             permission: 'documents.create',
+            title: 'Register Document',
+            navKey: 'documents',
         },
     },
 
@@ -78,6 +86,8 @@ const routes = [
         component: Dashboard,
         meta: {
             authenticated: true,
+            title: 'Dashboard',
+            navKey: 'dashboard',
         },
     },
 
@@ -86,6 +96,8 @@ const routes = [
         component: Documents,
         meta: {
             permission: 'documents.view',
+            title: 'Documents',
+            navKey: 'documents',
         },
     },
 
@@ -94,6 +106,8 @@ const routes = [
         component: DocumentDetails,
         meta: {
             permission: 'documents.view',
+            title: 'Document Details',
+            navKey: 'documents',
         },
     },
 
@@ -102,6 +116,8 @@ const routes = [
         component: QrCodes,
         meta: {
             permission: 'qr.view',
+            title: 'QR Codes',
+            navKey: 'qr-codes',
         },
     },
 
@@ -110,6 +126,8 @@ const routes = [
         component: Offices,
         meta: {
             permission: 'master_data.view',
+            title: 'Offices',
+            navKey: 'offices',
         },
     },
 
@@ -118,6 +136,8 @@ const routes = [
         component: DocumentTypes,
         meta: {
             permission: 'master_data.view',
+            title: 'Document Types',
+            navKey: 'document-types',
         },
     },
 
@@ -126,6 +146,8 @@ const routes = [
         component: Users,
         meta: {
             permission: 'users.manage',
+            title: 'Users',
+            navKey: 'users',
         },
     },
 
@@ -134,6 +156,8 @@ const routes = [
         component: AuditLogs,
         meta: {
             permission: 'audit.view',
+            title: 'Audit',
+            navKey: 'audit',
         },
     },
 ]
@@ -152,11 +176,25 @@ const router = createRouter({
 | stopping an already-authenticated user from opening a page that their role
 | does not permit.
 |
-| If no token is present, the guard deliberately leaves the existing login / QR
-| redirect behavior untouched. We will integrate the login page more tightly in
-| the next frontend step after inspecting its current QR redirect logic.
+| QR registration preserves its safe local redirect through the existing login
+| page. Other unauthenticated application routes return directly to login.
 |
 */
+
+const loginRouteFor = (to) => {
+    if (to.name === 'qr-document-registration') {
+        return {
+            path: '/login',
+            query: {
+                redirect: to.fullPath,
+            },
+        }
+    }
+
+    return {
+        path: '/login',
+    }
+}
 
 router.beforeEach(async (to) => {
     const permission = to.meta?.permission
@@ -169,14 +207,19 @@ router.beforeEach(async (to) => {
     }
 
     if (!getToken()) {
-        return true
+        return loginRouteFor(to)
     }
 
     try {
         await ensureCurrentUser()
     } catch {
-        // API authentication/error handling on the destination page remains
-        // the fallback. Do not disturb the existing login/QR workflow here.
+        if (!getToken()) {
+            return loginRouteFor(to)
+        }
+
+        // Preserve the existing page-level fallback for temporary API or
+        // network errors. Backend authentication and authorization remain
+        // authoritative for every request made by the destination page.
         return true
     }
 
