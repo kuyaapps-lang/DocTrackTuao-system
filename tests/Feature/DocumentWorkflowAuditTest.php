@@ -73,6 +73,48 @@ class DocumentWorkflowAuditTest extends TestCase
         );
     }
 
+    public function test_unauthorized_and_invalid_create_attempts_create_nothing(): void
+    {
+        $officeId = $this->createOffice('CREATEBLOCKED');
+        $initialDocumentCount = Document::count();
+        $initialProcessingLogCount = DB::table('document_processing_logs')->count();
+
+        Sanctum::actingAs($this->createUser('Viewer', $officeId));
+        $this->postJson('/api/documents', $this->validCreatePayload($officeId))
+            ->assertForbidden();
+
+        Sanctum::actingAs($this->createUser('Records Officer', $officeId));
+        $this->postJson('/api/documents', [])
+            ->assertUnprocessable();
+
+        $this->assertSame($initialDocumentCount, Document::count());
+        $this->assertSame(
+            $initialProcessingLogCount,
+            DB::table('document_processing_logs')->count()
+        );
+        $this->assertSame(0, AuditLog::count());
+    }
+
+    public function test_create_http_request_context_reaches_audit_row(): void
+    {
+        $officeId = $this->createOffice('CREATECONTEXT');
+        $user = $this->createUser('Records Officer', $officeId);
+        Sanctum::actingAs($user);
+
+        $this->withServerVariables([
+            'REMOTE_ADDR' => '203.0.113.42',
+            'HTTP_USER_AGENT' => 'Process5F-Create-Agent/1.0',
+        ])->postJson('/api/documents', $this->validCreatePayload($officeId))
+            ->assertCreated();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => AuditLog::MODULE_DOCUMENTS,
+            'action' => AuditLog::ACTION_CREATED,
+            'ip_address' => '203.0.113.42',
+            'user_agent' => 'Process5F-Create-Agent/1.0',
+        ]);
+    }
+
     public function test_qr_registration_creates_document_and_safe_qr_audits(): void
     {
         $officeId = $this->createOffice('QRREGISTER');
@@ -230,6 +272,39 @@ class DocumentWorkflowAuditTest extends TestCase
         );
     }
 
+    public function test_unauthorized_and_missing_delete_attempts_do_not_delete_or_audit(): void
+    {
+        $officeId = $this->createOffice('DELETEBLOCKED');
+        $document = $this->createDocument($officeId);
+
+        Sanctum::actingAs($this->createUser('Viewer', $officeId));
+        $this->deleteJson('/api/documents/'.$document->id)
+            ->assertForbidden();
+
+        Sanctum::actingAs($this->createUser('Administrator', $officeId));
+        $missingId = $document->id + 1000;
+        $this->deleteJson('/api/documents/'.$missingId)
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('documents', ['id' => $document->id]);
+        $this->assertSame(0, AuditLog::count());
+    }
+
+    public function test_delete_succeeds_when_audit_persistence_fails(): void
+    {
+        $officeId = $this->createOffice('DELETEFAILURE');
+        $user = $this->createUser('Administrator', $officeId);
+        $document = $this->createDocument($officeId);
+        Sanctum::actingAs($user);
+        Schema::drop('audit_logs');
+        Log::spy();
+
+        $this->deleteJson('/api/documents/'.$document->id)->assertOk();
+
+        $this->assertDatabaseMissing('documents', ['id' => $document->id]);
+        Log::shouldHaveReceived('warning')->once();
+    }
+
     public function test_forward_produces_exactly_one_expected_audit_row(): void
     {
         $sourceOfficeId = $this->createOffice('SOURCE');
@@ -249,6 +324,72 @@ class DocumentWorkflowAuditTest extends TestCase
             $document->id,
             $user->id
         );
+    }
+
+    public function test_rejected_forward_attempts_do_not_mutate_route_history_or_audit(): void
+    {
+        $sourceOfficeId = $this->createOffice('FORWARDSOURCE');
+        $destinationOfficeId = $this->createOffice('FORWARDDEST');
+        $otherOfficeId = $this->createOffice('FORWARDOTHER');
+
+        $wrongOfficeDocument = $this->createDocument($sourceOfficeId);
+        Sanctum::actingAs($this->createUser('Office User', $otherOfficeId));
+        $this->postJson('/api/documents/'.$wrongOfficeDocument->id.'/forward', [
+            'to_office_id' => $destinationOfficeId,
+        ])->assertForbidden();
+        $this->assertSame(0, DB::table('document_routes')->count());
+        $this->assertSame(0, DB::table('document_processing_logs')->count());
+
+        $pendingDocument = $this->createDocument($sourceOfficeId);
+        $sender = $this->createUser('Office User', $sourceOfficeId);
+        $this->createPendingRoute(
+            $pendingDocument,
+            $sourceOfficeId,
+            $destinationOfficeId,
+            $sender
+        );
+        $initialRouteCount = DB::table('document_routes')->count();
+        $initialProcessingLogCount = DB::table('document_processing_logs')->count();
+        Sanctum::actingAs($sender);
+        $this->postJson('/api/documents/'.$pendingDocument->id.'/forward', [
+            'to_office_id' => $otherOfficeId,
+        ])->assertConflict();
+
+        $invalidDestinationDocument = $this->createDocument($sourceOfficeId);
+        $invalidDestinationId = $otherOfficeId + 1000;
+        $this->postJson('/api/documents/'.$invalidDestinationDocument->id.'/forward', [
+            'to_office_id' => $invalidDestinationId,
+        ])->assertUnprocessable();
+
+        $this->assertSame($initialRouteCount, DB::table('document_routes')->count());
+        $this->assertSame(
+            $initialProcessingLogCount,
+            DB::table('document_processing_logs')->count()
+        );
+        $this->assertSame($sourceOfficeId, $wrongOfficeDocument->fresh()->current_office_id);
+        $this->assertSame($sourceOfficeId, $pendingDocument->fresh()->current_office_id);
+        $this->assertSame($sourceOfficeId, $invalidDestinationDocument->fresh()->current_office_id);
+        $this->assertSame(0, AuditLog::count());
+    }
+
+    public function test_forward_succeeds_when_audit_persistence_fails(): void
+    {
+        $sourceOfficeId = $this->createOffice('FORWARDFAILSOURCE');
+        $destinationOfficeId = $this->createOffice('FORWARDFAILDEST');
+        $user = $this->createUser('Office User', $sourceOfficeId);
+        $document = $this->createDocument($sourceOfficeId);
+        Sanctum::actingAs($user);
+        Schema::drop('audit_logs');
+        Log::spy();
+
+        $this->postJson('/api/documents/'.$document->id.'/forward', [
+            'to_office_id' => $destinationOfficeId,
+        ])->assertCreated();
+
+        $this->assertSame(1, DB::table('document_routes')->count());
+        $this->assertSame(1, DB::table('document_processing_logs')->count());
+        $this->assertSame($destinationOfficeId, $document->fresh()->current_office_id);
+        Log::shouldHaveReceived('warning')->once();
     }
 
     public function test_receive_produces_exactly_one_expected_audit_row(): void
@@ -284,6 +425,66 @@ class DocumentWorkflowAuditTest extends TestCase
             $document->id,
             $receiver->id
         );
+    }
+
+    public function test_rejected_receive_attempts_do_not_mutate_routes_documents_or_audit(): void
+    {
+        $sourceOfficeId = $this->createOffice('RECEIVESOURCE');
+        $destinationOfficeId = $this->createOffice('RECEIVEDEST');
+        $otherOfficeId = $this->createOffice('RECEIVEOTHER');
+        $sender = $this->createUser('Office User', $sourceOfficeId);
+        $document = $this->createDocument($destinationOfficeId);
+        $routeId = $this->createPendingRoute(
+            $document,
+            $sourceOfficeId,
+            $destinationOfficeId,
+            $sender
+        );
+
+        Sanctum::actingAs($this->createUser('Office User', $otherOfficeId));
+        $this->postJson('/api/documents/'.$document->id.'/receive')
+            ->assertForbidden();
+
+        $noRouteDocument = $this->createDocument($destinationOfficeId);
+        Sanctum::actingAs($this->createUser('Office User', $destinationOfficeId));
+        $this->postJson('/api/documents/'.$noRouteDocument->id.'/receive')
+            ->assertConflict();
+
+        $this->assertDatabaseHas('document_routes', [
+            'id' => $routeId,
+            'received_by' => null,
+            'received_at' => null,
+        ]);
+        $this->assertSame(0, DB::table('document_processing_logs')->count());
+        $this->assertSame($destinationOfficeId, $document->fresh()->current_office_id);
+        $this->assertSame(0, AuditLog::count());
+    }
+
+    public function test_receive_succeeds_when_audit_persistence_fails(): void
+    {
+        $sourceOfficeId = $this->createOffice('RECEIVEFAILSOURCE');
+        $destinationOfficeId = $this->createOffice('RECEIVEFAILDEST');
+        $sender = $this->createUser('Office User', $sourceOfficeId);
+        $receiver = $this->createUser('Office User', $destinationOfficeId);
+        $document = $this->createDocument($destinationOfficeId);
+        $routeId = $this->createPendingRoute(
+            $document,
+            $sourceOfficeId,
+            $destinationOfficeId,
+            $sender
+        );
+        Sanctum::actingAs($receiver);
+        Schema::drop('audit_logs');
+        Log::spy();
+
+        $this->postJson('/api/documents/'.$document->id.'/receive')->assertOk();
+
+        $this->assertDatabaseHas('document_routes', [
+            'id' => $routeId,
+            'received_by' => $receiver->id,
+        ]);
+        $this->assertSame(1, DB::table('document_processing_logs')->count());
+        Log::shouldHaveReceived('warning')->once();
     }
 
     public function test_processing_action_and_note_create_one_combined_audit_row_without_note_text(): void
@@ -331,6 +532,78 @@ class DocumentWorkflowAuditTest extends TestCase
 
         $this->assertSame(0, AuditLog::count());
         $this->assertNull($document->fresh()->current_action_id);
+        $this->assertSame(0, DB::table('document_processing_logs')->count());
+    }
+
+    public function test_invalid_processing_states_create_no_mutation_history_or_audit(): void
+    {
+        $officeId = $this->createOffice('PROCESSINVALID');
+        $destinationOfficeId = $this->createOffice('PROCESSDEST');
+        $user = $this->createUser('Office User', $officeId);
+        $manualActionId = $this->processingActionId('UNDER_REVIEW');
+
+        $pendingDocument = $this->createDocument($officeId);
+        $this->createPendingRoute(
+            $pendingDocument,
+            $officeId,
+            $destinationOfficeId,
+            $user
+        );
+        Sanctum::actingAs($user);
+        $this->putJson('/api/documents/'.$pendingDocument->id.'/processing', [
+            'current_action_id' => $manualActionId,
+        ])->assertConflict();
+
+        $inactiveActionId = DB::table('processing_actions')->insertGetId([
+            'action_code' => 'INACTIVE_TEST',
+            'action_name' => 'Inactive Test',
+            'is_active' => false,
+            'sort_order' => 99,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $inactiveDocument = $this->createDocument($officeId);
+        $this->putJson('/api/documents/'.$inactiveDocument->id.'/processing', [
+            'current_action_id' => $inactiveActionId,
+        ])->assertUnprocessable();
+
+        $systemDocument = $this->createDocument($officeId);
+        $this->putJson('/api/documents/'.$systemDocument->id.'/processing', [
+            'current_action_id' => $this->processingActionId('REGISTERED'),
+        ])->assertUnprocessable();
+
+        $invalidDocument = $this->createDocument($officeId);
+        $invalidActionId = $inactiveActionId + 1000;
+        $this->putJson('/api/documents/'.$invalidDocument->id.'/processing', [
+            'current_action_id' => $invalidActionId,
+        ])->assertUnprocessable();
+
+        $this->assertNull($pendingDocument->fresh()->current_action_id);
+        $this->assertNull($inactiveDocument->fresh()->current_action_id);
+        $this->assertNull($systemDocument->fresh()->current_action_id);
+        $this->assertNull($invalidDocument->fresh()->current_action_id);
+        $this->assertSame(0, DB::table('document_processing_logs')->count());
+        $this->assertSame(0, AuditLog::count());
+    }
+
+    public function test_processing_update_succeeds_when_audit_persistence_fails(): void
+    {
+        $officeId = $this->createOffice('PROCESSFAILURE');
+        $user = $this->createUser('Office User', $officeId);
+        $document = $this->createDocument($officeId);
+        $actionId = $this->processingActionId('UNDER_REVIEW');
+        Sanctum::actingAs($user);
+        Schema::drop('audit_logs');
+        Log::spy();
+
+        $this->putJson('/api/documents/'.$document->id.'/processing', [
+            'current_action_id' => $actionId,
+            'processing_note' => 'Audit failure must not block this update.',
+        ])->assertOk();
+
+        $this->assertSame($actionId, $document->fresh()->current_action_id);
+        $this->assertSame(1, DB::table('document_processing_logs')->count());
+        Log::shouldHaveReceived('warning')->once();
     }
 
     public function test_audit_persistence_failure_does_not_roll_back_primary_update(): void
@@ -399,6 +672,37 @@ class DocumentWorkflowAuditTest extends TestCase
             'title' => 'Original document',
             'origin_office_id' => $officeId,
             'current_office_id' => $officeId,
+        ]);
+    }
+
+    private function validCreatePayload(int $officeId): array
+    {
+        return [
+            'title' => 'Process 5F created document',
+            'document_type_id' => $this->lookupId('document_types'),
+            'priority_id' => $this->lookupId('priorities'),
+            'confidentiality_level_id' => $this->lookupId('confidentiality_levels'),
+            'origin_office_id' => $officeId,
+            'document_date' => '2026-08-28',
+        ];
+    }
+
+    private function createPendingRoute(
+        Document $document,
+        int $sourceOfficeId,
+        int $destinationOfficeId,
+        User $sender
+    ): int {
+        return DB::table('document_routes')->insertGetId([
+            'document_id' => $document->id,
+            'from_office_id' => $sourceOfficeId,
+            'to_office_id' => $destinationOfficeId,
+            'forwarded_by' => $sender->id,
+            'forwarded_at' => now(),
+            'status_id' => $this->statusId('Forwarded'),
+            'action_id' => $this->routeActionId('Forward'),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 

@@ -147,6 +147,16 @@ class Process5CAuthUserAuditTest extends TestCase
         ]);
     }
 
+    public function test_unauthenticated_logout_creates_no_logout_audit(): void
+    {
+        $this->postJson('/api/logout')->assertUnauthorized();
+
+        $this->assertDatabaseMissing('audit_logs', [
+            'module' => AuditLog::MODULE_AUTHENTICATION,
+            'action' => AuditLog::ACTION_LOGOUT,
+        ]);
+    }
+
     public function test_login_and_logout_succeed_when_audit_persistence_fails(): void
     {
         $user = $this->createUser('Administrator', 'admin@example.test');

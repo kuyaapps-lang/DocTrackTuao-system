@@ -141,6 +141,21 @@ class Process5DQrAuditTest extends TestCase
         $this->assertSame(0, AuditLog::count());
     }
 
+    public function test_unauthenticated_void_does_not_mutate_or_audit(): void
+    {
+        $owner = $this->user('Records Officer');
+        $qr = $this->qr($owner, 'UNAUTHENTICATED-VOID-TOKEN', 'unused');
+
+        $this->postJson("/api/qr-codes/{$qr->id}/void")
+            ->assertUnauthorized();
+
+        $this->assertSame('unused', $qr->fresh()->status);
+        $this->assertDatabaseMissing('audit_logs', [
+            'module' => AuditLog::MODULE_QR_CODES,
+            'action' => AuditLog::ACTION_VOIDED,
+        ]);
+    }
+
     public function test_audit_failure_does_not_break_generation_or_voiding(): void
     {
         $user = $this->user('Records Officer');
