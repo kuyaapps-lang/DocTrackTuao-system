@@ -19,12 +19,24 @@ class DevelopmentSeeder extends Seeder
             );
         }
 
-        $requiredRoles = [
-            'Administrator',
-            'Records Officer',
-            'Office User',
-            'Viewer',
+        $accountConfiguration = [
+            'Administrator' => config('development.seeded_accounts.administrator'),
+            'Records Officer' => config('development.seeded_accounts.records_officer'),
+            'Office User' => config('development.seeded_accounts.office_user'),
+            'Viewer' => config('development.seeded_accounts.viewer'),
         ];
+
+        foreach ($accountConfiguration as $category => $configuration) {
+            $password = $configuration['password'] ?? null;
+
+            if (! is_string($password) || mb_strlen($password) < 8) {
+                throw new RuntimeException(
+                    "Required development password configuration is missing or invalid for the {$category} account."
+                );
+            }
+        }
+
+        $requiredRoles = array_keys($accountConfiguration);
 
         $roles = Role::whereIn('name', $requiredRoles)
             ->pluck('id', 'name');
@@ -59,30 +71,30 @@ class DevelopmentSeeder extends Seeder
             [
                 'name' => 'Admin',
                 'email' => 'admin@test.com',
-                'password' => 'Admin123!',
                 'role' => 'Administrator',
                 'office' => $budgetOffice,
+                'password' => $accountConfiguration['Administrator']['password'],
             ],
             [
                 'name' => 'Records Officer Test',
                 'email' => 'recordsofficer@test.com',
-                'password' => 'Records123!',
                 'role' => 'Records Officer',
                 'office' => $accountingOffice,
+                'password' => $accountConfiguration['Records Officer']['password'],
             ],
             [
                 'name' => 'Office User Test',
                 'email' => 'officeuser@test.com',
-                'password' => 'Office123!',
                 'role' => 'Office User',
                 'office' => $budgetOffice,
+                'password' => $accountConfiguration['Office User']['password'],
             ],
             [
                 'name' => 'Viewer Test',
                 'email' => 'viewer@test.com',
-                'password' => 'Viewer123!',
                 'role' => 'Viewer',
                 'office' => $budgetOffice,
+                'password' => $accountConfiguration['Viewer']['password'],
             ],
         ];
 
@@ -104,4 +116,3 @@ class DevelopmentSeeder extends Seeder
         );
     }
 }
-
