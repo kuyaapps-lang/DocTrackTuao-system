@@ -1,16 +1,10 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-
 import {
     Card,
     CardContent,
     CardHeader,
     CardTitle,
 } from '@/components/ui/card'
-
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/lib/auth'
 
 import {
     Table,
@@ -20,95 +14,11 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-
-const router = useRouter()
-const {
-    getToken,
-    clearCurrentUser,
-} = useAuth()
-
-const logoutPending = ref(false)
-const logoutError = ref('')
-
-const clearLocalAuthentication = async () => {
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
-    clearCurrentUser()
-
-    await router.replace('/login')
-}
-
-const logout = async () => {
-    if (logoutPending.value) {
-        return
-    }
-
-    logoutError.value = ''
-
-    const token = getToken()
-
-    if (!token) {
-        await clearLocalAuthentication()
-        return
-    }
-
-    logoutPending.value = true
-
-    try {
-        const response = await fetch('/api/logout', {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-        })
-
-        if (response.status === 200 || response.status === 401) {
-            await clearLocalAuthentication()
-            return
-        }
-
-        logoutError.value =
-            'Unable to logout right now. Please try again.'
-    } catch {
-        logoutError.value =
-            'Unable to logout right now. Please try again.'
-    } finally {
-        logoutPending.value = false
-    }
-}
 </script>
 
 <template>
 
     <div class="min-h-screen bg-gray-100">
-
-        <!-- Top Navbar -->
-        <div class="bg-white border-b px-6 py-4 flex justify-between items-center">
-
-            <h1 class="text-2xl font-bold">
-                Document Tracking System
-            </h1>
-
-            <div class="flex flex-col items-end gap-1">
-                <Button
-                    type="button"
-                    :disabled="logoutPending"
-                    @click="logout"
-                >
-                    {{ logoutPending ? 'Logging out...' : 'Logout' }}
-                </Button>
-
-                <p
-                    v-if="logoutError"
-                    class="text-sm text-red-600"
-                    role="alert"
-                >
-                    {{ logoutError }}
-                </p>
-            </div>
-
-        </div>
 
         <!-- Main Content -->
         <div class="p-6">

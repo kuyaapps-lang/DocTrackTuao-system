@@ -14,6 +14,7 @@ import Offices from '../pages/Offices.vue'
 import DocumentTypes from '../pages/DocumentTypes.vue'
 import Users from '../pages/Users.vue'
 import AuditLogs from '../pages/AuditLogs.vue'
+import AppShell from '../layouts/AppShell.vue'
 
 import {
     can,
@@ -22,11 +23,6 @@ import {
 } from '../lib/auth'
 
 const routes = [
-    {
-        path: '/',
-        redirect: '/login',
-    },
-
     /*
     |--------------------------------------------------------------------------
     | Public Routes
@@ -71,94 +67,96 @@ const routes = [
     */
 
     {
-        path: '/register-document/:qrToken',
-        name: 'qr-document-registration',
-        component: Documents,
-        meta: {
-            permission: 'documents.create',
-            title: 'Register Document',
-            navKey: 'documents',
-        },
-    },
-
-    {
-        path: '/dashboard',
-        component: Dashboard,
-        meta: {
-            authenticated: true,
-            title: 'Dashboard',
-            navKey: 'dashboard',
-        },
-    },
-
-    {
-        path: '/documents',
-        component: Documents,
-        meta: {
-            permission: 'documents.view',
-            title: 'Documents',
-            navKey: 'documents',
-        },
-    },
-
-    {
-        path: '/documents/:id',
-        component: DocumentDetails,
-        meta: {
-            permission: 'documents.view',
-            title: 'Document Details',
-            navKey: 'documents',
-        },
-    },
-
-    {
-        path: '/qr-codes',
-        component: QrCodes,
-        meta: {
-            permission: 'qr.view',
-            title: 'QR Codes',
-            navKey: 'qr-codes',
-        },
-    },
-
-    {
-        path: '/offices',
-        component: Offices,
-        meta: {
-            permission: 'master_data.view',
-            title: 'Offices',
-            navKey: 'offices',
-        },
-    },
-
-    {
-        path: '/document-types',
-        component: DocumentTypes,
-        meta: {
-            permission: 'master_data.view',
-            title: 'Document Types',
-            navKey: 'document-types',
-        },
-    },
-
-    {
-        path: '/users',
-        component: Users,
-        meta: {
-            permission: 'users.manage',
-            title: 'Users',
-            navKey: 'users',
-        },
-    },
-
-    {
-        path: '/audit',
-        component: AuditLogs,
-        meta: {
-            permission: 'audit.view',
-            title: 'Audit',
-            navKey: 'audit',
-        },
+        path: '/',
+        component: AppShell,
+        children: [
+            {
+                path: '',
+                redirect: '/login',
+            },
+            {
+                path: 'register-document/:qrToken',
+                name: 'qr-document-registration',
+                component: Documents,
+                meta: {
+                    permission: 'documents.create',
+                    title: 'Register Document',
+                    navKey: 'documents',
+                },
+            },
+            {
+                path: 'dashboard',
+                component: Dashboard,
+                meta: {
+                    authenticated: true,
+                    title: 'Dashboard',
+                    navKey: 'dashboard',
+                },
+            },
+            {
+                path: 'documents',
+                component: Documents,
+                meta: {
+                    permission: 'documents.view',
+                    title: 'Documents',
+                    navKey: 'documents',
+                },
+            },
+            {
+                path: 'documents/:id',
+                component: DocumentDetails,
+                meta: {
+                    permission: 'documents.view',
+                    title: 'Document Details',
+                    navKey: 'documents',
+                },
+            },
+            {
+                path: 'qr-codes',
+                component: QrCodes,
+                meta: {
+                    permission: 'qr.view',
+                    title: 'QR Codes',
+                    navKey: 'qr-codes',
+                },
+            },
+            {
+                path: 'offices',
+                component: Offices,
+                meta: {
+                    permission: 'master_data.view',
+                    title: 'Offices',
+                    navKey: 'offices',
+                },
+            },
+            {
+                path: 'document-types',
+                component: DocumentTypes,
+                meta: {
+                    permission: 'master_data.view',
+                    title: 'Document Types',
+                    navKey: 'document-types',
+                },
+            },
+            {
+                path: 'users',
+                component: Users,
+                meta: {
+                    permission: 'users.manage',
+                    title: 'Users',
+                    navKey: 'users',
+                },
+            },
+            {
+                path: 'audit',
+                component: AuditLogs,
+                meta: {
+                    permission: 'audit.view',
+                    title: 'Audit',
+                    navKey: 'audit',
+                },
+            },
+        ],
     },
 ]
 
