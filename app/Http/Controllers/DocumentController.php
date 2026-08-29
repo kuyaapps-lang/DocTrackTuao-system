@@ -28,17 +28,17 @@ class DocumentController extends Controller
             'type',
             'status',
             'priority',
-            'confidentiality',
-            'originOffice',
             'currentOffice',
-            'currentAction',
-            'currentActionUpdatedBy',
-            'creator',
         ])
             ->latest()
             ->get();
 
-        return response()->json($documents);
+        return response()->json(
+            $documents->map(
+                fn (Document $document): array =>
+                    $this->serializeListDocument($document)
+            )->values()
+        );
     }
 
     /**
@@ -56,14 +56,6 @@ class DocumentController extends Controller
 
         $documents = Document::with([
             'type',
-            'status',
-            'priority',
-            'confidentiality',
-            'originOffice',
-            'currentOffice',
-            'currentAction',
-            'currentActionUpdatedBy',
-            'creator',
 
             'routes' => function ($query) use ($user) {
                 $query
@@ -73,11 +65,6 @@ class DocumentController extends Controller
                     )
                     ->with([
                         'fromOffice',
-                        'toOffice',
-                        'forwardedBy',
-                        'receivedBy',
-                        'status',
-                        'action',
                     ])
                     ->orderByDesc('id');
             },
@@ -91,7 +78,12 @@ class DocumentController extends Controller
             ->latest()
             ->get();
 
-        return response()->json($documents);
+        return response()->json(
+            $documents->map(
+                fn (Document $document): array =>
+                    $this->serializeListDocument($document, 'incoming')
+            )->values()
+        );
     }
 
     /**
@@ -109,14 +101,6 @@ class DocumentController extends Controller
 
         $documents = Document::with([
             'type',
-            'status',
-            'priority',
-            'confidentiality',
-            'originOffice',
-            'currentOffice',
-            'currentAction',
-            'currentActionUpdatedBy',
-            'creator',
 
             'routes' => function ($query) use ($user) {
                 $query
@@ -125,12 +109,7 @@ class DocumentController extends Controller
                         $user->office_id
                     )
                     ->with([
-                        'fromOffice',
                         'toOffice',
-                        'forwardedBy',
-                        'receivedBy',
-                        'status',
-                        'action',
                     ])
                     ->orderByDesc('id');
             },
@@ -144,7 +123,90 @@ class DocumentController extends Controller
             ->latest()
             ->get();
 
-        return response()->json($documents);
+        return response()->json(
+            $documents->map(
+                fn (Document $document): array =>
+                    $this->serializeListDocument($document, 'outgoing')
+            )->values()
+        );
+    }
+
+    /**
+     * Return only fields consumed by the active document list.
+     */
+    private function serializeListDocument(
+        Document $document,
+        string $view = 'all'
+    ): array {
+        $data = [
+            'id' => $document->id,
+            'tracking_no' => $document->tracking_no,
+            'title' => $document->title,
+            'type' => $document->type
+                ? [
+                    'id' => $document->type->id,
+                    'type_name' => $document->type->type_name,
+                ]
+                : null,
+        ];
+
+        if ($view === 'all') {
+            return [
+                ...$data,
+                'status' => $document->status
+                    ? [
+                        'id' => $document->status->id,
+                        'status_name' => $document->status->status_name,
+                    ]
+                    : null,
+                'priority' => $document->priority
+                    ? [
+                        'id' => $document->priority->id,
+                        'priority_name' =>
+                            $document->priority->priority_name,
+                    ]
+                    : null,
+                'current_office' => $document->currentOffice
+                    ? [
+                        'id' => $document->currentOffice->id,
+                        'office_name' =>
+                            $document->currentOffice->office_name,
+                    ]
+                    : null,
+                'created_at' => $document->created_at,
+            ];
+        }
+
+        $route = $document->routes->first();
+
+        if ($view === 'incoming') {
+            $routeData = [
+                'from_office' => $route?->fromOffice
+                    ? [
+                        'id' => $route->fromOffice->id,
+                        'office_name' =>
+                            $route->fromOffice->office_name,
+                    ]
+                    : null,
+                'received_at' => $route?->received_at,
+            ];
+        } else {
+            $routeData = [
+                'to_office' => $route?->toOffice
+                    ? [
+                        'id' => $route->toOffice->id,
+                        'office_name' =>
+                            $route->toOffice->office_name,
+                    ]
+                    : null,
+                'forwarded_at' => $route?->forwarded_at,
+            ];
+        }
+
+        return [
+            ...$data,
+            'routes' => [$routeData],
+        ];
     }
 
     /**
@@ -492,7 +554,6 @@ class DocumentController extends Controller
                     ->orderBy('id');
             },
 
-            'attachments',
             'comments',
         ])->findOrFail($id);
 

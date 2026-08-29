@@ -123,6 +123,19 @@ GET {{base_url}}/api/documents
 
 Permission: `documents.view`
 
+Returns a newest-document-first JSON array. Each item contains only:
+
+```text
+id
+tracking_no
+title
+type: { id, type_name } or null
+status: { id, status_name } or null
+priority: { id, priority_name } or null
+current_office: { id, office_name } or null
+created_at
+```
+
 ### Incoming Documents
 
 ```http
@@ -132,6 +145,24 @@ GET {{base_url}}/api/documents/incoming
 Permission: `documents.view`
 
 Results are scoped to the authenticated user's office.
+
+A document is incoming when any historical route has `to_office_id` equal to
+the authenticated user's `office_id`. Pending and received routes both
+qualify. The newest matching route supplies the movement metadata. Users
+without an office receive `403`.
+
+Each item contains only:
+
+```text
+id
+tracking_no
+title
+type: { id, type_name } or null
+routes: [{
+  from_office: { id, office_name } or null,
+  received_at
+}]
+```
 
 ### Outgoing Documents
 
@@ -143,6 +174,24 @@ Permission: `documents.view`
 
 Results are scoped to the authenticated user's office.
 
+A document is outgoing when any historical route has `from_office_id` equal
+to the authenticated user's `office_id`. Pending and received routes both
+qualify. The newest matching route supplies the movement metadata. Users
+without an office receive `403`.
+
+Each item contains only:
+
+```text
+id
+tracking_no
+title
+type: { id, type_name } or null
+routes: [{
+  to_office: { id, office_name } or null,
+  forwarded_at
+}]
+```
+
 ### Show One Document
 
 ```http
@@ -150,6 +199,9 @@ GET {{base_url}}/api/documents/{document}
 ```
 
 Permission: `documents.view`
+
+Attachment metadata is not embedded in this response. Use the separately
+authorized `GET /api/documents/{document}/attachments` endpoint.
 
 ### Register Document
 
