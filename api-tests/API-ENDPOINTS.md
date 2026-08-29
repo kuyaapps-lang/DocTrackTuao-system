@@ -654,6 +654,97 @@ Permission: `master_data.manage`
 
 ---
 
+## Dashboard Summary
+
+### `GET /api/dashboard/summary`
+
+Requires authentication and the `reports.view` permission.
+
+Supported query parameter:
+
+- `month`: optional strict Gregorian `YYYY-MM` value.
+
+No month means all-time movement/registration data and current document-state
+counts. The configured reporting timezone defaults to `Asia/Manila`. Month
+boundaries use the inclusive local month start and exclusive next-month start,
+converted to UTC for stored timestamp comparisons.
+
+If the configured reporting timezone is invalid, the endpoint returns a
+generic `500` JSON response without exposing the configured value or diagnostic
+details. It never substitutes a different timezone.
+
+All other query parameters are rejected with `422`. Clients cannot choose an
+office, role, scope, sort, column, group, or arbitrary date range.
+
+Scope is determined by the authenticated user:
+
+- Administrator and Records Officer receive system-wide results.
+- Office User and Viewer receive office-scoped results.
+- The office universe includes surviving documents whose origin office,
+  current office, or routing history involves the user's office.
+- Office-scoped users without a valid office receive `403`.
+
+Metric meanings:
+
+- `total_documents`: distinct surviving documents in scope.
+- `incoming_movements`: historical routes to the scoped office, or all routes
+  for system scope. A document may contribute multiple movements.
+- `outgoing_movements`: historical routes from the scoped office, or all
+  routes for system scope. A document may contribute multiple movements.
+- `in_transit_documents`: distinct documents with an unreceived route.
+- `received_documents`: documents currently in Received status with no
+  unreceived route.
+- distributions use each document's current status/current office/origin
+  office and include an explicit Unassigned bucket when the relation is null.
+
+When `month` is supplied, document/current-state metrics and recent documents
+use `documents.created_at`; movement counts use `forwarded_at`; each routing
+activity event uses its own `occurred_at` (`forwarded_at` or `received_at`).
+
+Exact top-level response shape:
+
+```json
+{
+  "filters": {
+    "month": null,
+    "timezone": "Asia/Manila"
+  },
+  "scope": {
+    "type": "system",
+    "office": null
+  },
+  "summary": {
+    "total_documents": 0,
+    "incoming_movements": 0,
+    "outgoing_movements": 0,
+    "in_transit_documents": 0,
+    "received_documents": 0
+  },
+  "status_distribution": [],
+  "current_office_distribution": [],
+  "origin_office_distribution": [],
+  "recent_documents": [],
+  "recent_routing_activity": []
+}
+```
+
+Distribution items contain only `{ status: { id, name }, count }` or
+`{ office: { id, name }, count }`. Recent documents contain only document ID,
+tracking number, safe status, and UTC `created_at`. Routing activity contains
+only safe document ID/tracking number, event type, safe from/to office objects,
+and UTC `occurred_at`.
+
+Recent results are limited to 10. Documents are ordered by `created_at` then
+document ID descending. Routing activity is ordered by occurred time, route ID,
+and fixed event precedence descending.
+
+The endpoint never returns titles, descriptions, processing notes, route
+remarks, users, actor identities, emails, attachments, filenames, paths,
+credentials, raw models, or query details. It is read-only and creates no audit
+event.
+
+---
+
 ## Current RBAC Reference
 
 ### Administrator

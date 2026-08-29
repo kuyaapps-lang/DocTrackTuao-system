@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentAttachmentController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentProcessingController;
@@ -71,6 +72,17 @@ Route::get(
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | DASHBOARD / ESSENTIAL REPORTS
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        'dashboard/summary',
+        [DashboardController::class, 'summary']
+    )->middleware('can:reports.view');
 
     /*
     |--------------------------------------------------------------------------
