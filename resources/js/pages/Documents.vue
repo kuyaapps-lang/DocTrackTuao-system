@@ -1,6 +1,12 @@
 ﻿<script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import {
+    computed,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
     Card,
@@ -21,6 +27,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { can } from '@/lib/auth'
+import {
+    buildDocumentListQuery,
+    DOCUMENT_SEARCH_MAX_LENGTH,
+    filterDocuments,
+    isValidDocumentListPayload,
+    parseDocumentListQuery,
+} from '@/lib/document-list'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,11 +44,18 @@ const router = useRouter()
 |--------------------------------------------------------------------------
 */
 
+const initialQuery = parseDocumentListQuery(route.query)
 const documents = ref([])
 const loading = ref(true)
 const error = ref('')
+const activeTab = ref(initialQuery.view)
+const searchTerm = ref(initialQuery.search)
+const incomingState = ref(initialQuery.incomingState)
 
-const activeTab = ref('all')
+let activeRequestController = null
+let componentUnmounted = false
+let pageMounted = false
+let requestSequence = 0
 
 const tabs = [
     {
@@ -51,6 +71,14 @@ const tabs = [
         label: 'Outgoing',
     },
 ]
+
+const filteredDocuments = computed(() => {
+    return filterDocuments(documents.value, {
+        view: activeTab.value,
+        search: searchTerm.value,
+        incomingState: incomingState.value,
+    })
+})
 
 /*
 |--------------------------------------------------------------------------
@@ -121,26 +149,37 @@ const canCreateDocuments = computed(() => {
 |--------------------------------------------------------------------------
 */
 
-const getDocumentEndpoint = () => {
-    if (activeTab.value === 'incoming') {
+const getDocumentEndpoint = (view) => {
+    if (view === 'incoming') {
         return '/api/documents/incoming'
     }
 
-    if (activeTab.value === 'outgoing') {
+    if (view === 'outgoing') {
         return '/api/documents/outgoing'
     }
 
     return '/api/documents'
 }
 
-const fetchDocuments = async () => {
+const fetchDocuments = async (view = activeTab.value) => {
+    if (componentUnmounted) {
+        return
+    }
+
+    const requestId = ++requestSequence
+
+    activeRequestController?.abort()
+    const requestController = new AbortController()
+    activeRequestController = requestController
+
     loading.value = true
     error.value = ''
 
     try {
         const response = await fetch(
-            getDocumentEndpoint(),
+            getDocumentEndpoint(view),
             {
+                signal: requestController.signal,
                 headers: {
                     Accept: 'application/json',
                     Authorization: `Bearer ${getToken()}`,
@@ -148,27 +187,54 @@ const fetchDocuments = async () => {
             }
         )
 
-        const data = await response.json()
-
         if (!response.ok) {
             throw new Error(
-                data.message ||
-                'Unable to load documents.'
+                response.status === 401
+                    ? 'Your session has expired. Please sign in again.'
+                    : 'Unable to load documents. Please try again.'
             )
         }
 
-        documents.value = Array.isArray(data)
-            ? data
-            : []
+        const data = await response.json()
+
+        if (
+            componentUnmounted ||
+            requestId !== requestSequence
+        ) {
+            return
+        }
+
+        if (!isValidDocumentListPayload(data)) {
+            throw new Error()
+        }
+
+        documents.value = data
 
     } catch (err) {
-        documents.value = []
+        if (
+            err?.name === 'AbortError' ||
+            componentUnmounted ||
+            requestId !== requestSequence
+        ) {
+            return
+        }
 
-        error.value =
-            err.message ||
-            'Unable to load documents.'
+        documents.value = []
+        error.value = err?.message ===
+            'Your session has expired. Please sign in again.'
+            ? err.message
+            : 'Unable to load documents. Please try again.'
     } finally {
-        loading.value = false
+        if (
+            !componentUnmounted &&
+            requestId === requestSequence
+        ) {
+            loading.value = false
+
+            if (activeRequestController === requestController) {
+                activeRequestController = null
+            }
+        }
     }
 }
 
@@ -178,17 +244,55 @@ const fetchDocuments = async () => {
 |--------------------------------------------------------------------------
 */
 
-const changeTab = async (tab) => {
-    if (
-        activeTab.value === tab ||
-        loading.value
-    ) {
+const currentListQuery = () => {
+    return buildDocumentListQuery({
+        view: activeTab.value,
+        search: searchTerm.value,
+        incomingState: incomingState.value,
+    })
+}
+
+const queryMatches = (query, expected) => {
+    const actualKeys = Object.keys(query)
+
+    return (
+        actualKeys.length === Object.keys(expected).length &&
+        Object.entries(expected).every(([key, value]) => {
+            return query[key] === value
+        })
+    )
+}
+
+const replaceListQuery = async () => {
+    if (route.path !== '/documents') {
         return
     }
 
-    activeTab.value = tab
+    const query = currentListQuery()
 
-    await fetchDocuments()
+    if (!queryMatches(route.query, query)) {
+        await router.replace({
+            path: '/documents',
+            query,
+        })
+    }
+}
+
+const changeTab = async (tab) => {
+    if (activeTab.value === tab) {
+        return
+    }
+
+    await router.push({
+        path: '/documents',
+        query: buildDocumentListQuery({
+            view: tab,
+            search: searchTerm.value,
+            incomingState: tab === 'incoming'
+                ? incomingState.value
+                : 'all',
+        }),
+    })
 }
 
 /*
@@ -598,18 +702,6 @@ const createDocument = async () => {
 
 /*
 |--------------------------------------------------------------------------
-| Open Document
-|--------------------------------------------------------------------------
-*/
-
-const openDocument = (document) => {
-    router.push(
-        `/documents/${document.id}`
-    )
-}
-
-/*
-|--------------------------------------------------------------------------
 | Relevant Route
 |--------------------------------------------------------------------------
 |
@@ -775,6 +867,13 @@ const formatDate = (date) => {
 */
 
 const emptyMessage = () => {
+    if (
+        documents.value.length > 0 &&
+        filteredDocuments.value.length === 0
+    ) {
+        return 'No documents match the current search or filter.'
+    }
+
     if (activeTab.value === 'incoming') {
         return 'No incoming documents found.'
     }
@@ -786,6 +885,41 @@ const emptyMessage = () => {
     return 'No documents found.'
 }
 
+watch(
+    () => route.query,
+    async query => {
+        if (!pageMounted || route.path !== '/documents') {
+            return
+        }
+
+        const nextState = parseDocumentListQuery(query)
+        const viewChanged = nextState.view !== activeTab.value
+
+        activeTab.value = nextState.view
+        searchTerm.value = nextState.search
+        incomingState.value = nextState.incomingState
+
+        await replaceListQuery()
+
+        if (viewChanged) {
+            await fetchDocuments(nextState.view)
+        }
+    },
+    { deep: true }
+)
+
+watch(searchTerm, async () => {
+    if (pageMounted) {
+        await replaceListQuery()
+    }
+})
+
+watch(incomingState, async () => {
+    if (pageMounted) {
+        await replaceListQuery()
+    }
+})
+
 /*
 |--------------------------------------------------------------------------
 | Page Load
@@ -793,7 +927,13 @@ const emptyMessage = () => {
 */
 
 onMounted(async () => {
-    await fetchDocuments()
+    if (route.path === '/documents') {
+        await replaceListQuery()
+    }
+
+    pageMounted = true
+
+    await fetchDocuments(activeTab.value)
 
     const scannedToken =
         route.params.qrToken
@@ -804,41 +944,17 @@ onMounted(async () => {
         )
     }
 })
+
+onBeforeUnmount(() => {
+    componentUnmounted = true
+    requestSequence++
+    activeRequestController?.abort()
+    activeRequestController = null
+})
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-100">
-
-        <!-- Header -->
-        <div
-            class="bg-white border-b px-6 py-4
-                   flex items-center justify-between"
-        >
-            <div>
-                <h1
-                    class="text-2xl font-bold text-gray-800"
-                >
-                    Documents
-                </h1>
-
-                <p
-                    class="text-sm text-gray-500 mt-1"
-                >
-                    Document Registration and Management
-                </p>
-            </div>
-
-            <Button
-                v-if="canCreateDocuments"
-                @click="openCreateForm"
-                class="bg-blue-600 hover:bg-blue-700"
-            >
-                + Register Document
-            </Button>
-        </div>
-
-        <!-- Main Content -->
-        <div class="p-6">
+    <div class="p-6">
 
             <!-- QR Verification -->
             <div
@@ -860,29 +976,47 @@ onMounted(async () => {
                 <CardHeader
                     class="space-y-4"
                 >
-                    <div>
-                        <CardTitle>
-                            Document Management
-                        </CardTitle>
+                    <div
+                        class="flex flex-wrap items-start
+                               justify-between gap-4"
+                    >
+                        <div>
+                            <CardTitle>
+                                Document Management
+                            </CardTitle>
 
-                        <p
-                            class="text-sm text-gray-500 mt-1"
+                            <p
+                                class="text-sm text-gray-500 mt-1"
+                            >
+                                View and manage registered,
+                                incoming, and outgoing documents.
+                            </p>
+                        </div>
+
+                        <Button
+                            v-if="canCreateDocuments"
+                            @click="openCreateForm"
+                            class="bg-blue-600 hover:bg-blue-700"
                         >
-                            View and manage registered,
-                            incoming, and outgoing documents.
-                        </p>
+                            + Register Document
+                        </Button>
                     </div>
 
                     <!-- Tabs -->
                     <div
                         class="flex flex-wrap gap-2
                                border-b border-gray-200"
+                        role="tablist"
+                        aria-label="Document views"
                     >
                         <button
                             v-for="tab in tabs"
                             :key="tab.key"
                             type="button"
                             @click="changeTab(tab.key)"
+                            role="tab"
+                            :aria-selected="activeTab === tab.key"
+                            aria-controls="document-list-panel"
                             class="px-4 py-3 text-sm
                                    font-semibold border-b-2
                                    transition-colors"
@@ -895,14 +1029,71 @@ onMounted(async () => {
                             {{ tab.label }}
                         </button>
                     </div>
+
+                    <div
+                        class="grid gap-4 md:grid-cols-2"
+                    >
+                        <div>
+                            <label
+                                for="document-search"
+                                class="mb-2 block text-sm font-semibold text-gray-700"
+                            >
+                                Search this document list
+                            </label>
+
+                            <Input
+                                id="document-search"
+                                v-model="searchTerm"
+                                type="search"
+                                :maxlength="DOCUMENT_SEARCH_MAX_LENGTH"
+                                placeholder="Tracking number, title, type, or office"
+                                autocomplete="off"
+                            />
+                        </div>
+
+                        <div v-if="activeTab === 'incoming'">
+                            <label
+                                for="incoming-state"
+                                class="mb-2 block text-sm font-semibold text-gray-700"
+                            >
+                                Incoming route state
+                            </label>
+
+                            <select
+                                id="incoming-state"
+                                v-model="incomingState"
+                                class="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            >
+                                <option value="all">
+                                    All states
+                                </option>
+                                <option value="pending">
+                                    Pending receipt
+                                </option>
+                                <option value="received">
+                                    Received
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-gray-500">
+                        Search and filters apply to the documents currently returned for this view.
+                    </p>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent
+                    id="document-list-panel"
+                    role="tabpanel"
+                    :aria-busy="loading"
+                >
 
                     <!-- Loading -->
                     <div
                         v-if="loading"
                         class="py-10 text-center text-gray-500"
+                        role="status"
+                        aria-live="polite"
                     >
                         Loading documents...
                     </div>
@@ -911,16 +1102,29 @@ onMounted(async () => {
                     <div
                         v-else-if="error"
                         class="rounded-md border border-red-200
-                               bg-red-50 p-4 text-center
-                               text-red-600"
+                               bg-red-50 p-4 text-center"
+                        role="alert"
                     >
-                        {{ error }}
+                        <p class="text-red-600">
+                            {{ error }}
+                        </p>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            class="mt-3"
+                            @click="fetchDocuments(activeTab)"
+                        >
+                            Retry
+                        </Button>
                     </div>
 
                     <!-- Empty -->
                     <div
-                        v-else-if="documents.length === 0"
+                        v-else-if="filteredDocuments.length === 0"
                         class="py-10 text-center text-gray-500"
+                        role="status"
+                        aria-live="polite"
                     >
                         {{ emptyMessage() }}
                     </div>
@@ -995,17 +1199,22 @@ onMounted(async () => {
                             <TableBody>
 
                                 <TableRow
-                                    v-for="document in documents"
+                                    v-for="document in filteredDocuments"
                                     :key="document.id"
-                                    class="cursor-pointer hover:bg-gray-50"
-                                    @click="openDocument(document)"
+                                    class="hover:bg-gray-50"
                                 >
 
                                     <!-- Tracking -->
                                     <TableCell
                                         class="font-medium"
                                     >
-                                        {{ document.tracking_no }}
+                                        <RouterLink
+                                            :to="`/documents/${document.id}`"
+                                            class="rounded text-blue-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                                            :aria-label="`View document ${document.tracking_no || document.id}: ${document.title || 'Untitled document'}`"
+                                        >
+                                            {{ document.tracking_no || 'N/A' }}
+                                        </RouterLink>
                                     </TableCell>
 
                                     <!-- Type -->
@@ -1170,8 +1379,6 @@ onMounted(async () => {
                 </CardContent>
 
             </Card>
-
-        </div>
 
         <!-- Register Document Modal -->
         <div
