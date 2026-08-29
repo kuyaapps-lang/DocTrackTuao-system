@@ -82,6 +82,7 @@ class DocumentListApiContractTest extends TestCase
             $table->unsignedBigInteger('created_by')->nullable();
             $table->date('document_date')->nullable();
             $table->date('due_date')->nullable();
+            $table->string('status')->default('pending');
             $table->timestamps();
         });
 
@@ -203,7 +204,11 @@ class DocumentListApiContractTest extends TestCase
             $status,
             $priority
         );
+        DB::table('documents')
+            ->where('id', $newer->id)
+            ->update(['status' => 'legacy-scalar-value']);
         Sanctum::actingAs($this->createUser('Viewer', $origin));
+        $before = $this->readOnlyStateSnapshot();
 
         $response = $this->getJson('/api/documents')->assertOk();
         $data = $response->json('data');
@@ -223,12 +228,21 @@ class DocumentListApiContractTest extends TestCase
         ], array_keys($data[0]));
         $this->assertSame(['id', 'type_name'], array_keys($data[0]['type']));
         $this->assertSame(['id', 'status_name'], array_keys($data[0]['status']));
+        $this->assertSame([
+            'id' => $status,
+            'status_name' => 'Received',
+        ], $data[0]['status']);
         $this->assertSame(['id', 'priority_name'], array_keys($data[0]['priority']));
         $this->assertSame(['id', 'office_name'], array_keys($data[0]['current_office']));
+        $this->assertStringNotContainsString(
+            'legacy-scalar-value',
+            $response->getContent()
+        );
         $response
             ->assertJsonMissingPath('data.0.description')
             ->assertJsonMissingPath('data.0.processing_note')
             ->assertJsonMissingPath('data.0.creator');
+        $this->assertReadOnlyStateUnchanged($before);
     }
 
     public function test_incoming_uses_historical_destinations_includes_pending_and_received_and_selects_newest_route(): void
@@ -632,6 +646,7 @@ class DocumentListApiContractTest extends TestCase
                     'title',
                     'current_office_id',
                     'status_id',
+                    'status',
                     'updated_at',
                 ])
                 ->map(fn ($row): array => (array) $row)

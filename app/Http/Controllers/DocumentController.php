@@ -380,12 +380,16 @@ class DocumentController extends Controller
         ];
 
         if ($view === 'all') {
+            $status = $document->relationLoaded('status')
+                ? $document->getRelation('status')
+                : null;
+
             return [
                 ...$data,
-                'status' => $document->status
+                'status' => $status
                     ? [
-                        'id' => $document->status->id,
-                        'status_name' => $document->status->status_name,
+                        'id' => $status->id,
+                        'status_name' => $status->status_name,
                     ]
                     : null,
                 'priority' => $document->priority
