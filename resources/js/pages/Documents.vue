@@ -29,10 +29,16 @@ import { Input } from '@/components/ui/input'
 import { can } from '@/lib/auth'
 import {
     buildDocumentListQuery,
+    buildDocumentListRequestQuery,
+    DOCUMENT_LIST_DEFAULT_PER_PAGE,
+    DOCUMENT_LIST_PER_PAGE_OPTIONS,
+    DOCUMENT_SEARCH_DEBOUNCE_MS,
     DOCUMENT_SEARCH_MAX_LENGTH,
-    filterDocuments,
-    isValidDocumentListPayload,
+    getDocumentPaginationState,
+    isValidDocumentListResponse,
+    normalizeDocumentSearch,
     parseDocumentListQuery,
+    resetDocumentListPage,
 } from '@/lib/document-list'
 
 const route = useRoute()
@@ -51,11 +57,23 @@ const error = ref('')
 const activeTab = ref(initialQuery.view)
 const searchTerm = ref(initialQuery.search)
 const incomingState = ref(initialQuery.incomingState)
+const currentPage = ref(initialQuery.page)
+const perPage = ref(initialQuery.perPage)
+const paginationMeta = ref({
+    current_page: initialQuery.page,
+    last_page: 1,
+    per_page: initialQuery.perPage,
+    total: 0,
+    from: null,
+    to: null,
+})
 
 let activeRequestController = null
 let componentUnmounted = false
+let lastRequestKey = ''
 let pageMounted = false
 let requestSequence = 0
+let searchDebounceTimer = null
 
 const tabs = [
     {
@@ -72,12 +90,8 @@ const tabs = [
     },
 ]
 
-const filteredDocuments = computed(() => {
-    return filterDocuments(documents.value, {
-        view: activeTab.value,
-        search: searchTerm.value,
-        incomingState: incomingState.value,
-    })
+const paginationState = computed(() => {
+    return getDocumentPaginationState(paginationMeta.value)
 })
 
 /*
@@ -161,12 +175,26 @@ const getDocumentEndpoint = (view) => {
     return '/api/documents'
 }
 
-const fetchDocuments = async (view = activeTab.value) => {
+const currentListState = () => ({
+    view: activeTab.value,
+    search: normalizeDocumentSearch(searchTerm.value),
+    incomingState: incomingState.value,
+    page: currentPage.value,
+    perPage: perPage.value,
+})
+
+const documentRequestKey = state => JSON.stringify({
+    view: state.view,
+    query: buildDocumentListRequestQuery(state),
+})
+
+const fetchDocuments = async (state = currentListState()) => {
     if (componentUnmounted) {
         return
     }
 
     const requestId = ++requestSequence
+    lastRequestKey = documentRequestKey(state)
 
     activeRequestController?.abort()
     const requestController = new AbortController()
@@ -176,8 +204,11 @@ const fetchDocuments = async (view = activeTab.value) => {
     error.value = ''
 
     try {
+        const requestQuery = new URLSearchParams(
+            buildDocumentListRequestQuery(state)
+        )
         const response = await fetch(
-            getDocumentEndpoint(view),
+            `${getDocumentEndpoint(state.view)}?${requestQuery}`,
             {
                 signal: requestController.signal,
                 headers: {
@@ -204,11 +235,12 @@ const fetchDocuments = async (view = activeTab.value) => {
             return
         }
 
-        if (!isValidDocumentListPayload(data)) {
+        if (!isValidDocumentListResponse(data)) {
             throw new Error()
         }
 
-        documents.value = data
+        documents.value = data.data
+        paginationMeta.value = data.meta
 
     } catch (err) {
         if (
@@ -245,11 +277,7 @@ const fetchDocuments = async (view = activeTab.value) => {
 */
 
 const currentListQuery = () => {
-    return buildDocumentListQuery({
-        view: activeTab.value,
-        search: searchTerm.value,
-        incomingState: incomingState.value,
-    })
+    return buildDocumentListQuery(currentListState())
 }
 
 const queryMatches = (query, expected) => {
@@ -283,14 +311,36 @@ const changeTab = async (tab) => {
         return
     }
 
+    clearTimeout(searchDebounceTimer)
+
+    const nextState = resetDocumentListPage(currentListState(), {
+        view: tab,
+        incomingState: tab === 'incoming'
+            ? incomingState.value
+            : 'all',
+    })
+
+    await router.push({
+        path: '/documents',
+        query: buildDocumentListQuery(nextState),
+    })
+}
+
+const changePage = async page => {
+    if (
+        loading.value ||
+        page === currentPage.value ||
+        page < 1 ||
+        page > paginationMeta.value.last_page
+    ) {
+        return
+    }
+
     await router.push({
         path: '/documents',
         query: buildDocumentListQuery({
-            view: tab,
-            search: searchTerm.value,
-            incomingState: tab === 'incoming'
-                ? incomingState.value
-                : 'all',
+            ...currentListState(),
+            page,
         }),
     })
 }
@@ -868,8 +918,11 @@ const formatDate = (date) => {
 
 const emptyMessage = () => {
     if (
-        documents.value.length > 0 &&
-        filteredDocuments.value.length === 0
+        normalizeDocumentSearch(searchTerm.value) !== '' ||
+        (
+            activeTab.value === 'incoming' &&
+            incomingState.value !== 'all'
+        )
     ) {
         return 'No documents match the current search or filter.'
     }
@@ -893,30 +946,72 @@ watch(
         }
 
         const nextState = parseDocumentListQuery(query)
-        const viewChanged = nextState.view !== activeTab.value
 
         activeTab.value = nextState.view
         searchTerm.value = nextState.search
         incomingState.value = nextState.incomingState
+        currentPage.value = nextState.page
+        perPage.value = nextState.perPage
 
         await replaceListQuery()
 
-        if (viewChanged) {
-            await fetchDocuments(nextState.view)
+        if (documentRequestKey(nextState) !== lastRequestKey) {
+            await fetchDocuments(nextState)
         }
     },
     { deep: true }
 )
 
-watch(searchTerm, async () => {
-    if (pageMounted) {
-        await replaceListQuery()
+watch(searchTerm, value => {
+    if (!pageMounted) {
+        return
     }
+
+    const normalizedSearch = normalizeDocumentSearch(value)
+
+    if (normalizedSearch === parseDocumentListQuery(route.query).search) {
+        return
+    }
+
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = setTimeout(async () => {
+        await router.replace({
+            path: '/documents',
+            query: buildDocumentListQuery(
+                resetDocumentListPage(currentListState(), {
+                    search: normalizedSearch,
+                })
+            ),
+        })
+    }, DOCUMENT_SEARCH_DEBOUNCE_MS)
 })
 
 watch(incomingState, async () => {
-    if (pageMounted) {
-        await replaceListQuery()
+    if (
+        pageMounted &&
+        incomingState.value !==
+            parseDocumentListQuery(route.query).incomingState
+    ) {
+        await router.replace({
+            path: '/documents',
+            query: buildDocumentListQuery(
+                resetDocumentListPage(currentListState())
+            ),
+        })
+    }
+})
+
+watch(perPage, async () => {
+    if (
+        pageMounted &&
+        perPage.value !== parseDocumentListQuery(route.query).perPage
+    ) {
+        await router.replace({
+            path: '/documents',
+            query: buildDocumentListQuery(
+                resetDocumentListPage(currentListState())
+            ),
+        })
     }
 })
 
@@ -933,7 +1028,7 @@ onMounted(async () => {
 
     pageMounted = true
 
-    await fetchDocuments(activeTab.value)
+    await fetchDocuments(currentListState())
 
     const scannedToken =
         route.params.qrToken
@@ -948,6 +1043,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
     componentUnmounted = true
     requestSequence++
+    clearTimeout(searchDebounceTimer)
     activeRequestController?.abort()
     activeRequestController = null
 })
@@ -1031,7 +1127,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div
-                        class="grid gap-4 md:grid-cols-2"
+                        class="grid gap-4 md:grid-cols-3"
                     >
                         <div>
                             <label
@@ -1075,10 +1171,33 @@ onBeforeUnmount(() => {
                                 </option>
                             </select>
                         </div>
+
+                        <div>
+                            <label
+                                for="documents-per-page"
+                                class="mb-2 block text-sm font-semibold text-gray-700"
+                            >
+                                Results per page
+                            </label>
+
+                            <select
+                                id="documents-per-page"
+                                v-model.number="perPage"
+                                class="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            >
+                                <option
+                                    v-for="option in DOCUMENT_LIST_PER_PAGE_OPTIONS"
+                                    :key="option"
+                                    :value="option"
+                                >
+                                    {{ option }}
+                                </option>
+                            </select>
+                        </div>
                     </div>
 
                     <p class="text-xs text-gray-500">
-                        Search and filters apply to the documents currently returned for this view.
+                        Search and filters are applied securely across this document view.
                     </p>
                 </CardHeader>
 
@@ -1113,7 +1232,7 @@ onBeforeUnmount(() => {
                             type="button"
                             variant="outline"
                             class="mt-3"
-                            @click="fetchDocuments(activeTab)"
+                            @click="fetchDocuments()"
                         >
                             Retry
                         </Button>
@@ -1121,7 +1240,7 @@ onBeforeUnmount(() => {
 
                     <!-- Empty -->
                     <div
-                        v-else-if="filteredDocuments.length === 0"
+                        v-else-if="documents.length === 0"
                         class="py-10 text-center text-gray-500"
                         role="status"
                         aria-live="polite"
@@ -1199,7 +1318,7 @@ onBeforeUnmount(() => {
                             <TableBody>
 
                                 <TableRow
-                                    v-for="document in filteredDocuments"
+                                    v-for="document in documents"
                                     :key="document.id"
                                     class="hover:bg-gray-50"
                                 >
@@ -1374,6 +1493,40 @@ onBeforeUnmount(() => {
                             </TableBody>
 
                         </Table>
+                    </div>
+
+                    <div
+                        v-if="!loading && !error"
+                        class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4"
+                    >
+                        <p class="text-sm text-gray-600">
+                            {{ paginationMeta.total }} total results
+                            · Page {{ paginationMeta.current_page }}
+                            of {{ paginationMeta.last_page }}
+                        </p>
+
+                        <div
+                            class="flex gap-2"
+                            aria-label="Document list pagination"
+                        >
+                            <Button
+                                type="button"
+                                variant="outline"
+                                :disabled="loading || !paginationState.canGoPrevious"
+                                @click="changePage(paginationState.previousPage)"
+                            >
+                                Previous
+                            </Button>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                :disabled="loading || !paginationState.canGoNext"
+                                @click="changePage(paginationState.nextPage)"
+                            >
+                                Next
+                            </Button>
+                        </div>
                     </div>
 
                 </CardContent>

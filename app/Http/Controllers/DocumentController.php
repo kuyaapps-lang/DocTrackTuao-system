@@ -13,7 +13,9 @@ use App\Models\Office;
 use App\Models\Priority;
 use App\Models\ProcessingAction;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Services\AuditLogger;
 
@@ -22,22 +24,29 @@ class DocumentController extends Controller
     /**
      * Display all documents.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $documents = Document::with([
+        $filters = $this->validateListRequest($request, false);
+        $query = Document::with([
             'type',
             'status',
             'priority',
             'currentOffice',
-        ])
-            ->latest()
-            ->get();
+        ]);
+
+        $this->applyAllDocumentSearch($query, $filters['search']);
+
+        $documents = $query
+            ->orderByDesc('documents.created_at')
+            ->orderByDesc('documents.id')
+            ->paginate($filters['per_page']);
 
         return response()->json(
-            $documents->map(
-                fn (Document $document): array =>
-                    $this->serializeListDocument($document)
-            )->values()
+            $this->serializeListPagination(
+                $documents,
+                $filters,
+                'all'
+            )
         );
     }
 
@@ -54,7 +63,9 @@ class DocumentController extends Controller
             ], 403);
         }
 
-        $documents = Document::with([
+        $filters = $this->validateListRequest($request, true);
+
+        $query = Document::with([
             'type',
 
             'routes' => function ($query) use ($user) {
@@ -74,15 +85,33 @@ class DocumentController extends Controller
                     'to_office_id',
                     $user->office_id
                 );
-            })
-            ->latest()
-            ->get();
+            });
+
+        $this->applyMovementSearch(
+            $query,
+            $filters['search'],
+            'to_office_id',
+            $user->office_id,
+            'fromOffice',
+            'offices.office_name'
+        );
+        $this->applyIncomingState(
+            $query,
+            $filters['state'],
+            $user->office_id
+        );
+
+        $documents = $query
+            ->orderByDesc('documents.created_at')
+            ->orderByDesc('documents.id')
+            ->paginate($filters['per_page']);
 
         return response()->json(
-            $documents->map(
-                fn (Document $document): array =>
-                    $this->serializeListDocument($document, 'incoming')
-            )->values()
+            $this->serializeListPagination(
+                $documents,
+                $filters,
+                'incoming'
+            )
         );
     }
 
@@ -99,7 +128,9 @@ class DocumentController extends Controller
             ], 403);
         }
 
-        $documents = Document::with([
+        $filters = $this->validateListRequest($request, false);
+
+        $query = Document::with([
             'type',
 
             'routes' => function ($query) use ($user) {
@@ -119,16 +150,214 @@ class DocumentController extends Controller
                     'from_office_id',
                     $user->office_id
                 );
-            })
-            ->latest()
-            ->get();
+            });
+
+        $this->applyMovementSearch(
+            $query,
+            $filters['search'],
+            'from_office_id',
+            $user->office_id,
+            'toOffice',
+            'offices.office_name'
+        );
+
+        $documents = $query
+            ->orderByDesc('documents.created_at')
+            ->orderByDesc('documents.id')
+            ->paginate($filters['per_page']);
 
         return response()->json(
-            $documents->map(
-                fn (Document $document): array =>
-                    $this->serializeListDocument($document, 'outgoing')
-            )->values()
+            $this->serializeListPagination(
+                $documents,
+                $filters,
+                'outgoing'
+            )
         );
+    }
+
+    private function validateListRequest(
+        Request $request,
+        bool $allowState
+    ): array {
+        if ($request->has('search') && is_string($request->query('search'))) {
+            $request->merge([
+                'search' => trim($request->query('search')),
+            ]);
+        }
+
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', Rule::in([10, 25, 50])],
+            'search' => ['sometimes', 'string', 'max:100'],
+            'state' => $allowState
+                ? ['sometimes', 'string', Rule::in(['pending', 'received'])]
+                : ['prohibited'],
+        ]);
+
+        return [
+            'page' => $validated['page'] ?? 1,
+            'per_page' => $validated['per_page'] ?? 25,
+            'search' => $validated['search'] ?? '',
+            'state' => $validated['state'] ?? null,
+        ];
+    }
+
+    private function applyAllDocumentSearch($query, string $search): void
+    {
+        if ($search === '') {
+            return;
+        }
+
+        $pattern = $this->escapedLikePattern($search);
+
+        $query->where(function ($query) use ($pattern) {
+            $query
+                ->whereRaw("documents.tracking_no LIKE ? ESCAPE '!'", [$pattern])
+                ->orWhereRaw("documents.title LIKE ? ESCAPE '!'", [$pattern])
+                ->orWhereHas('type', fn ($query) =>
+                    $query->whereRaw("document_types.type_name LIKE ? ESCAPE '!'", [$pattern]))
+                ->orWhereHas('status', fn ($query) =>
+                    $query->whereRaw("document_statuses.status_name LIKE ? ESCAPE '!'", [$pattern]))
+                ->orWhereHas('priority', fn ($query) =>
+                    $query->whereRaw("priorities.priority_name LIKE ? ESCAPE '!'", [$pattern]))
+                ->orWhereHas('currentOffice', fn ($query) =>
+                    $query->whereRaw("offices.office_name LIKE ? ESCAPE '!'", [$pattern]));
+        });
+    }
+
+    private function applyMovementSearch(
+        $query,
+        string $search,
+        string $officeColumn,
+        int $officeId,
+        string $officeRelation,
+        string $officeNameColumn
+    ): void {
+        if ($search === '') {
+            return;
+        }
+
+        $pattern = $this->escapedLikePattern($search);
+
+        $query->where(function ($query) use (
+            $pattern,
+            $officeColumn,
+            $officeId,
+            $officeRelation,
+            $officeNameColumn
+        ) {
+            $query
+                ->whereRaw("documents.tracking_no LIKE ? ESCAPE '!'", [$pattern])
+                ->orWhereRaw("documents.title LIKE ? ESCAPE '!'", [$pattern])
+                ->orWhereHas('type', fn ($query) =>
+                    $query->whereRaw("document_types.type_name LIKE ? ESCAPE '!'", [$pattern]))
+                ->orWhereHas('routes', function ($query) use (
+                    $officeColumn,
+                    $officeId,
+                    $officeRelation,
+                    $officeNameColumn,
+                    $pattern
+                ) {
+                    $this->constrainNewestRelevantRoute(
+                        $query,
+                        $officeColumn,
+                        $officeId
+                    );
+                    $query->whereHas($officeRelation, fn ($query) =>
+                        $query->whereRaw("{$officeNameColumn} LIKE ? ESCAPE '!'", [$pattern]));
+                });
+        });
+    }
+
+    private function applyIncomingState(
+        $query,
+        ?string $state,
+        int $officeId
+    ): void {
+        if ($state === null) {
+            return;
+        }
+
+        $query->whereHas('routes', function ($query) use ($state, $officeId) {
+            $this->constrainNewestRelevantRoute(
+                $query,
+                'to_office_id',
+                $officeId
+            );
+
+            if ($state === 'pending') {
+                $query->whereNull('received_at');
+            } else {
+                $query->whereNotNull('received_at');
+            }
+        });
+    }
+
+    private function constrainNewestRelevantRoute(
+        $query,
+        string $officeColumn,
+        int $officeId
+    ): void {
+        $query
+            ->where($officeColumn, $officeId)
+            ->whereRaw(
+                "document_routes.id = (".
+                "select max(latest_route.id) from document_routes as latest_route ".
+                "where latest_route.document_id = documents.id ".
+                "and latest_route.{$officeColumn} = ?)",
+                [$officeId]
+            );
+    }
+
+    private function escapedLikePattern(string $search): string
+    {
+        return '%'.str_replace(
+            ['!', '%', '_'],
+            ['!!', '!%', '!_'],
+            $search
+        ).'%';
+    }
+
+    private function serializeListPagination(
+        LengthAwarePaginator $paginator,
+        array $filters,
+        string $view
+    ): array {
+        $approvedQuery = [
+            'per_page' => $filters['per_page'],
+        ];
+
+        if ($filters['search'] !== '') {
+            $approvedQuery['search'] = $filters['search'];
+        }
+
+        if ($view === 'incoming' && $filters['state'] !== null) {
+            $approvedQuery['state'] = $filters['state'];
+        }
+
+        $paginator->appends($approvedQuery);
+
+        return [
+            'data' => $paginator->getCollection()
+                ->map(fn (Document $document): array =>
+                    $this->serializeListDocument($document, $view))
+                ->values()
+                ->all(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+            'links' => [
+                'first' => $paginator->url(1),
+                'last' => $paginator->url($paginator->lastPage()),
+                'prev' => $paginator->previousPageUrl(),
+                'next' => $paginator->nextPageUrl(),
+            ],
+        ];
     }
 
     /**

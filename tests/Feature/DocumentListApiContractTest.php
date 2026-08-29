@@ -206,7 +206,9 @@ class DocumentListApiContractTest extends TestCase
         Sanctum::actingAs($this->createUser('Viewer', $origin));
 
         $response = $this->getJson('/api/documents')->assertOk();
-        $data = $response->json();
+        $data = $response->json('data');
+
+        $this->assertPaginationShape($response->json());
 
         $this->assertSame([$newer->id, $older->id], array_column($data, 'id'));
         $this->assertSame([
@@ -224,9 +226,9 @@ class DocumentListApiContractTest extends TestCase
         $this->assertSame(['id', 'priority_name'], array_keys($data[0]['priority']));
         $this->assertSame(['id', 'office_name'], array_keys($data[0]['current_office']));
         $response
-            ->assertJsonMissingPath('0.description')
-            ->assertJsonMissingPath('0.processing_note')
-            ->assertJsonMissingPath('0.creator');
+            ->assertJsonMissingPath('data.0.description')
+            ->assertJsonMissingPath('data.0.processing_note')
+            ->assertJsonMissingPath('data.0.creator');
     }
 
     public function test_incoming_uses_historical_destinations_includes_pending_and_received_and_selects_newest_route(): void
@@ -246,7 +248,9 @@ class DocumentListApiContractTest extends TestCase
         Sanctum::actingAs($this->createUser('Records Officer', $office));
 
         $response = $this->getJson('/api/documents/incoming')->assertOk();
-        $data = $response->json();
+        $data = $response->json('data');
+
+        $this->assertPaginationShape($response->json());
 
         $this->assertSame([$pending->id, $received->id], array_column($data, 'id'));
         $this->assertNotContains($originOnly->id, array_column($data, 'id'));
@@ -260,9 +264,9 @@ class DocumentListApiContractTest extends TestCase
             'from_office', 'received_at',
         ], array_keys($data[0]['routes'][0]));
         $response
-            ->assertJsonMissingPath('0.routes.0.remarks')
-            ->assertJsonMissingPath('0.routes.0.forwarded_by')
-            ->assertJsonMissingPath('0.description');
+            ->assertJsonMissingPath('data.0.routes.0.remarks')
+            ->assertJsonMissingPath('data.0.routes.0.forwarded_by')
+            ->assertJsonMissingPath('data.0.description');
     }
 
     public function test_outgoing_uses_historical_senders_includes_pending_and_received_and_selects_newest_route(): void
@@ -281,7 +285,9 @@ class DocumentListApiContractTest extends TestCase
         Sanctum::actingAs($this->createUser('Office User', $office));
 
         $response = $this->getJson('/api/documents/outgoing')->assertOk();
-        $data = $response->json();
+        $data = $response->json('data');
+
+        $this->assertPaginationShape($response->json());
 
         $this->assertSame([$pending->id, $received->id], array_column($data, 'id'));
         $this->assertNotContains($originOnly->id, array_column($data, 'id'));
@@ -290,9 +296,9 @@ class DocumentListApiContractTest extends TestCase
             'to_office', 'forwarded_at',
         ], array_keys($data[0]['routes'][0]));
         $response
-            ->assertJsonMissingPath('0.routes.0.remarks')
-            ->assertJsonMissingPath('0.routes.0.received_by')
-            ->assertJsonMissingPath('0.description');
+            ->assertJsonMissingPath('data.0.routes.0.remarks')
+            ->assertJsonMissingPath('data.0.routes.0.received_by')
+            ->assertJsonMissingPath('data.0.description');
     }
 
     public function test_document_can_appear_in_both_lists_and_empty_office_gets_empty_arrays(): void
@@ -306,13 +312,237 @@ class DocumentListApiContractTest extends TestCase
 
         Sanctum::actingAs($this->createUser('Administrator', $office));
         $this->getJson('/api/documents/incoming')
-            ->assertOk()->assertJsonPath('0.id', $document->id);
+            ->assertOk()->assertJsonPath('data.0.id', $document->id);
         $this->getJson('/api/documents/outgoing')
-            ->assertOk()->assertJsonPath('0.id', $document->id);
+            ->assertOk()->assertJsonPath('data.0.id', $document->id);
 
         Sanctum::actingAs($this->createUser('Viewer', $empty));
-        $this->getJson('/api/documents/incoming')->assertOk()->assertExactJson([]);
-        $this->getJson('/api/documents/outgoing')->assertOk()->assertExactJson([]);
+        $this->getJson('/api/documents/incoming')
+            ->assertOk()
+            ->assertJsonPath('data', [])
+            ->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/documents/outgoing')
+            ->assertOk()
+            ->assertJsonPath('data', [])
+            ->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_defaults_allowed_page_sizes_and_exact_pagination_shape(): void
+    {
+        $office = $this->createOffice('PAGE');
+        $this->createDocument($office, $office, now(), 'Paginated');
+        Sanctum::actingAs($this->createUser('Viewer', $office));
+
+        $default = $this->getJson('/api/documents')->assertOk();
+
+        $this->assertPaginationShape($default->json());
+        $default
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.last_page', 1)
+            ->assertJsonPath('meta.per_page', 25)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('meta.from', 1)
+            ->assertJsonPath('meta.to', 1);
+
+        foreach ([10, 25, 50] as $perPage) {
+            $this->getJson("/api/documents?per_page={$perPage}")
+                ->assertOk()
+                ->assertJsonPath('meta.per_page', $perPage);
+        }
+    }
+
+    public function test_rejected_pagination_search_and_state_are_read_only(): void
+    {
+        $office = $this->createReadOnlyFixture();
+        Sanctum::actingAs($this->createUser('Viewer', $office));
+
+        foreach ([
+            '/api/documents?page=0',
+            '/api/documents?page=one',
+            '/api/documents?per_page=11',
+            '/api/documents?search='.str_repeat('x', 101),
+            '/api/documents?state=pending',
+            '/api/documents/outgoing?state=received',
+            '/api/documents/incoming?state=invalid',
+        ] as $endpoint) {
+            $before = $this->readOnlyStateSnapshot();
+
+            $this->getJson($endpoint)->assertUnprocessable();
+
+            $this->assertReadOnlyStateUnchanged($before);
+        }
+    }
+
+    public function test_all_search_covers_every_safe_visible_field(): void
+    {
+        $origin = $this->createOffice('ORIGIN-SEARCH');
+        $current = $this->createOffice('CURRENT-SEARCH');
+        $type = $this->createLookup('document_types', 'type_name', 'Unique Memo Type');
+        $status = $this->createLookup('document_statuses', 'status_name', 'Unique Status');
+        $priority = $this->createLookup('priorities', 'priority_name', 'Unique Priority');
+        $document = $this->createDocument(
+            $origin,
+            $current,
+            now(),
+            'Unique Search Title',
+            $type,
+            $status,
+            $priority
+        );
+        Sanctum::actingAs($this->createUser('Viewer', $origin));
+
+        foreach ([
+            $document->tracking_no,
+            'Search Title',
+            'Memo Type',
+            'Unique Status',
+            'Unique Priority',
+            'CURRENT-SEARCH Office',
+        ] as $search) {
+            $this->getJson('/api/documents?search='.urlencode($search))
+                ->assertOk()
+                ->assertJsonPath('meta.total', 1)
+                ->assertJsonPath('data.0.id', $document->id);
+        }
+
+        $this->getJson('/api/documents?search=%25')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_movement_search_uses_newest_related_office_and_preserves_scope(): void
+    {
+        $office = $this->createOffice('SCOPED');
+        $oldSender = $this->createOffice('OLD-SENDER');
+        $newSender = $this->createOffice('NEW-SENDER');
+        $oldDestination = $this->createOffice('OLD-DEST');
+        $newDestination = $this->createOffice('NEW-DEST');
+        $unrelated = $this->createOffice('UNRELATED');
+        $type = $this->createLookup(
+            'document_types',
+            'type_name',
+            'Movement Search Type'
+        );
+        $incoming = $this->createDocument(
+            $oldSender,
+            $office,
+            now(),
+            'Incoming visible',
+            $type
+        );
+        $outgoing = $this->createDocument(
+            $office,
+            $newDestination,
+            now(),
+            'Outgoing visible',
+            $type
+        );
+        $wrongOffice = $this->createDocument($unrelated, $unrelated, now(), 'Scope Needle');
+
+        $this->createRoute($incoming, $oldSender, $office, now()->subHour(), now()->subMinutes(50));
+        $this->createRoute($incoming, $newSender, $office, now(), null);
+        $this->createRoute($outgoing, $office, $oldDestination, now()->subHour(), now()->subMinutes(50));
+        $this->createRoute($outgoing, $office, $newDestination, now(), null);
+        $this->createRoute($wrongOffice, $unrelated, $unrelated, now(), null);
+        Sanctum::actingAs($this->createUser('Viewer', $office));
+
+        $this->getJson('/api/documents/incoming?search=NEW-SENDER')
+            ->assertOk()->assertJsonPath('data.0.id', $incoming->id);
+        $this->getJson('/api/documents/incoming?search=OLD-SENDER')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/documents/outgoing?search=NEW-DEST')
+            ->assertOk()->assertJsonPath('data.0.id', $outgoing->id);
+        $this->getJson('/api/documents/outgoing?search=OLD-DEST')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/documents/incoming?search=Scope%20Needle')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+
+        foreach ([
+            ['/api/documents/incoming', $incoming],
+            ['/api/documents/outgoing', $outgoing],
+        ] as [$endpoint, $document]) {
+            foreach ([
+                $document->tracking_no,
+                $document->title,
+                'Movement Search Type',
+            ] as $search) {
+                $this->getJson($endpoint.'?search='.urlencode($search))
+                    ->assertOk()
+                    ->assertJsonPath('meta.total', 1)
+                    ->assertJsonPath('data.0.id', $document->id);
+            }
+        }
+    }
+
+    public function test_incoming_state_uses_only_the_newest_relevant_route(): void
+    {
+        $office = $this->createOffice('STATE');
+        $sender = $this->createOffice('STATE-SENDER');
+        $newestPending = $this->createDocument($sender, $office, now(), 'Newest pending');
+        $newestReceived = $this->createDocument($sender, $office, now(), 'Newest received');
+
+        $this->createRoute($newestPending, $sender, $office, now()->subHour(), now()->subMinutes(50));
+        $this->createRoute($newestPending, $sender, $office, now(), null);
+        $this->createRoute($newestReceived, $sender, $office, now()->subHour(), null);
+        $this->createRoute($newestReceived, $sender, $office, now(), now());
+        Sanctum::actingAs($this->createUser('Viewer', $office));
+
+        $pendingIds = array_column(
+            $this->getJson('/api/documents/incoming?state=pending')
+                ->assertOk()->json('data'),
+            'id'
+        );
+        $receivedIds = array_column(
+            $this->getJson('/api/documents/incoming?state=received')
+                ->assertOk()->json('data'),
+            'id'
+        );
+
+        $this->assertSame([$newestPending->id], $pendingIds);
+        $this->assertSame([$newestReceived->id], $receivedIds);
+    }
+
+    public function test_deterministic_order_page_boundaries_totals_and_safe_links(): void
+    {
+        $office = $this->createOffice('BOUNDARY');
+        $createdAt = now();
+        $documents = [];
+
+        for ($index = 0; $index < 12; $index++) {
+            $documents[] = $this->createDocument(
+                $office,
+                $office,
+                $createdAt,
+                "Boundary {$index}"
+            );
+        }
+
+        Sanctum::actingAs($this->createUser('Viewer', $office));
+        $response = $this->getJson('/api/documents?page=2&per_page=10&search=Boundary')
+            ->assertOk()
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.total', 12)
+            ->assertJsonPath('meta.from', 11)
+            ->assertJsonPath('meta.to', 12);
+
+        $expected = collect($documents)
+            ->sortByDesc('id')
+            ->pluck('id')
+            ->slice(10)
+            ->values()
+            ->all();
+
+        $this->assertSame($expected, array_column($response->json('data'), 'id'));
+
+        foreach ($response->json('links') as $link) {
+            if ($link !== null) {
+                $this->assertStringNotContainsString('token', $link);
+                $this->assertStringNotContainsString('Authorization', $link);
+                $this->assertStringContainsString('per_page=10', $link);
+                $this->assertStringContainsString('search=Boundary', $link);
+            }
+        }
     }
 
     public function test_list_requests_create_no_audits_or_business_mutations(): void
@@ -340,6 +570,25 @@ class DocumentListApiContractTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function assertPaginationShape(array $response): void
+    {
+        $this->assertSame(['data', 'meta', 'links'], array_keys($response));
+        $this->assertSame([
+            'current_page',
+            'last_page',
+            'per_page',
+            'total',
+            'from',
+            'to',
+        ], array_keys($response['meta']));
+        $this->assertSame([
+            'first',
+            'last',
+            'prev',
+            'next',
+        ], array_keys($response['links']));
     }
 
     private function createReadOnlyFixture(): int

@@ -3,241 +3,199 @@ import assert from 'node:assert/strict'
 
 import {
     buildDocumentListQuery,
+    buildDocumentListRequestQuery,
+    DOCUMENT_LIST_DEFAULT_PER_PAGE,
+    DOCUMENT_LIST_PER_PAGE_OPTIONS,
+    DOCUMENT_SEARCH_DEBOUNCE_MS,
     DOCUMENT_SEARCH_MAX_LENGTH,
-    filterDocuments,
-    isValidDocumentListPayload,
+    getDocumentPaginationState,
+    isValidDocumentListResponse,
     normalizeDocumentSearch,
     normalizeDocumentView,
     normalizeIncomingState,
     parseDocumentListQuery,
+    resetDocumentListPage,
 } from '../../resources/js/lib/document-list.js'
 
-const documents = [
-    {
-        id: 1,
-        tracking_no: 'DOC-001',
-        title: 'Budget request',
-        type: { id: 1, type_name: 'Memorandum' },
-        current_office: { id: 2, office_name: 'Treasury' },
-        routes: [{
-            from_office: { id: 3, office_name: 'Mayor Office' },
-            to_office: { id: 2, office_name: 'Treasury' },
-            received_at: null,
-        }],
+const validResponse = {
+    data: [{ id: 1, tracking_no: 'DOC-1' }],
+    meta: {
+        current_page: 1,
+        last_page: 2,
+        per_page: 25,
+        total: 30,
+        from: 1,
+        to: 25,
     },
-    {
-        id: 2,
-        tracking_no: 'DOC-002',
-        title: 'Completed review',
-        type: { id: 2, type_name: 'Letter' },
-        current_office: { id: 4, office_name: 'Records' },
-        routes: [{
-            from_office: { id: 2, office_name: 'Treasury' },
-            to_office: { id: 4, office_name: 'Records' },
-            received_at: '2026-08-29T03:00:00.000000Z',
-        }],
+    links: {
+        first: '/api/documents?page=1',
+        last: '/api/documents?page=2',
+        prev: null,
+        next: '/api/documents?page=2',
     },
-    {
-        id: 3,
-        tracking_no: null,
-        title: null,
-        type: null,
-        current_office: null,
-        routes: [],
-    },
-]
+}
 
-test('normalizes valid and invalid document views', () => {
-    assert.equal(normalizeDocumentView('all'), 'all')
+test('normalizes view, state, and bounded search values', () => {
     assert.equal(normalizeDocumentView('incoming'), 'incoming')
-    assert.equal(normalizeDocumentView('outgoing'), 'outgoing')
     assert.equal(normalizeDocumentView('invalid'), 'all')
-    assert.equal(normalizeDocumentView(undefined), 'all')
-    assert.equal(normalizeDocumentView(['incoming']), 'incoming')
-})
-
-test('normalizes search and incoming state safely', () => {
-    assert.equal(normalizeDocumentSearch('  Budget  '), 'Budget')
-    assert.equal(normalizeDocumentSearch(null), '')
-    assert.equal(normalizeIncomingState('pending'), 'pending')
     assert.equal(normalizeIncomingState('received'), 'received')
     assert.equal(normalizeIncomingState('invalid'), 'all')
+    const overlong = `  ${'x'.repeat(DOCUMENT_SEARCH_MAX_LENGTH + 20)}  `
+    assert.equal(
+        normalizeDocumentSearch(overlong),
+        'x'.repeat(DOCUMENT_SEARCH_MAX_LENGTH)
+    )
 })
 
-test('trims and bounds search text with one shared maximum', () => {
-    const overlong = `  ${'x'.repeat(
-        DOCUMENT_SEARCH_MAX_LENGTH + 25
-    )}  `
-    const normalized = normalizeDocumentSearch(overlong)
-
-    assert.equal(normalized.length, DOCUMENT_SEARCH_MAX_LENGTH)
-    assert.equal(normalized, 'x'.repeat(DOCUMENT_SEARCH_MAX_LENGTH))
-})
-
-test('parses URL query state and defaults invalid values', () => {
+test('parses page and per-page URL state with safe defaults', () => {
     assert.deepEqual(parseDocumentListQuery({
         view: 'incoming',
-        search: '  memo ',
-        state: 'received',
+        search: ' memo ',
+        state: 'pending',
+        page: '3',
+        per_page: '50',
     }), {
         view: 'incoming',
         search: 'memo',
-        incomingState: 'received',
+        incomingState: 'pending',
+        page: 3,
+        perPage: 50,
     })
-
     assert.deepEqual(parseDocumentListQuery({
-        view: 'unknown',
-        state: 'received',
+        view: 'invalid', page: '0', per_page: '11', state: 'pending',
     }), {
         view: 'all',
         search: '',
         incomingState: 'all',
+        page: 1,
+        perPage: DOCUMENT_LIST_DEFAULT_PER_PAGE,
     })
 })
 
-test('builds canonical URL query without empty or irrelevant filters', () => {
+test('builds canonical URL state and omits defaults', () => {
+    assert.deepEqual(buildDocumentListQuery({
+        view: 'all', page: 1, perPage: 25,
+    }), { view: 'all' })
     assert.deepEqual(buildDocumentListQuery({
         view: 'incoming',
-        search: ' budget ',
-        incomingState: 'pending',
+        search: 'budget',
+        incomingState: 'received',
+        page: 2,
+        perPage: 10,
     }), {
         view: 'incoming',
         search: 'budget',
+        state: 'received',
+        page: '2',
+        per_page: '10',
+    })
+    assert.deepEqual(buildDocumentListQuery({
+        view: 'outgoing', incomingState: 'pending',
+    }), { view: 'outgoing' })
+})
+
+test('resets page without mutating source state', () => {
+    const source = Object.freeze({
+        view: 'incoming', page: 4, perPage: 50, search: 'old',
+    })
+    const result = resetDocumentListPage(source, { search: 'new' })
+
+    assert.deepEqual(result, {
+        view: 'incoming', page: 1, perPage: 50, search: 'new',
+    })
+    assert.equal(source.page, 4)
+    assert.equal(source.search, 'old')
+})
+
+test('builds only approved backend request parameters', () => {
+    assert.deepEqual(buildDocumentListRequestQuery({
+        view: 'incoming',
+        search: 'memo',
+        incomingState: 'pending',
+        page: 2,
+        perPage: 50,
+        sort: 'title',
+        token: 'secret',
+    }), {
+        page: '2',
+        per_page: '50',
+        search: 'memo',
         state: 'pending',
     })
-
-    assert.deepEqual(buildDocumentListQuery({
-        view: 'outgoing',
-        search: '',
-        incomingState: 'received',
-    }), {
-        view: 'outgoing',
-    })
+    assert.deepEqual(buildDocumentListRequestQuery({
+        view: 'outgoing', incomingState: 'received', page: 1, perPage: 25,
+    }), { page: '1', per_page: '25' })
 })
 
-test('canonicalizes overlong URL search to the shared maximum', () => {
-    const search = 'q'.repeat(DOCUMENT_SEARCH_MAX_LENGTH + 1)
-    const parsed = parseDocumentListQuery({ view: 'all', search })
-
-    assert.equal(parsed.search, 'q'.repeat(DOCUMENT_SEARCH_MAX_LENGTH))
-    assert.deepEqual(buildDocumentListQuery(parsed), {
-        view: 'all',
-        search: 'q'.repeat(DOCUMENT_SEARCH_MAX_LENGTH),
-    })
+test('exports a small fixed debounce interval and allowed page sizes', () => {
+    assert.equal(DOCUMENT_SEARCH_DEBOUNCE_MS, 300)
+    assert.deepEqual(DOCUMENT_LIST_PER_PAGE_OPTIONS, [10, 25, 50])
 })
 
-test('searches only visible safe fields for the active view', () => {
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'all',
-            search: 'doc-001',
-        }).map(document => document.id),
-        [1]
-    )
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'all',
-            search: 'completed review',
-        }).map(document => document.id),
-        [2]
-    )
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'all',
-            search: 'treasury',
-        }).map(document => document.id),
-        [1]
-    )
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'incoming',
-            search: 'mayor',
-        }).map(document => document.id),
-        [1]
-    )
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'outgoing',
-            search: 'records',
-        }).map(document => document.id),
-        [2]
-    )
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'all',
-            search: 'MEMORANDUM',
-        }).map(document => document.id),
-        [1]
-    )
+test('accepts a complete valid paginated response without mutation', () => {
+    const payload = structuredClone(validResponse)
+    const before = structuredClone(payload)
+
+    assert.equal(isValidDocumentListResponse(payload), true)
+    assert.deepEqual(payload, before)
 })
 
-test('validates complete document list payloads', () => {
-    assert.equal(isValidDocumentListPayload(documents), true)
-    assert.equal(isValidDocumentListPayload([]), true)
-})
-
-test('rejects malformed document list elements and IDs', () => {
-    for (const invalidElement of [
+test('rejects malformed data, metadata, and links', () => {
+    const invalidPayloads = [
         null,
-        1,
-        'document',
         [],
-        {},
-        { id: null },
-        { id: 0 },
-        { id: -1 },
-        { id: 1.5 },
-        { id: '1' },
-    ]) {
-        assert.equal(
-            isValidDocumentListPayload([invalidElement]),
-            false
-        )
+        { ...validResponse, data: null },
+        { ...validResponse, data: [null] },
+        { ...validResponse, data: [[]] },
+        { ...validResponse, data: [{ id: 0 }] },
+        { ...validResponse, data: [{ id: '1' }] },
+        { ...validResponse, meta: null },
+        { ...validResponse, meta: { ...validResponse.meta, current_page: 0 } },
+        { ...validResponse, meta: { ...validResponse.meta, per_page: 11 } },
+        { ...validResponse, meta: { ...validResponse.meta, total: -1 } },
+        { ...validResponse, meta: { ...validResponse.meta, from: null } },
+        { ...validResponse, links: null },
+        { ...validResponse, links: { ...validResponse.links, first: null } },
+        { ...validResponse, links: { ...validResponse.links, next: 2 } },
+    ]
+
+    for (const payload of invalidPayloads) {
+        assert.equal(isValidDocumentListResponse(payload), false)
     }
-
-    assert.equal(isValidDocumentListPayload({}), false)
 })
 
-test('filters incoming pending and received routes', () => {
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'incoming',
-            incomingState: 'pending',
-        }).map(document => document.id),
-        [1]
-    )
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'incoming',
-            incomingState: 'received',
-        }).map(document => document.id),
-        [2]
-    )
+test('accepts an empty first page response', () => {
+    const payload = structuredClone(validResponse)
+    payload.data = []
+    payload.meta = {
+        current_page: 1,
+        last_page: 1,
+        per_page: 25,
+        total: 0,
+        from: null,
+        to: null,
+    }
+    payload.links.last = '/api/documents?page=1'
+    payload.links.next = null
+
+    assert.equal(isValidDocumentListResponse(payload), true)
 })
 
-test('handles null fields and invalid source values without throwing', () => {
-    assert.deepEqual(
-        filterDocuments(documents, {
-            view: 'incoming',
-            search: 'not present',
-        }),
-        []
-    )
-    assert.deepEqual(filterDocuments(null), [])
-})
-
-test('filtering does not mutate the source array or objects', () => {
-    const source = structuredClone(documents)
-    const before = structuredClone(source)
-    const result = filterDocuments(source, {
-        view: 'incoming',
-        search: 'treasury',
-        incomingState: 'received',
+test('calculates previous and next boundaries', () => {
+    assert.deepEqual(getDocumentPaginationState({
+        current_page: 1, last_page: 3,
+    }), {
+        canGoPrevious: false,
+        canGoNext: true,
+        previousPage: 1,
+        nextPage: 2,
     })
-
-    assert.notEqual(result, source)
-    assert.deepEqual(source, before)
-
-    assert.equal(isValidDocumentListPayload(source), true)
-    assert.deepEqual(source, before)
+    assert.deepEqual(getDocumentPaginationState({
+        current_page: 3, last_page: 3,
+    }), {
+        canGoPrevious: true,
+        canGoNext: false,
+        previousPage: 2,
+        nextPage: 3,
+    })
 })

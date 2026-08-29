@@ -123,7 +123,9 @@ GET {{base_url}}/api/documents
 
 Permission: `documents.view`
 
-Returns a newest-document-first JSON array. Each item contains only:
+Returns a deterministic newest-document-first paginated response. Search covers
+tracking number, title, document type, document status, priority, and current
+office. Each data item contains only:
 
 ```text
 id
@@ -135,6 +137,8 @@ priority: { id, priority_name } or null
 current_office: { id, office_name } or null
 created_at
 ```
+
+`state` is rejected with `422` on this endpoint.
 
 ### Incoming Documents
 
@@ -150,6 +154,10 @@ A document is incoming when any historical route has `to_office_id` equal to
 the authenticated user's `office_id`. Pending and received routes both
 qualify. The newest matching route supplies the movement metadata. Users
 without an office receive `403`.
+
+Search covers tracking number, title, document type, and the From Office on the
+newest matching route. Optional `state` accepts `pending` or `received` and
+applies only to that same newest relevant route.
 
 Each item contains only:
 
@@ -179,6 +187,9 @@ to the authenticated user's `office_id`. Pending and received routes both
 qualify. The newest matching route supplies the movement metadata. Users
 without an office receive `403`.
 
+Search covers tracking number, title, document type, and the To Office on the
+newest matching route. `state` is rejected with `422` on this endpoint.
+
 Each item contains only:
 
 ```text
@@ -191,6 +202,43 @@ routes: [{
   forwarded_at
 }]
 ```
+
+All three document-list endpoints accept these supported controls:
+
+- `page`: integer, minimum `1` (default `1`);
+- `per_page`: exactly `10`, `25`, or `50` (default `25`);
+- `search`: trimmed string, maximum `100` characters;
+- `state`: Incoming only, exactly `pending` or `received`.
+
+Invalid supported values return `422`. Other arbitrary query keys are ignored
+by the current Laravel request handling and are never preserved in pagination
+links. Client-controlled sorting is not supported. Results are ordered by
+`documents.created_at` descending and then `documents.id` descending.
+
+Each endpoint returns this explicit shape:
+
+```json
+{
+  "data": [],
+  "meta": {
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 25,
+    "total": 0,
+    "from": null,
+    "to": null
+  },
+  "links": {
+    "first": "http://127.0.0.1:8000/api/documents?page=1&per_page=25",
+    "last": "http://127.0.0.1:8000/api/documents?page=1&per_page=25",
+    "prev": null,
+    "next": null
+  }
+}
+```
+
+`data` uses the safe per-view item fields listed above. Links preserve only
+approved list parameters and never contain credentials or bearer tokens.
 
 ### Show One Document
 
