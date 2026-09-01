@@ -876,10 +876,23 @@ Thunder Client itself does not need to be synchronized for this workflow. Recrea
 
 ## Security Rule
 
-Failed-login auditing is deferred to Process 9 so its design can be reviewed
-together with authentication rate limiting and audit retention. Process 5C
-records successful login/logout events only; invalid credentials and validation
-failures must not create misleading successful-login rows.
+Login accepts at most five requests per normalized email-and-client-IP key in
+each 60-second window. Every accepted request counts, including malformed,
+failed, and successful attempts; the next request receives a generic `429`.
+The raw email is not used in the limiter cache key.
+
+Successful login returns the existing Bearer token field, revokes that user's
+older tokens, and creates one token that expires after 480 minutes by default.
+Email, password, role, or office changes revoke the affected user's tokens;
+name-only changes retain them. Expired or replaced tokens receive `401`, after
+which the frontend clears local authentication and requires login. Closing the
+browser is not server logout. Deployment must schedule Sanctum's expired-token
+pruning command; Process 9B does not add the production scheduler.
+
+Failed-login auditing remains deferred so its retention and privacy impact can
+be reviewed separately. Successful login/logout events are recorded; invalid,
+throttled, and validation-failed requests do not create misleading successful-
+login audit rows.
 
 Public QR-scan auditing and the QR void/registration concurrency review are
 deferred to Process 9 so rate limiting, audit retention, and lifecycle locking

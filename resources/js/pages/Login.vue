@@ -19,6 +19,7 @@ import {
 } from 'lucide-vue-next'
 
 import logo from '@/assets/tuao-logo.png'
+import { loginErrorMessage } from '@/lib/login'
 
 const email = ref('')
 const password = ref('')
@@ -113,10 +114,10 @@ const login = async () => {
             await response.json()
 
         if (!response.ok) {
-            throw new Error(
-                data.message ||
-                'Login failed.'
-            )
+            throw new Error(loginErrorMessage(
+                response.status,
+                data.message
+            ))
         }
 
         /*

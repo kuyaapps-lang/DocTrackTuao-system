@@ -21,6 +21,7 @@ import {
     ensureCurrentUser,
     getToken,
 } from '../lib/auth'
+import { resolveAuthenticationNavigation } from '../lib/auth-guard'
 
 const routes = [
     /*
@@ -179,58 +180,12 @@ const router = createRouter({
 |
 */
 
-const loginRouteFor = (to) => {
-    if (to.name === 'qr-document-registration') {
-        return {
-            path: '/login',
-            query: {
-                redirect: to.fullPath,
-            },
-        }
-    }
-
-    return {
-        path: '/login',
-    }
-}
-
 router.beforeEach(async (to) => {
-    const permission = to.meta?.permission
-    const authenticated =
-        to.meta?.authenticated === true ||
-        Boolean(permission)
-
-    if (!authenticated || to.meta?.public) {
-        return true
-    }
-
-    if (!getToken()) {
-        return loginRouteFor(to)
-    }
-
-    try {
-        await ensureCurrentUser()
-    } catch {
-        if (!getToken()) {
-            return loginRouteFor(to)
-        }
-
-        // Preserve the existing page-level fallback for temporary API or
-        // network errors. Backend authentication and authorization remain
-        // authoritative for every request made by the destination page.
-        return true
-    }
-
-    if (permission && !can(permission)) {
-        return {
-            path: '/dashboard',
-            query: {
-                forbidden: '1',
-            },
-        }
-    }
-
-    return true
+    return resolveAuthenticationNavigation(to, {
+        getToken,
+        ensureCurrentUser,
+        can,
+    })
 })
 
 export default router

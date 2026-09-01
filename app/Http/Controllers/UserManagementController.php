@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -179,49 +180,77 @@ class UserManagementController extends Controller
                 : (int) $office->department_id,
         ];
 
-        foreach ($newValues as $field => $value) {
-            $currentValue = $user->getAttribute($field);
-
-            if (in_array($field, ['role_id', 'office_id', 'department_id'], true)) {
-                $currentValue = $currentValue === null
-                    ? null
-                    : (int) $currentValue;
-            }
-
-            if ($currentValue !== $value) {
-                $changedFields[] = $field;
-            }
-        }
-
         $passwordChanged = !empty($validated['password']);
 
-        $user->name = $validated['name'];
-        $user->email = $validated['email'];
-        $user->role_id = $validated['role_id'];
-        $user->department_id = $office->department_id;
-        $user->office_id = $office->id;
+        DB::transaction(function () use (
+            $user,
+            $validated,
+            $office,
+            $passwordChanged,
+            $newValues,
+            &$changedFields,
+            $auditLogger,
+            $request
+        ): void {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($passwordChanged) {
-            $user->password = Hash::make(
-                $validated['password']
+            foreach ($newValues as $field => $value) {
+                $currentValue = $lockedUser->getAttribute($field);
+
+                if (in_array($field, ['role_id', 'office_id', 'department_id'], true)) {
+                    $currentValue = $currentValue === null
+                        ? null
+                        : (int) $currentValue;
+                }
+
+                if ($currentValue !== $value) {
+                    $changedFields[] = $field;
+                }
+            }
+
+            $lockedUser->name = $validated['name'];
+            $lockedUser->email = $validated['email'];
+            $lockedUser->role_id = $validated['role_id'];
+            $lockedUser->department_id = $office->department_id;
+            $lockedUser->office_id = $office->id;
+
+            if ($passwordChanged) {
+                $lockedUser->password = Hash::make(
+                    $validated['password']
+                );
+            }
+
+            $lockedUser->save();
+
+            $securitySensitiveChange = $passwordChanged ||
+                array_intersect(
+                    $changedFields,
+                    ['email', 'role_id', 'office_id']
+                ) !== [];
+
+            if ($securitySensitiveChange) {
+                $lockedUser->tokens()->delete();
+            }
+
+            $auditLogger->log(
+                module: AuditLog::MODULE_USERS,
+                action: AuditLog::ACTION_UPDATED,
+                recordId: $lockedUser->id,
+                description: sprintf(
+                    'Changed fields: %s; password changed: %s.',
+                    $changedFields === []
+                        ? 'none'
+                        : implode(', ', $changedFields),
+                    $passwordChanged ? 'yes' : 'no'
+                ),
+                userId: $request->user()->id
             );
-        }
 
-        $user->save();
-
-        $auditLogger->log(
-            module: AuditLog::MODULE_USERS,
-            action: AuditLog::ACTION_UPDATED,
-            recordId: $user->id,
-            description: sprintf(
-                'Changed fields: %s; password changed: %s.',
-                $changedFields === []
-                    ? 'none'
-                    : implode(', ', $changedFields),
-                $passwordChanged ? 'yes' : 'no'
-            ),
-            userId: $request->user()->id
-        );
+            $user->setRawAttributes($lockedUser->getAttributes(), true);
+        });
 
         return response()->json([
             'message' => 'User updated successfully.',

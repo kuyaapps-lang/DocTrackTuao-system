@@ -7,6 +7,11 @@ const authError = ref('')
 let activeRequest = null
 let resolvedToken = null
 
+const AUTHENTICATION_REQUIRED_MESSAGE =
+    'Authentication is required.'
+const AUTHENTICATION_TEMPORARY_ERROR_MESSAGE =
+    'Unable to verify authentication right now.'
+
 export const getToken = () => {
     return localStorage.getItem('auth_token')
 }
@@ -51,30 +56,37 @@ export const ensureCurrentUser = async (force = false) => {
                 },
             })
 
-            const data = await response.json()
-
-            if (!response.ok) {
-                if (response.status === 401) {
-                    localStorage.removeItem('auth_token')
-                    clearCurrentUser()
-                }
+            if (response.status === 401) {
+                localStorage.removeItem('auth_token')
+                localStorage.removeItem('auth_user')
+                clearCurrentUser()
 
                 throw new Error(
-                    data.message ||
-                    'Unable to load authenticated user.'
+                    AUTHENTICATION_REQUIRED_MESSAGE
                 )
             }
+
+            if (!response.ok) {
+                throw new Error(
+                    AUTHENTICATION_TEMPORARY_ERROR_MESSAGE
+                )
+            }
+
+            const data = await response.json()
 
             currentUser.value = data
             resolvedToken = token
 
             return data
         } catch (error) {
-            authError.value =
-                error.message ||
-                'Unable to load authenticated user.'
+            const message =
+                error?.message === AUTHENTICATION_REQUIRED_MESSAGE
+                    ? AUTHENTICATION_REQUIRED_MESSAGE
+                    : AUTHENTICATION_TEMPORARY_ERROR_MESSAGE
 
-            throw error
+            authError.value = message
+
+            throw new Error(message)
         } finally {
             authLoading.value = false
             activeRequest = null
