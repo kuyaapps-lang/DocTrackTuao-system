@@ -98,149 +98,55 @@ class DocumentRoutingController extends Controller
         AuditLogger $auditLogger,
         $documentId
     ) {
-        $validated =
-            $request->validate([
-                'to_office_id' => [
-                    'required',
-                    'exists:offices,id',
-                ],
+        $validated = $request->validate([
+            'to_office_id' => ['required', 'exists:offices,id'],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $user = $request->user();
 
-                'remarks' => [
-                    'nullable',
-                    'string',
-                    'max:2000',
-                ],
-            ]);
+        $route = DB::transaction(
+            function () use ($documentId, $user, $validated, $auditLogger) {
+                $document = Document::whereKey($documentId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-        $document =
-            Document::findOrFail(
-                $documentId
-            );
-
-        $user =
-            $request->user();
-
-        /*
-        |--------------------------------------------------------------------------
-        | User must belong to an office
-        |--------------------------------------------------------------------------
-        */
-
-        if (!$user->office_id) {
-            return response()->json([
-                'message' =>
-                    'Your user account is not assigned to an office.',
-            ], 403);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Only current office can forward
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            (int) $user->office_id !==
-            (int) $document->current_office_id
-        ) {
-            return response()->json([
-                'message' =>
-                    'You cannot forward this document because it is not currently assigned to your office.',
-            ], 403);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Cannot forward to same office
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            (int) $validated['to_office_id'] ===
-            (int) $document->current_office_id
-        ) {
-            return response()->json([
-                'message' =>
-                    'Destination office must be different from the current office.',
-            ], 422);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Prevent double forwarding before receipt
-        |--------------------------------------------------------------------------
-        */
-
-        $pendingRoute =
-            DocumentRoute::where(
-                'document_id',
-                $document->id
-            )
-                ->whereNull(
-                    'received_at'
-                )
-                ->latest('id')
-                ->first();
-
-        if ($pendingRoute) {
-            return response()->json([
-                'message' =>
-                    'This document already has a pending route and must be received first.',
-            ], 409);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Lookup routing status/action
-        |--------------------------------------------------------------------------
-        */
-
-        $forwardedStatus =
-            DocumentStatus::where(
-                'status_name',
-                'Forwarded'
-            )->firstOrFail();
-
-        $forwardAction =
-            RouteAction::where(
-                'action_name',
-                'Forward'
-            )->firstOrFail();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Automatic processing action
-        |--------------------------------------------------------------------------
-        */
-
-        $awaitingReceiptAction =
-            ProcessingAction::where(
-                'action_code',
-                'AWAITING_RECEIPT'
-            )
-                ->where(
-                    'is_active',
-                    true
-                )
-                ->firstOrFail();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Forward transaction
-        |--------------------------------------------------------------------------
-        */
-
-        $route =
-            DB::transaction(
-                function () use (
-                    $document,
-                    $user,
-                    $validated,
-                    $forwardedStatus,
-                    $forwardAction,
-                    $awaitingReceiptAction,
-                    $auditLogger
+                if (
+                    !$user->office_id ||
+                    !Office::whereKey($user->office_id)->exists()
                 ) {
+                    abort(403, 'Your user account is not assigned to a valid office.');
+                }
+
+                if ((int) $user->office_id !== (int) $document->current_office_id) {
+                    abort(403, 'You cannot forward this document because it is not currently assigned to your office.');
+                }
+
+                if (
+                    DocumentRoute::where('document_id', $document->id)
+                        ->whereNull('received_at')
+                        ->lockForUpdate()
+                        ->exists()
+                ) {
+                    abort(409, 'This document already has a pending route and must be received first.');
+                }
+
+                $destination = Office::whereKey($validated['to_office_id'])->first();
+                if (!$destination) {
+                    abort(422, 'The selected destination office is not available.');
+                }
+
+                if ((int) $destination->id === (int) $document->current_office_id) {
+                    abort(422, 'Destination office must be different from the current office.');
+                }
+
+                $forwardedStatus = DocumentStatus::where('status_name', 'Forwarded')
+                    ->firstOrFail();
+                $forwardAction = RouteAction::where('action_name', 'Forward')
+                    ->firstOrFail();
+                $awaitingReceiptAction = ProcessingAction::where(
+                    'action_code',
+                    'AWAITING_RECEIPT'
+                )->where('is_active', true)->firstOrFail();
                     /*
                     |--------------------------------------------------------------------------
                     | Remember source office before current office changes
@@ -408,9 +314,9 @@ class DocumentRoutingController extends Controller
                         userId: $user->id
                     );
 
-                    return $route;
-                }
-            );
+                return $route;
+            }
+        );
 
         $route->load([
             'fromOffice',
@@ -438,111 +344,45 @@ class DocumentRoutingController extends Controller
         AuditLogger $auditLogger,
         $documentId
     ) {
-        $document =
-            Document::findOrFail(
-                $documentId
-            );
+        $user = $request->user();
 
-        $user =
-            $request->user();
+        $route = DB::transaction(
+            function () use ($documentId, $user, $auditLogger) {
+                $document = Document::whereKey($documentId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-        /*
-        |--------------------------------------------------------------------------
-        | User must belong to an office
-        |--------------------------------------------------------------------------
-        */
+                if (
+                    !$user->office_id ||
+                    !Office::whereKey($user->office_id)->exists()
+                ) {
+                    abort(403, 'Your user account is not assigned to a valid office.');
+                }
 
-        if (!$user->office_id) {
-            return response()->json([
-                'message' =>
-                    'Your user account is not assigned to an office.',
-            ], 403);
-        }
+                $pendingRoutes = DocumentRoute::where('document_id', $document->id)
+                    ->whereNull('received_at')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Find latest unreceived route
-        |--------------------------------------------------------------------------
-        */
+                if ($pendingRoutes->isEmpty()) {
+                    abort(409, 'This document has no pending route to receive.');
+                }
 
-        $route =
-            DocumentRoute::where(
-                'document_id',
-                $document->id
-            )
-                ->whereNull(
-                    'received_at'
-                )
-                ->latest('id')
-                ->first();
+                if ($pendingRoutes->count() !== 1) {
+                    abort(409, 'This document has an invalid pending routing state.');
+                }
 
-        if (!$route) {
-            return response()->json([
-                'message' =>
-                    'This document has no pending route to receive.',
-            ], 409);
-        }
+                $route = $pendingRoutes->first();
+                if ((int) $route->to_office_id !== (int) $user->office_id) {
+                    abort(403, 'You cannot receive this document because it is routed to another office.');
+                }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Only destination office may receive
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            (int) $route->to_office_id !==
-            (int) $user->office_id
-        ) {
-            return response()->json([
-                'message' =>
-                    'You cannot receive this document because it is routed to another office.',
-            ], 403);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Lookup Received status
-        |--------------------------------------------------------------------------
-        */
-
-        $receivedStatus =
-            DocumentStatus::where(
-                'status_name',
-                'Received'
-            )->firstOrFail();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Automatic processing action after receipt
-        |--------------------------------------------------------------------------
-        */
-
-        $forAction =
-            ProcessingAction::where(
-                'action_code',
-                'FOR_ACTION'
-            )
-                ->where(
-                    'is_active',
-                    true
-                )
-                ->firstOrFail();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Receive transaction
-        |--------------------------------------------------------------------------
-        */
-
-        DB::transaction(
-            function () use (
-                $route,
-                $document,
-                $user,
-                $receivedStatus,
-                $forAction,
-                $auditLogger
-            ) {
+                $receivedStatus = DocumentStatus::where('status_name', 'Received')
+                    ->firstOrFail();
+                $forAction = ProcessingAction::where('action_code', 'FOR_ACTION')
+                    ->where('is_active', true)
+                    ->firstOrFail();
                 /*
                 |--------------------------------------------------------------------------
                 | Complete route
@@ -631,6 +471,7 @@ class DocumentRoutingController extends Controller
                     userId: $user->id
                 );
 
+                return $route;
             }
         );
 

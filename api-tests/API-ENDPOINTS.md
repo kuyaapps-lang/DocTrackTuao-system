@@ -324,6 +324,18 @@ fields are prohibited and return `422`. Tracking number, processing action and
 note/history, current-action actor/time, creator, and routing records are not
 ordinary editable fields and are never applied by this endpoint.
 
+Document forward, receive, and processing transitions re-read the current
+document state inside a transaction while holding the document lock. Pending
+route checks use the same transaction and lock the relevant route rows after
+the document. Replayed forward/receive requests return `409` without creating
+another route, history event, state change, or audit. More than one pending
+route is treated as an invalid state and is not received.
+
+An identical processing action and normalized note submission returns `200`
+with `Current processing action is already up to date.` It is a no-op and does
+not create another processing-history or audit row. A different authorized
+processing update remains a new history event.
+
 ### Delete Document
 
 ```http
@@ -472,7 +484,9 @@ POST {{base_url}}/api/qr-codes/{qrCode}/void
 
 Permission: `qr.manage`
 
-Only unused QR codes may be voided.
+Only unused QR codes may be voided. The QR row is re-read and locked inside
+the void transaction. Registered, already-void, and other invalid lifecycle
+states return `409`; replaying a successful void creates no additional audit.
 
 ---
 

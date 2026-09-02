@@ -7,6 +7,7 @@ use App\Models\DocumentQrCode;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -36,6 +37,49 @@ class Process5DQrAuditTest extends TestCase
         });
         Schema::create('documents', function (Blueprint $table) {
             $table->id();
+            $table->string('tracking_no')->unique();
+            $table->string('title');
+            $table->text('description')->nullable();
+            $table->string('status')->default('pending');
+            $table->unsignedBigInteger('document_type_id')->nullable();
+            $table->unsignedBigInteger('status_id')->nullable();
+            $table->unsignedBigInteger('priority_id')->nullable();
+            $table->unsignedBigInteger('confidentiality_level_id')->nullable();
+            $table->unsignedBigInteger('origin_office_id')->nullable();
+            $table->unsignedBigInteger('current_office_id')->nullable();
+            $table->unsignedBigInteger('current_action_id')->nullable();
+            $table->text('processing_note')->nullable();
+            $table->unsignedBigInteger('current_action_updated_by')->nullable();
+            $table->timestamp('current_action_updated_at')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->date('document_date')->nullable();
+            $table->date('due_date')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('document_routes', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('document_id');
+            $table->unsignedBigInteger('from_office_id');
+            $table->unsignedBigInteger('to_office_id');
+            $table->unsignedBigInteger('forwarded_by');
+            $table->unsignedBigInteger('received_by')->nullable();
+            $table->timestamp('forwarded_at')->nullable();
+            $table->timestamp('received_at')->nullable();
+            $table->unsignedBigInteger('status_id');
+            $table->unsignedBigInteger('action_id')->nullable();
+            $table->text('remarks')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('document_processing_logs', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('document_id');
+            $table->unsignedBigInteger('office_id')->nullable();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('processing_action_id')->nullable();
+            $table->unsignedBigInteger('document_route_id')->nullable();
+            $table->string('event_type', 50);
+            $table->text('processing_note')->nullable();
+            $table->string('event_note', 1000)->nullable();
             $table->timestamps();
         });
         Schema::create('document_qr_codes', function (Blueprint $table) {
@@ -48,12 +92,48 @@ class Process5DQrAuditTest extends TestCase
             $table->timestamp('registered_at')->nullable();
             $table->timestamps();
         });
+        Schema::create('personal_access_tokens', function (Blueprint $table) {
+            $table->id();
+            $table->string('tokenable_type');
+            $table->unsignedBigInteger('tokenable_id');
+            $table->string('name');
+            $table->string('token', 64)->unique();
+            $table->text('abilities')->nullable();
+            $table->timestamp('last_used_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
+            $table->timestamps();
+        });
         $this->createAuditTable();
+        DB::table('documents')->insert([
+            'tracking_no' => 'QR-SNAPSHOT-DOC',
+            'title' => 'QR snapshot fixture',
+            'description' => 'Non-sensitive mutation sentinel',
+            'status' => 'pending',
+            'document_type_id' => 101,
+            'status_id' => 102,
+            'priority_id' => 103,
+            'confidentiality_level_id' => 104,
+            'origin_office_id' => 105,
+            'current_office_id' => 106,
+            'current_action_id' => 107,
+            'processing_note' => 'Fixture note sentinel',
+            'current_action_updated_by' => 108,
+            'current_action_updated_at' => '2026-09-01 08:00:00',
+            'created_by' => 109,
+            'document_date' => '2026-09-01',
+            'due_date' => '2026-09-30',
+            'created_at' => '2026-09-01 07:00:00',
+            'updated_at' => '2026-09-01 07:30:00',
+        ]);
     }
 
     protected function tearDown(): void
     {
-        foreach (['audit_logs', 'document_qr_codes', 'documents', 'users', 'roles'] as $table) {
+        foreach ([
+            'audit_logs', 'personal_access_tokens', 'document_qr_codes',
+            'document_processing_logs', 'document_routes', 'documents',
+            'users', 'roles',
+        ] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -122,10 +202,21 @@ class Process5DQrAuditTest extends TestCase
         ]);
         $this->assertSame(1, AuditLog::count());
 
+        $beforeReplay = $this->completeSnapshot();
+        $this->postJson("/api/qr-codes/{$unused->id}/void")
+            ->assertConflict();
+        $this->assertSame($beforeReplay, $this->completeSnapshot());
+
         $void = $this->qr($user, 'VOID-TOKEN', 'void');
         $registered = $this->qr($user, 'REGISTERED-TOKEN', 'registered');
+
+        $beforeVoid = $this->completeSnapshot();
         $this->postJson("/api/qr-codes/{$void->id}/void")->assertConflict();
+        $this->assertSame($beforeVoid, $this->completeSnapshot());
+
+        $beforeRegistered = $this->completeSnapshot();
         $this->postJson("/api/qr-codes/{$registered->id}/void")->assertConflict();
+        $this->assertSame($beforeRegistered, $this->completeSnapshot());
         $this->assertSame(1, AuditLog::count());
     }
 
@@ -134,26 +225,61 @@ class Process5DQrAuditTest extends TestCase
         $owner = $this->user('Records Officer');
         $qr = $this->qr($owner, 'FORBIDDEN-TOKEN', 'unused');
         Sanctum::actingAs($this->user('Viewer', 'viewer@example.test'));
+        $before = $this->completeSnapshot();
 
         $this->postJson("/api/qr-codes/{$qr->id}/void")->assertForbidden();
 
-        $this->assertSame('unused', $qr->fresh()->status);
-        $this->assertSame(0, AuditLog::count());
+        $this->assertSame($before, $this->completeSnapshot());
     }
 
     public function test_unauthenticated_void_does_not_mutate_or_audit(): void
     {
         $owner = $this->user('Records Officer');
         $qr = $this->qr($owner, 'UNAUTHENTICATED-VOID-TOKEN', 'unused');
+        $before = $this->completeSnapshot();
 
         $this->postJson("/api/qr-codes/{$qr->id}/void")
             ->assertUnauthorized();
 
-        $this->assertSame('unused', $qr->fresh()->status);
-        $this->assertDatabaseMissing('audit_logs', [
-            'module' => AuditLog::MODULE_QR_CODES,
-            'action' => AuditLog::ACTION_VOIDED,
-        ]);
+        $this->assertSame($before, $this->completeSnapshot());
+    }
+
+    public function test_void_reloads_stale_qr_state_before_transition(): void
+    {
+        $user = $this->user('Records Officer');
+        $qr = $this->qr($user, 'STALE-VOID-TOKEN', 'unused');
+        $staleQr = $qr->fresh();
+        DocumentQrCode::whereKey($qr->id)->update(['status' => 'registered']);
+        Sanctum::actingAs($user);
+        $expectedAfterExternalChange = $this->completeSnapshot();
+
+        $this->postJson("/api/qr-codes/{$staleQr->id}/void")
+            ->assertConflict();
+
+        $this->assertSame(
+            $expectedAfterExternalChange,
+            $this->completeSnapshot()
+        );
+    }
+
+    public function test_unexpected_qr_state_is_rejected_without_any_side_effect(): void
+    {
+        $user = $this->user('Records Officer');
+        $qr = $this->qr($user, 'UNEXPECTED-STATE-TOKEN', 'quarantined');
+        Sanctum::actingAs($user);
+        $before = $this->completeSnapshot();
+
+        $response = $this->postJson("/api/qr-codes/{$qr->id}/void")
+            ->assertConflict();
+
+        $this->assertSame($before, $this->completeSnapshot());
+        $content = strtolower($response->getContent());
+        foreach ([
+            strtolower($qr->qr_token), 'sql', 'exception', 'transaction',
+            'lock', 'file_path', 'stored_filename',
+        ] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $content);
+        }
     }
 
     public function test_audit_failure_does_not_break_generation_or_voiding(): void
@@ -208,5 +334,97 @@ class Process5DQrAuditTest extends TestCase
             $table->string('user_agent')->nullable();
             $table->timestamps();
         });
+    }
+
+    private function completeSnapshot(): array
+    {
+        $audits = $this->normalizedRows('audit_logs', [
+            'id', 'user_id', 'module', 'action', 'record_id', 'description',
+            'ip_address', 'user_agent', 'created_at', 'updated_at',
+        ], ['id'], ['user_id', 'record_id']);
+
+        return [
+            'documents' => $this->normalizedRows('documents', [
+                'id', 'tracking_no', 'title', 'description', 'status',
+                'document_type_id', 'status_id', 'priority_id',
+                'confidentiality_level_id', 'origin_office_id',
+                'current_office_id', 'current_action_id', 'processing_note',
+                'current_action_updated_by', 'current_action_updated_at',
+                'created_by', 'document_date', 'due_date', 'created_at',
+                'updated_at',
+            ], ['id'], [
+                'document_type_id', 'status_id', 'priority_id',
+                'confidentiality_level_id', 'origin_office_id',
+                'current_office_id', 'current_action_id',
+                'current_action_updated_by', 'created_by',
+            ]),
+            'routes' => $this->normalizedRows('document_routes', [
+                'id', 'document_id', 'from_office_id', 'to_office_id',
+                'forwarded_by', 'received_by', 'forwarded_at', 'received_at',
+                'status_id', 'action_id', 'remarks', 'created_at', 'updated_at',
+            ], [
+                'id', 'document_id', 'from_office_id', 'to_office_id',
+                'forwarded_by', 'status_id',
+            ], ['received_by', 'action_id']),
+            'processing' => $this->normalizedRows(
+                'document_processing_logs',
+                [
+                    'id', 'document_id', 'office_id', 'user_id',
+                    'processing_action_id', 'document_route_id', 'event_type',
+                    'processing_note', 'event_note', 'created_at', 'updated_at',
+                ],
+                ['id', 'document_id'],
+                ['office_id', 'user_id', 'processing_action_id', 'document_route_id']
+            ),
+            'qr_codes' => $this->normalizedRows('document_qr_codes', [
+                'id', 'qr_token', 'status', 'document_id', 'generated_by',
+                'generated_at', 'registered_at', 'created_at', 'updated_at',
+            ], ['id'], ['document_id', 'generated_by']),
+            'audits' => $audits,
+            'audit_count' => count($audits),
+            'tokens' => $this->normalizedRows('personal_access_tokens', [
+                'id', 'tokenable_type', 'tokenable_id', 'name', 'abilities',
+                'last_used_at', 'expires_at', 'created_at', 'updated_at',
+            ], ['id', 'tokenable_id'], [], ['abilities']),
+            'token_count' => DB::table('personal_access_tokens')->count(),
+        ];
+    }
+
+    private function normalizedRows(
+        string $table,
+        array $columns,
+        array $integerColumns = [],
+        array $nullableIntegerColumns = [],
+        array $jsonColumns = []
+    ): array {
+        return DB::table($table)->orderBy('id')->get($columns)
+            ->map(function ($row) use (
+                $columns,
+                $integerColumns,
+                $nullableIntegerColumns,
+                $jsonColumns
+            ): array {
+                $normalized = [];
+
+                foreach ($columns as $column) {
+                    $value = $row->{$column};
+
+                    if (in_array($column, $integerColumns, true)) {
+                        $value = (int) $value;
+                    } elseif (in_array($column, $nullableIntegerColumns, true)) {
+                        $value = $value === null ? null : (int) $value;
+                    } elseif (in_array($column, $jsonColumns, true)) {
+                        $value = $value === null
+                            ? null
+                            : json_decode((string) $value, true, 512, JSON_THROW_ON_ERROR);
+                    } elseif ($value !== null) {
+                        $value = (string) $value;
+                    }
+
+                    $normalized[$column] = $value;
+                }
+
+                return $normalized;
+            })->all();
     }
 }

@@ -247,101 +247,6 @@ class DocumentProcessingController extends Controller
             ],
         ]);
 
-        $document =
-            Document::findOrFail(
-                $documentId
-            );
-
-        $user =
-            $request->user();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Office authorization
-        |--------------------------------------------------------------------------
-        */
-
-        if (!$user->office_id) {
-            return response()->json([
-                'message' =>
-                    'Your user account is not assigned to an office.',
-            ], 403);
-        }
-
-        if (
-            (int) $user->office_id !==
-            (int) $document->current_office_id
-        ) {
-            return response()->json([
-                'message' =>
-                    'You cannot update the processing action because this document is not currently assigned to your office.',
-            ], 403);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Do not allow processing updates while document is in transit
-        |--------------------------------------------------------------------------
-        */
-
-        $pendingRouteExists =
-            DocumentRoute::where(
-                'document_id',
-                $document->id
-            )
-                ->whereNull(
-                    'received_at'
-                )
-                ->exists();
-
-        if ($pendingRouteExists) {
-            return response()->json([
-                'message' =>
-                    'This document must be received before its processing action can be updated.',
-            ], 409);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Validate selected action
-        |--------------------------------------------------------------------------
-        */
-
-        $action =
-            ProcessingAction::where(
-                'id',
-                $validated['current_action_id']
-            )
-                ->where(
-                    'is_active',
-                    true
-                )
-                ->first();
-
-        if (!$action) {
-            throw ValidationException::withMessages([
-                'current_action_id' =>
-                    'The selected processing action is not available.',
-            ]);
-        }
-
-        if (
-            in_array(
-                $action->action_code,
-                [
-                    'REGISTERED',
-                    'AWAITING_RECEIPT',
-                    'FOR_ACTION',
-                ],
-                true
-            )
-        ) {
-            throw ValidationException::withMessages([
-                'current_action_id' =>
-                    'This processing action is controlled automatically by the system.',
-            ]);
-        }
-
         $note =
             isset(
                 $validated['processing_note']
@@ -355,31 +260,76 @@ class DocumentProcessingController extends Controller
             $note = null;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | OTHER requires an explanation
-        |--------------------------------------------------------------------------
-        */
+        $user = $request->user();
 
-        if (
-            $action->action_code ===
-                'OTHER' &&
-            !$note
-        ) {
-            throw ValidationException::withMessages([
-                'processing_note' =>
-                    'Please enter a processing note when selecting Other.',
-            ]);
-        }
-
-        DB::transaction(
+        $changed = DB::transaction(
             function () use (
-                $document,
-                $action,
+                $documentId,
+                $validated,
                 $note,
                 $user,
                 $auditLogger
             ) {
+                $document = Document::whereKey($documentId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if (
+                    !$user->office_id ||
+                    !DB::table('offices')->where('id', $user->office_id)->exists()
+                ) {
+                    abort(403, 'Your user account is not assigned to a valid office.');
+                }
+
+                if ((int) $user->office_id !== (int) $document->current_office_id) {
+                    abort(403, 'You cannot update the processing action because this document is not currently assigned to your office.');
+                }
+
+                if (
+                    DocumentRoute::where('document_id', $document->id)
+                        ->whereNull('received_at')
+                        ->lockForUpdate()
+                        ->exists()
+                ) {
+                    abort(409, 'This document must be received before its processing action can be updated.');
+                }
+
+                $action = ProcessingAction::whereKey($validated['current_action_id'])
+                    ->where('is_active', true)
+                    ->first();
+
+                if (!$action) {
+                    throw ValidationException::withMessages([
+                        'current_action_id' =>
+                            'The selected processing action is not available.',
+                    ]);
+                }
+
+                if (in_array($action->action_code, [
+                    'REGISTERED',
+                    'AWAITING_RECEIPT',
+                    'FOR_ACTION',
+                ], true)) {
+                    throw ValidationException::withMessages([
+                        'current_action_id' =>
+                            'This processing action is controlled automatically by the system.',
+                    ]);
+                }
+
+                if ($action->action_code === 'OTHER' && !$note) {
+                    throw ValidationException::withMessages([
+                        'processing_note' =>
+                            'Please enter a processing note when selecting Other.',
+                    ]);
+                }
+
+                if (
+                    (int) $document->current_action_id === (int) $action->id &&
+                    $document->processing_note === $note
+                ) {
+                    return false;
+                }
+
                 $document->update([
                     'current_action_id' =>
                         $action->id,
@@ -431,8 +381,12 @@ class DocumentProcessingController extends Controller
                         '.',
                     userId: $user->id
                 );
+
+                return true;
             }
         );
+
+        $document = Document::findOrFail($documentId);
 
         $document->load([
             'currentOffice',
@@ -442,7 +396,9 @@ class DocumentProcessingController extends Controller
 
         return response()->json([
             'message' =>
-                'Current processing action updated successfully.',
+                $changed
+                    ? 'Current processing action updated successfully.'
+                    : 'Current processing action is already up to date.',
 
             'processing' => [
                 'current_office' =>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\DocumentQrCode;
 use App\Services\AuditLogger;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -117,33 +118,42 @@ class DocumentQrCodeController extends Controller
         $id
     )
     {
-        $qrCode = DocumentQrCode::findOrFail($id);
+        $qrCode = DB::transaction(function () use ($id, $request, $auditLogger) {
+            $qrCode = DocumentQrCode::whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($qrCode->status === 'registered') {
-            return response()->json([
-                'message' =>
-                    'This QR code cannot be voided because it is already linked to a registered document.',
-            ], 409);
-        }
+            if ($qrCode->status === 'registered') {
+                throw new HttpResponseException(response()->json([
+                    'message' =>
+                        'This QR code cannot be voided because it is already linked to a registered document.',
+                ], 409));
+            }
 
-        if ($qrCode->status === 'void') {
-            return response()->json([
-                'message' =>
-                    'This QR code has already been voided.',
-            ], 409);
-        }
+            if ($qrCode->status === 'void') {
+                throw new HttpResponseException(response()->json([
+                    'message' => 'This QR code has already been voided.',
+                ], 409));
+            }
 
-        $qrCode->update([
-            'status' => 'void',
-        ]);
+            if ($qrCode->status !== 'unused') {
+                throw new HttpResponseException(response()->json([
+                    'message' => 'This QR code is not in a voidable state.',
+                ], 409));
+            }
 
-        $auditLogger->log(
-            module: AuditLog::MODULE_QR_CODES,
-            action: AuditLog::ACTION_VOIDED,
-            recordId: $qrCode->id,
-            description: 'QR code voided successfully.',
-            userId: $request->user()->id
-        );
+            $qrCode->update(['status' => 'void']);
+
+            $auditLogger->log(
+                module: AuditLog::MODULE_QR_CODES,
+                action: AuditLog::ACTION_VOIDED,
+                recordId: $qrCode->id,
+                description: 'QR code voided successfully.',
+                userId: $request->user()->id
+            );
+
+            return $qrCode;
+        });
 
         return response()->json([
             'message' => 'QR code voided successfully.',

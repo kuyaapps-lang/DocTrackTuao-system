@@ -27,6 +27,7 @@ class DocumentWorkflowAuditTest extends TestCase
     protected function tearDown(): void
     {
         foreach ([
+            'personal_access_tokens',
             'audit_logs',
             'document_processing_logs',
             'document_routes',
@@ -626,6 +627,125 @@ class DocumentWorkflowAuditTest extends TestCase
         Log::shouldHaveReceived('warning')->once();
     }
 
+    public function test_forward_replay_preserves_authorization_precedence_and_has_no_second_side_effect(): void
+    {
+        $source = $this->createOffice('REPLAYSOURCE');
+        $destination = $this->createOffice('REPLAYDEST');
+        $user = $this->createUser('Office User', $source);
+        $document = $this->createDocument($source);
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/documents/'.$document->id.'/forward', [
+            'to_office_id' => $destination,
+        ])->assertCreated();
+        $beforeReplay = $this->workflowSnapshot();
+
+        $this->postJson('/api/documents/'.$document->id.'/forward', [
+            'to_office_id' => $destination,
+        ])->assertForbidden();
+
+        $this->assertSame($beforeReplay, $this->workflowSnapshot());
+
+        $authorizedUser = $this->createUser('Office User', $destination);
+        Sanctum::actingAs($authorizedUser);
+        $beforeAuthorizedConflict = $this->workflowSnapshot();
+
+        $this->postJson('/api/documents/'.$document->id.'/forward', [
+            'to_office_id' => $source,
+        ])->assertConflict();
+
+        $this->assertSame(
+            $beforeAuthorizedConflict,
+            $this->workflowSnapshot()
+        );
+        $this->assertSame(1, DB::table('document_routes')->count());
+        $this->assertSame(1, DB::table('document_processing_logs')->count());
+        $this->assertSame(1, AuditLog::count());
+    }
+
+    public function test_receive_replay_and_multiple_pending_routes_fail_without_changes(): void
+    {
+        $source = $this->createOffice('RECEIVEREPLAYSOURCE');
+        $destination = $this->createOffice('RECEIVEREPLAYDEST');
+        $sender = $this->createUser('Office User', $source);
+        $receiver = $this->createUser('Office User', $destination);
+        $document = $this->createDocument($source);
+        $this->createPendingRoute($document, $source, $destination, $sender);
+        Sanctum::actingAs($receiver);
+
+        $this->postJson('/api/documents/'.$document->id.'/receive')->assertOk();
+        $beforeReplay = $this->workflowSnapshot();
+        $this->postJson('/api/documents/'.$document->id.'/receive')
+            ->assertConflict();
+        $this->assertSame($beforeReplay, $this->workflowSnapshot());
+
+        $ambiguous = $this->createDocument($destination);
+        $this->createPendingRoute($ambiguous, $source, $destination, $sender);
+        $this->createPendingRoute($ambiguous, $source, $destination, $sender);
+        $beforeAmbiguous = $this->workflowSnapshot();
+        $this->postJson('/api/documents/'.$ambiguous->id.'/receive')
+            ->assertConflict();
+        $this->assertSame($beforeAmbiguous, $this->workflowSnapshot());
+    }
+
+    public function test_identical_processing_replay_is_a_successful_no_op(): void
+    {
+        $office = $this->createOffice('PROCESSREPLAY');
+        $user = $this->createUser('Office User', $office);
+        $document = $this->createDocument($office);
+        $payload = [
+            'current_action_id' => $this->processingActionId('UNDER_REVIEW'),
+            'processing_note' => 'Normalized note',
+        ];
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/documents/'.$document->id.'/processing', $payload)
+            ->assertOk();
+        $beforeReplay = $this->workflowSnapshot();
+
+        $this->putJson('/api/documents/'.$document->id.'/processing', $payload)
+            ->assertOk()
+            ->assertJsonPath(
+                'message',
+                'Current processing action is already up to date.'
+            );
+
+        $this->assertSame($beforeReplay, $this->workflowSnapshot());
+        $this->assertSame(1, DB::table('document_processing_logs')->count());
+        $this->assertSame(1, AuditLog::count());
+    }
+
+    public function test_locked_rechecks_reject_stale_custody_and_pending_state(): void
+    {
+        $office = $this->createOffice('STALE');
+        $other = $this->createOffice('STALEOTHER');
+        $user = $this->createUser('Office User', $office);
+        $document = $this->createDocument($office);
+        $staleDocument = $document->fresh();
+        DB::table('documents')->where('id', $document->id)->update([
+            'current_office_id' => $other,
+        ]);
+        Sanctum::actingAs($user);
+        $before = $this->workflowSnapshot();
+
+        $this->putJson('/api/documents/'.$staleDocument->id.'/processing', [
+            'current_action_id' => $this->processingActionId('UNDER_REVIEW'),
+        ])->assertForbidden();
+
+        $this->assertSame($before, $this->workflowSnapshot());
+
+        $pendingDocument = $this->createDocument($office);
+        $sender = $this->createUser('Office User', $office);
+        $this->createPendingRoute($pendingDocument, $office, $other, $sender);
+        $beforePending = $this->workflowSnapshot();
+
+        $this->putJson('/api/documents/'.$pendingDocument->id.'/processing', [
+            'current_action_id' => $this->processingActionId('UNDER_REVIEW'),
+        ])->assertConflict();
+
+        $this->assertSame($beforePending, $this->workflowSnapshot());
+    }
+
     private function assertSingleAudit(
         string $module,
         string $action,
@@ -639,6 +759,113 @@ class DocumentWorkflowAuditTest extends TestCase
             'record_id' => $recordId,
             'user_id' => $userId,
         ]);
+    }
+
+    private function workflowSnapshot(): array
+    {
+        $audits = $this->normalizedRows('audit_logs', [
+            'id', 'user_id', 'module', 'action', 'record_id', 'description',
+            'ip_address', 'user_agent', 'created_at', 'updated_at',
+        ], ['id'], ['user_id', 'record_id']);
+
+        return [
+            'documents' => $this->normalizedRows('documents', [
+                'id', 'tracking_no', 'title', 'description', 'status',
+                'document_type_id', 'status_id', 'priority_id',
+                'confidentiality_level_id', 'origin_office_id',
+                'current_office_id', 'current_action_id', 'processing_note',
+                'current_action_updated_by', 'current_action_updated_at',
+                'created_by', 'document_date', 'due_date', 'created_at',
+                'updated_at',
+            ], ['id'], [
+                'document_type_id', 'status_id', 'priority_id',
+                'confidentiality_level_id', 'origin_office_id',
+                'current_office_id', 'current_action_id',
+                'current_action_updated_by', 'created_by',
+            ]),
+            'routes' => $this->normalizedRows('document_routes', [
+                'id', 'document_id', 'from_office_id', 'to_office_id',
+                'forwarded_by', 'received_by', 'forwarded_at', 'received_at',
+                'status_id', 'action_id', 'remarks', 'created_at', 'updated_at',
+            ], [
+                'id', 'document_id', 'from_office_id', 'to_office_id',
+                'forwarded_by', 'status_id',
+            ], ['received_by', 'action_id']),
+            'processing' => $this->normalizedRows(
+                'document_processing_logs',
+                [
+                    'id', 'document_id', 'office_id', 'user_id',
+                    'processing_action_id', 'document_route_id', 'event_type',
+                    'processing_note', 'event_note', 'created_at', 'updated_at',
+                ],
+                ['id', 'document_id'],
+                ['office_id', 'user_id', 'processing_action_id', 'document_route_id']
+            ),
+            'qr_codes' => $this->normalizedRows('document_qr_codes', [
+                'id', 'qr_token', 'status', 'document_id', 'generated_by',
+                'generated_at', 'registered_at', 'created_at', 'updated_at',
+            ], ['id'], ['document_id', 'generated_by']),
+            'audits' => $audits,
+            'audit_count' => count($audits),
+            'tokens' => $this->normalizedRows('personal_access_tokens', [
+                'id', 'tokenable_type', 'tokenable_id', 'name', 'abilities',
+                'last_used_at', 'expires_at', 'created_at', 'updated_at',
+            ], ['id', 'tokenable_id'], [], ['abilities']),
+            'token_count' => DB::table('personal_access_tokens')->count(),
+        ];
+    }
+
+    private function normalizedRows(
+        string $table,
+        array $columns,
+        array $integerColumns = [],
+        array $nullableIntegerColumns = [],
+        array $jsonColumns = []
+    ): array {
+        return DB::table($table)->orderBy('id')->get($columns)
+            ->map(function ($row) use (
+                $columns,
+                $integerColumns,
+                $nullableIntegerColumns,
+                $jsonColumns
+            ): array {
+                $normalized = [];
+
+                foreach ($columns as $column) {
+                    $value = $row->{$column};
+
+                    if (in_array($column, $integerColumns, true)) {
+                        $value = (int) $value;
+                    } elseif (in_array($column, $nullableIntegerColumns, true)) {
+                        $value = $value === null ? null : (int) $value;
+                    } elseif (in_array($column, $jsonColumns, true)) {
+                        $value = $this->normalizedJsonArray($value);
+                    } elseif ($value !== null) {
+                        $value = (string) $value;
+                    }
+
+                    $normalized[$column] = $value;
+                }
+
+                return $normalized;
+            })->all();
+    }
+
+    private function normalizedJsonArray(mixed $value): ?array
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $decoded = json_decode((string) $value, true, 512, JSON_THROW_ON_ERROR);
+
+        if (array_is_list($decoded)) {
+            sort($decoded, SORT_STRING);
+        } else {
+            ksort($decoded, SORT_STRING);
+        }
+
+        return $decoded;
     }
 
     private function createOffice(string $code): int
@@ -804,6 +1031,17 @@ class DocumentWorkflowAuditTest extends TestCase
             $table->unsignedBigInteger('department_id')->nullable();
             $table->unsignedBigInteger('office_id')->nullable();
             $table->rememberToken();
+            $table->timestamps();
+        });
+        Schema::create('personal_access_tokens', function (Blueprint $table) {
+            $table->id();
+            $table->string('tokenable_type');
+            $table->unsignedBigInteger('tokenable_id');
+            $table->string('name');
+            $table->string('token', 64)->unique();
+            $table->text('abilities')->nullable();
+            $table->timestamp('last_used_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
             $table->timestamps();
         });
         Schema::create('document_types', function (Blueprint $table) {
