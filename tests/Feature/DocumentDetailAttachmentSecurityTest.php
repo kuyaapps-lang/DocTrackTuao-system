@@ -187,10 +187,7 @@ class DocumentDetailAttachmentSecurityTest extends TestCase
         Sanctum::actingAs($this->createUser('Viewer', $unrelatedOffice));
 
         $this->getJson("/api/documents/{$documentId}")
-            ->assertOk()
-            ->assertJsonMissingPath('attachments')
-            ->assertJsonMissingPath('stored_filename')
-            ->assertJsonMissingPath('file_path');
+            ->assertForbidden();
 
         $this->getJson("/api/documents/{$documentId}/attachments")
             ->assertForbidden();

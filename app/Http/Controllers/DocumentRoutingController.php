@@ -11,6 +11,7 @@ use App\Models\Office;
 use App\Models\ProcessingAction;
 use App\Models\RouteAction;
 use App\Services\AuditLogger;
+use App\Services\DocumentReadScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -21,19 +22,44 @@ class DocumentRoutingController extends Controller
      */
     public function options(
         Request $request,
+        DocumentReadScope $readScope,
         $documentId
     ) {
-        $document = Document::with([
+        $document = Document::findOrFail($documentId);
+        $readScope->authorize($request->user(), $document);
+
+        $document->load([
             'currentOffice',
             'originOffice',
             'status',
             'currentAction',
-        ])->findOrFail($documentId);
+        ]);
 
         $user = $request->user();
 
         return response()->json([
-            'document' => $document,
+            'document' => [
+                'id' => $document->id,
+                'tracking_no' => $document->tracking_no,
+                'title' => $document->title,
+                'origin_office_id' => $document->origin_office_id,
+                'current_office_id' => $document->current_office_id,
+                'origin_office' => $this->officeShape($document->originOffice),
+                'current_office' => $this->officeShape($document->currentOffice),
+                'status' => $document->status
+                    ? [
+                        'id' => $document->status->id,
+                        'status_name' => $document->status->status_name,
+                    ]
+                    : null,
+                'current_action' => $document->currentAction
+                    ? [
+                        'id' => $document->currentAction->id,
+                        'action_code' => $document->currentAction->action_code,
+                        'action_name' => $document->currentAction->action_name,
+                    ]
+                    : null,
+            ],
 
             'offices' =>
                 Office::where(
@@ -44,7 +70,7 @@ class DocumentRoutingController extends Controller
                     ->orderBy(
                         'office_name'
                     )
-                    ->get(),
+                    ->get(['id', 'office_name', 'office_code']),
 
             'user' => [
                 'id' =>
@@ -630,11 +656,12 @@ class DocumentRoutingController extends Controller
      * Display complete routing history.
      */
     public function history(
+        Request $request,
+        DocumentReadScope $readScope,
         $documentId
     ) {
-        Document::findOrFail(
-            $documentId
-        );
+        $document = Document::findOrFail($documentId);
+        $readScope->authorize($request->user(), $document);
 
         $routes =
             DocumentRoute::with([
@@ -652,8 +679,58 @@ class DocumentRoutingController extends Controller
                 ->orderBy('id')
                 ->get();
 
-        return response()->json(
-            $routes
-        );
+        return response()->json($routes->map(
+            fn (DocumentRoute $route): array => $this->routeShape($route)
+        )->values());
+    }
+
+    private function officeShape($office): ?array
+    {
+        return $office
+            ? [
+                'id' => $office->id,
+                'office_name' => $office->office_name,
+                'office_code' => $office->office_code,
+            ]
+            : null;
+    }
+
+    private function userShape($user): ?array
+    {
+        return $user
+            ? [
+                'id' => $user->id,
+                'name' => $user->name,
+            ]
+            : null;
+    }
+
+    private function routeShape(DocumentRoute $route): array
+    {
+        return [
+            'id' => $route->id,
+            'document_id' => $route->document_id,
+            'from_office_id' => $route->from_office_id,
+            'to_office_id' => $route->to_office_id,
+            'forwarded_at' => $route->forwarded_at,
+            'received_at' => $route->received_at,
+            'remarks' => $route->remarks,
+            'from_office' => $this->officeShape($route->fromOffice),
+            'to_office' => $this->officeShape($route->toOffice),
+            'forwarded_by' => $this->userShape($route->forwardedBy),
+            'received_by' => $this->userShape($route->receivedBy),
+            'status' => $route->status
+                ? [
+                    'id' => $route->status->id,
+                    'status_name' => $route->status->status_name,
+                ]
+                : null,
+            'action' => $route->action
+                ? [
+                    'id' => $route->action->id,
+                    'action_name' => $route->action->action_name,
+                ]
+                : null,
+        ];
     }
 }

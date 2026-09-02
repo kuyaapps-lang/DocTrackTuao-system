@@ -8,6 +8,7 @@ use App\Models\DocumentRoute;
 use App\Models\DocumentProcessingLog;
 use App\Models\ProcessingAction;
 use App\Services\AuditLogger;
+use App\Services\DocumentReadScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,13 +21,17 @@ class DocumentProcessingController extends Controller
      */
     public function show(
         Request $request,
+        DocumentReadScope $readScope,
         $documentId
     ) {
-        $document = Document::with([
+        $document = Document::findOrFail($documentId);
+        $readScope->authorize($request->user(), $document);
+
+        $document->load([
             'currentOffice',
             'currentAction',
             'currentActionUpdatedBy',
-        ])->findOrFail($documentId);
+        ]);
 
         $user = $request->user();
 
@@ -103,7 +108,8 @@ class DocumentProcessingController extends Controller
                 'office',
                 'user',
                 'action',
-                'route',
+                'route.fromOffice',
+                'route.toOffice',
             ])
                 ->where(
                     'document_id',
@@ -124,17 +130,20 @@ class DocumentProcessingController extends Controller
             'tracking_no' =>
                 $document->tracking_no,
 
-            'current_office' =>
-                $document->currentOffice,
+            'current_office' => $this->officeShape(
+                $document->currentOffice
+            ),
 
-            'current_action' =>
-                $document->currentAction,
+            'current_action' => $this->actionShape(
+                $document->currentAction
+            ),
 
             'processing_note' =>
                 $document->processing_note,
 
-            'current_action_updated_by' =>
-                $document->currentActionUpdatedBy,
+            'current_action_updated_by' => $this->userShape(
+                $document->currentActionUpdatedBy
+            ),
 
             'current_action_updated_at' =>
                 $document->current_action_updated_at,
@@ -151,9 +160,69 @@ class DocumentProcessingController extends Controller
             'is_in_transit' =>
                 (bool) $pendingRoute,
 
-            'history' =>
-                $history,
+            'history' => $history->map(fn (
+                DocumentProcessingLog $log
+            ): array => [
+                'id' => $log->id,
+                'document_route_id' => $log->document_route_id,
+                'event_type' => $log->event_type,
+                'processing_note' => $log->processing_note,
+                'event_note' => $log->event_note,
+                'created_at' => $log->created_at,
+                'office' => $this->officeShape($log->office),
+                'user' => $this->userShape($log->user),
+                'action' => $this->actionShape($log->action),
+                'route' => $log->route
+                    ? $this->processingRouteShape($log->route)
+                    : null,
+            ])->values(),
         ]);
+    }
+
+    private function officeShape($office): ?array
+    {
+        return $office
+            ? [
+                'id' => $office->id,
+                'office_name' => $office->office_name,
+                'office_code' => $office->office_code,
+            ]
+            : null;
+    }
+
+    private function userShape($user): ?array
+    {
+        return $user
+            ? [
+                'id' => $user->id,
+                'name' => $user->name,
+            ]
+            : null;
+    }
+
+    private function actionShape($action): ?array
+    {
+        return $action
+            ? [
+                'id' => $action->id,
+                'action_code' => $action->action_code,
+                'action_name' => $action->action_name,
+            ]
+            : null;
+    }
+
+    private function processingRouteShape($route): array
+    {
+        return [
+            'id' => $route->id,
+            'from_office_id' => $route->from_office_id,
+            'to_office_id' => $route->to_office_id,
+            'forwarded_at' => $route->forwarded_at,
+            'received_at' => $route->received_at,
+            'remarks' => $route->remarks,
+            'from_office' => $this->officeShape($route->fromOffice),
+            'to_office' => $this->officeShape($route->toOffice),
+        ];
     }
 
     /**

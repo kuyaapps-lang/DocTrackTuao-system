@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Services\AuditLogger;
+use App\Services\DocumentReadScope;
 
 class DocumentController extends Controller
 {
@@ -761,9 +762,16 @@ class DocumentController extends Controller
     /**
      * Display a single document.
      */
-    public function show($id)
+    public function show(
+        Request $request,
+        DocumentReadScope $readScope,
+        $id
+    )
     {
-        $document = Document::with([
+        $document = Document::findOrFail($id);
+        $readScope->authorize($request->user(), $document);
+
+        $document->load([
             'type',
             'status',
             'priority',
@@ -774,21 +782,7 @@ class DocumentController extends Controller
             'currentActionUpdatedBy',
             'creator',
 
-            'routes' => function ($query) {
-                $query
-                    ->with([
-                        'fromOffice',
-                        'toOffice',
-                        'forwardedBy',
-                        'receivedBy',
-                        'status',
-                        'action',
-                    ])
-                    ->orderBy('id');
-            },
-
-            'comments',
-        ])->findOrFail($id);
+        ]);
 
         /*
         |--------------------------------------------------------------------------
@@ -813,8 +807,52 @@ class DocumentController extends Controller
             ->first();
 
         return response()->json([
-            ...$document->toArray(),
-            'qr_code' => $qrCode,
+            'id' => $document->id,
+            'tracking_no' => $document->tracking_no,
+            'title' => $document->title,
+            'description' => $document->description,
+            'document_type_id' => $document->document_type_id,
+            'status_id' => $document->status_id,
+            'priority_id' => $document->priority_id,
+            'confidentiality_level_id' =>
+                $document->confidentiality_level_id,
+            'origin_office_id' => $document->origin_office_id,
+            'current_office_id' => $document->current_office_id,
+            'document_date' => $document->document_date,
+            'due_date' => $document->due_date,
+            'type' => $this->namedRelation($document->type, 'type_name'),
+            'status' => $this->namedRelation(
+                $document->status,
+                'status_name'
+            ),
+            'priority' => $this->namedRelation(
+                $document->priority,
+                'priority_name'
+            ),
+            'confidentiality' => $this->namedRelation(
+                $document->confidentiality,
+                'level_name'
+            ),
+            'origin_office' => $this->officeShape($document->originOffice),
+            'current_office' => $this->officeShape($document->currentOffice),
+            'current_action' => $document->currentAction
+                ? [
+                    'id' => $document->currentAction->id,
+                    'action_code' => $document->currentAction->action_code,
+                    'action_name' => $document->currentAction->action_name,
+                ]
+                : null,
+            'current_action_updated_by' => $this->userShape(
+                $document->currentActionUpdatedBy
+            ),
+            'creator' => $this->userShape($document->creator),
+            'qr_code' => $qrCode
+                ? [
+                    'id' => $qrCode->id,
+                    'qr_token' => $qrCode->qr_token,
+                    'status' => $qrCode->status,
+                ]
+                : null,
         ]);
     }
 
@@ -864,11 +902,9 @@ class DocumentController extends Controller
             'confidentiality_level_id' =>
                 'sometimes|required|exists:confidentiality_levels,id',
 
-            'origin_office_id' =>
-                'sometimes|required|exists:offices,id',
+            'origin_office_id' => ['prohibited'],
 
-            'current_office_id' =>
-                'sometimes|required|exists:offices,id',
+            'current_office_id' => ['prohibited'],
 
             'document_date' =>
                 'sometimes|required|date',
@@ -876,8 +912,7 @@ class DocumentController extends Controller
             'due_date' =>
                 'nullable|date|after_or_equal:document_date',
 
-            'status_id' =>
-                'sometimes|required|exists:document_statuses,id',
+            'status_id' => ['prohibited'],
         ]);
 
             DB::transaction(
@@ -918,6 +953,37 @@ class DocumentController extends Controller
             'document' =>
                 $document,
         ]);
+    }
+
+    private function namedRelation($model, string $nameField): ?array
+    {
+        return $model
+            ? [
+                'id' => $model->id,
+                $nameField => $model->getAttribute($nameField),
+            ]
+            : null;
+    }
+
+    private function officeShape($office): ?array
+    {
+        return $office
+            ? [
+                'id' => $office->id,
+                'office_name' => $office->office_name,
+                'office_code' => $office->office_code,
+            ]
+            : null;
+    }
+
+    private function userShape($user): ?array
+    {
+        return $user
+            ? [
+                'id' => $user->id,
+                'name' => $user->name,
+            ]
+            : null;
     }
 
     /**

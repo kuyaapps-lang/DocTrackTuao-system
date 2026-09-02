@@ -251,6 +251,26 @@ Permission: `documents.view`
 Attachment metadata is not embedded in this response. Use the separately
 authorized `GET /api/documents/{document}/attachments` endpoint.
 
+Direct document reads are additionally office-scoped. Administrator and
+Records Officer have system-wide access. Office User, Viewer, and any other
+role that passes `documents.view` may read a document only when their valid
+assigned office is its origin office, current office, historical route sender,
+or historical route destination. Missing, invalid, and unrelated office
+assignments receive `403`.
+
+The same rule applies to these sensitive reads:
+
+- `GET /api/documents/{document}`;
+- `GET /api/documents/{document}/routing-options`;
+- `GET /api/documents/{document}/history`;
+- `GET /api/documents/{document}/processing`.
+
+These endpoints return explicit fields used by the document-detail workflow.
+Related users contain only `id` and `name`; responses omit email addresses,
+credentials, token data, attachment storage names/paths, and unrestricted
+relationship trees. The Process 7 document lists and the dedicated attachment
+authorization rules are unchanged.
+
 ### Register Document
 
 ```http
@@ -295,6 +315,14 @@ PATCH {{base_url}}/api/documents/{document}
 ```
 
 Permission: `documents.edit`
+
+The user must still belong to the document's current office. Ordinary updates
+accept only `title`, `description`, `document_type_id`, `priority_id`,
+`confidentiality_level_id`, `document_date`, and `due_date`. The
+workflow-controlled `origin_office_id`, `current_office_id`, and `status_id`
+fields are prohibited and return `422`. Tracking number, processing action and
+note/history, current-action actor/time, creator, and routing records are not
+ordinary editable fields and are never applied by this endpoint.
 
 ### Delete Document
 
