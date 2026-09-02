@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\DocumentQrCode;
 use App\Services\AuditLogger;
+use App\Support\PublicLookupSecurity;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -168,6 +169,10 @@ class DocumentQrCodeController extends Controller
      */
     public function resolve($token)
     {
+        if (!PublicLookupSecurity::validQrToken($token)) {
+            return $this->invalidPublicQrResponse();
+        }
+
         $qrCode = DocumentQrCode::with([
             'document',
         ])
@@ -175,11 +180,7 @@ class DocumentQrCodeController extends Controller
             ->first();
 
         if (!$qrCode) {
-            return response()->json([
-                'state' => 'invalid',
-                'message' =>
-                    'The QR code is invalid or does not exist.',
-            ], 404);
+            return $this->invalidPublicQrResponse();
         }
 
         if ($qrCode->status === 'void') {
@@ -221,6 +222,14 @@ class DocumentQrCodeController extends Controller
             'message' =>
                 'The QR code is not in a valid state.',
         ], 409);
+    }
+
+    private function invalidPublicQrResponse()
+    {
+        return response()->json([
+            'state' => 'invalid',
+            'message' => 'The QR code is invalid or does not exist.',
+        ], 404);
     }
 
     /**

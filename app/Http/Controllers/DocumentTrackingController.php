@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Document;
+use App\Support\PublicLookupSecurity;
 
 class DocumentTrackingController extends Controller
 {
@@ -15,6 +16,10 @@ class DocumentTrackingController extends Controller
      */
     public function show($trackingNo)
     {
+        if (!PublicLookupSecurity::validTrackingNumber($trackingNo)) {
+            return $this->notFoundResponse();
+        }
+
         /*
         |--------------------------------------------------------------------------
         | Find Document
@@ -52,10 +57,7 @@ class DocumentTrackingController extends Controller
         */
 
         if (!$document) {
-            return response()->json([
-                'message' =>
-                    'Document tracking number not found.',
-            ], 404);
+            return $this->notFoundResponse();
         }
 
         /*
@@ -211,5 +213,12 @@ class DocumentTrackingController extends Controller
             'movement_history' =>
                 $movementHistory,
         ]);
+    }
+
+    private function notFoundResponse()
+    {
+        return response()->json([
+            'message' => 'Document tracking number not found.',
+        ], 404);
     }
 }

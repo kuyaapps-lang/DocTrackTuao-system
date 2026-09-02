@@ -91,6 +91,20 @@ GET {{base_url}}/api/track/{trackingNo}
 
 Public. No bearer token required.
 
+Accepted tracking identifiers are 1–50 ASCII letters or digits separated by
+single hyphens. This preserves both legacy hyphenated identifiers and the
+current `DOC-` plus 17-digit format. Matching remains case-sensitive or
+case-insensitive according to the existing database collation; the API does
+not normalize or truncate the supplied value.
+
+Malformed and unknown identifiers receive the same generic `404` response:
+
+```json
+{
+  "message": "Document tracking number not found."
+}
+```
+
 ### Resolve QR Token
 
 ```http
@@ -100,6 +114,42 @@ GET {{base_url}}/api/q/{token}
 Public. No bearer token required.
 
 Possible states include unused, registered, void, or invalid.
+
+Accepted QR identifiers are either the current 13-character uppercase
+`XXXXX-XXXXXXX` form (using the generator's unambiguous letter/digit alphabet)
+or the legacy canonical 36-character UUID form. The API does not normalize or
+truncate tokens. Malformed and unknown tokens receive the same generic invalid
+`404` response.
+
+Both public endpoints have separate per-client-IP limiter buckets. Each allows
+30 requests per 60 seconds by default, counts every request outcome, and returns
+the following fixed JSON with normal retry headers after the allowance:
+
+```json
+{
+  "message": "Too many requests. Please try again later."
+}
+```
+
+Configure the bounded non-secret policy with
+`PUBLIC_TRACKING_MAX_ATTEMPTS`, `PUBLIC_TRACKING_DECAY_SECONDS`,
+`PUBLIC_QR_MAX_ATTEMPTS`, and `PUBLIC_QR_DECAY_SECONDS`. Invalid configuration
+fails closed with generic JSON before a lookup query. Values must be PHP
+integers (not booleans) or canonical unsigned ASCII decimal strings without
+leading zeroes. Positive bounds are 1–1,000 attempts and 1–3,600 seconds;
+values are never trimmed, coerced, rounded, or clamped.
+
+Application code validates and canonicalizes the resolved client IP (including
+equivalent IPv6 spellings), combines it with a server-controlled endpoint
+category, and supplies a SHA-256 digest as the named limiter key. An invalid or
+unavailable IP uses one fixed sentinel identity. No raw IP, tracking number, or
+QR token is supplied as a key. Laravel then applies its own internal MD5
+transformation to that already opaque application key; cache storage is not
+claimed to contain the SHA-256 text unchanged. Correct `Request::ip()` behavior
+depends on trusted proxy configuration when deploying behind a reverse proxy;
+proxy trust is a deployment responsibility and is not broadened here.
+
+Public tracking and QR reads create no audit record or business-data mutation.
 
 ---
 

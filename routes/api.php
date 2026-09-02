@@ -45,7 +45,9 @@ Route::post(
 Route::get(
     '/track/{trackingNo}',
     [DocumentTrackingController::class, 'show']
-);
+)
+    ->where('trackingNo', '.*')
+    ->middleware('throttle:public-document-tracking');
 
 /*
 |--------------------------------------------------------------------------
@@ -63,7 +65,9 @@ Route::get(
 Route::get(
     '/q/{token}',
     [DocumentQrCodeController::class, 'resolve']
-);
+)
+    ->where('token', '.*')
+    ->middleware('throttle:public-qr-resolution');
 
 /*
 |--------------------------------------------------------------------------
