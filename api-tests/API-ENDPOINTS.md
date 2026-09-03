@@ -151,6 +151,45 @@ proxy trust is a deployment responsibility and is not broadened here.
 
 Public tracking and QR reads create no audit record or business-data mutation.
 
+### Application security boundary
+
+Dynamic HTML and API responses include an enforced Content Security Policy,
+`nosniff`, clickjacking protection, a strict referrer policy, a restrictive
+permissions policy, and `no-store` caching. Static Vite build assets retain
+their server caching behavior. Production CSP permits scripts and connections
+only from the application origin. Styles retain `unsafe-inline` because the
+current Vue templates use inline and dynamically bound style attributes.
+`data:` and `blob:` image sources support QR rendering and local download
+previews. Workers remain restricted to the application origin.
+
+Local development reads the active loopback Vite origin from the established
+`public/hot` file, or an explicitly configured `VITE_DEV_SERVER_URL`, and adds
+its matching WebSocket origin. Development origins are excluded from production
+policy. Vite host handling is separate from Laravel request-host validation.
+
+`TRUSTED_HOSTS` is a comma-separated exact allowlist. It defaults to localhost
+and IPv4/IPv6 loopback; production or LAN names and addresses must be added
+explicitly. Wildcards, URLs, ports, paths, credentials, whitespace, and
+malformed entries are rejected. Reverse-proxy trust remains a deployment task;
+never trust every proxy.
+
+Unexpected `/api/` server failures return only generic JSON even in debug mode.
+Expected authentication, authorization, validation, not-found, conflict,
+throttling, and safe-unavailable responses retain their existing contracts.
+Existing application-controlled safe `500` responses and the public-lookup
+configuration `503` are preserved only by narrow execution-path, status, exact
+JSON body, content-type, and safe-header allowlists. Near matches, extra fields,
+unsafe headers, duplicate or conflicting transport-header values, and responses
+outside those paths become the generic error.
+HSTS is disabled by default and is emitted only for verified HTTPS requests
+when `SECURITY_HSTS_ENABLED=true`; HTTPS termination and server-added headers
+must be verified during deployment. Laravel cannot remove disclosure headers
+added later by PHP, Apache, or a reverse proxy.
+
+Bearer tokens remain in browser local storage for the current architecture.
+The enforced CSP and shorter token lifetime reduce, but do not eliminate, the
+residual XSS token-theft risk.
+
 ---
 
 ## 03 - Documents
