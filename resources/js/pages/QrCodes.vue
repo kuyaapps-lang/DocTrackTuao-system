@@ -3,6 +3,10 @@ import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import QRCode from 'qrcode'
 import { clearCurrentUser } from '@/lib/auth'
 import {
+    printQrLabels,
+    qrPrintFailureMessage,
+} from '@/lib/qrPrint'
+import {
     canBeginVoid,
     canVoidInventoryItem,
     createInventoryManager,
@@ -576,62 +580,6 @@ const generateQrBatch = async () => {
 
 /*
 |--------------------------------------------------------------------------
-| Build 1x1 Inch Label Pair
-|--------------------------------------------------------------------------
-|
-| ORIGINAL is on top.
-| RECORD COPY is immediately below it.
-| Both use exactly the same QR token.
-|
-*/
-
-const buildLabelPair = (
-    qr,
-    qrImage
-) => {
-    return `
-        <div class="qr-pair">
-
-            <div class="label">
-
-                <div class="copy-name">
-                    ORIGINAL
-                </div>
-
-                <img
-                    src="${qrImage}"
-                    alt="QR Code"
-                >
-
-                <div class="token">
-                    ${qr.qr_token}
-                </div>
-
-            </div>
-
-            <div class="label record-copy">
-
-                <div class="copy-name">
-                    RECORD COPY
-                </div>
-
-                <img
-                    src="${qrImage}"
-                    alt="QR Code"
-                >
-
-                <div class="token">
-                    ${qr.qr_token}
-                </div>
-
-            </div>
-
-        </div>
-    `
-}
-
-/*
-|--------------------------------------------------------------------------
 | Print Last Generated Batch
 |--------------------------------------------------------------------------
 */
@@ -650,240 +598,21 @@ const printLastBatch = async () => {
     error.value = ''
 
     try {
-        const printablePairs = []
-
-        for (
-            const qr of
-            lastGeneratedBatch.value
-        ) {
-            const image =
-                await createQrImage(qr)
-
-            printablePairs.push(
-                buildLabelPair(
+        await printQrLabels({
+            windowRef: window,
+            items: lastGeneratedBatch.value.map(
+                qr => ({
+                    identifier: qr.qr_token,
                     qr,
-                    image
-                )
-            )
-        }
-
-        const printWindow =
-            window.open(
-                '',
-                '_blank',
-                'width=1000,height=900'
-            )
-
-        if (!printWindow) {
-            throw new Error(
-                'Unable to open print window. Please allow pop-ups.'
-            )
-        }
-
-        printWindow.document.write(`
-            <!DOCTYPE html>
-
-            <html>
-
-            <head>
-
-                <title>
-                    QR Code Batch
-                </title>
-
-                <style>
-                    @page {
-                        margin: 0.30in;
-                    }
-
-                    * {
-                        box-sizing:
-                            border-box;
-                    }
-
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        font-family:
-                            Arial,
-                            sans-serif;
-                        color: #111827;
-                        background: white;
-                    }
-
-                    .screen-note {
-                        margin-bottom:
-                            0.15in;
-                        text-align: center;
-                        font-size: 9pt;
-                        color: #4b5563;
-                    }
-
-                    .sheet {
-                        display: grid;
-
-                        grid-template-columns:
-                            repeat(
-                                4,
-                                1in
-                            );
-
-                        column-gap:
-                            0.12in;
-
-                        row-gap:
-                            0.12in;
-
-                        justify-content:
-                            center;
-
-                        align-items:
-                            start;
-                    }
-
-                    .qr-pair {
-                        width: 1in;
-
-                        break-inside:
-                            avoid;
-
-                        page-break-inside:
-                            avoid;
-                    }
-
-                    .label {
-                        width: 1in;
-                        height: 1in;
-
-                        border:
-                            1px dashed
-                            #9ca3af;
-
-                        display: flex;
-                        flex-direction:
-                            column;
-
-                        align-items:
-                            center;
-
-                        justify-content:
-                            center;
-
-                        overflow:
-                            hidden;
-
-                        padding:
-                            0.015in;
-
-                        background:
-                            white;
-                    }
-
-                    .record-copy {
-                        border-top: 0;
-                    }
-
-                    .copy-name {
-                        height:
-                            0.09in;
-
-                        line-height:
-                            0.09in;
-
-                        font-size:
-                            5.2pt;
-
-                        font-weight:
-                            700;
-
-                        letter-spacing:
-                            0.15px;
-                    }
-
-                    .label img {
-                        width:
-                            0.72in;
-
-                        height:
-                            0.72in;
-
-                        display:
-                            block;
-                    }
-
-                    .token {
-                        width:
-                            0.95in;
-
-                        height:
-                            0.11in;
-
-                        line-height:
-                            0.11in;
-
-                        overflow:
-                            hidden;
-
-                        text-align:
-                            center;
-
-                        white-space:
-                            nowrap;
-
-                        font-size:
-                            5.3pt;
-
-                        font-weight:
-                            700;
-
-                        letter-spacing:
-                            0.1px;
-                    }
-
-                    @media print {
-                        .screen-note {
-                            display: none;
-                        }
-
-                        body {
-                            margin: 0;
-                        }
-                    }
-                </style>
-
-            </head>
-
-            <body>
-
-                <div class="screen-note">
-                    ORIGINAL is printed above its matching RECORD COPY.
-                </div>
-
-                <div class="sheet">
-                    ${
-                        printablePairs
-                            .join('')
-                    }
-                </div>
-
-                <script>
-                    window.onload =
-                        function () {
-                            window.print();
-                        };
-                <\/script>
-
-            </body>
-
-            </html>
-        `)
-
-        printWindow.document.close()
+                })
+            ),
+            getImageSource: item =>
+                createQrImage(item.qr),
+        })
 
     } catch (err) {
         error.value =
-            err.message ||
-            'Unable to prepare the QR batch for printing.'
+            qrPrintFailureMessage(err)
     }
 }
 

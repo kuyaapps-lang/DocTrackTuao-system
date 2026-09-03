@@ -21,6 +21,10 @@ import {
 } from 'lucide-vue-next'
 
 import { can } from '@/lib/auth'
+import {
+    printQrLabels,
+    qrPrintFailureMessage,
+} from '@/lib/qrPrint'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,7 +219,7 @@ const generateQRCode = async () => {
 |--------------------------------------------------------------------------
 */
 
-const printQRCode = () => {
+const printQRCode = async () => {
     if (
         !qrDataUrl.value ||
         !document.value ||
@@ -224,126 +228,21 @@ const printQRCode = () => {
         return
     }
 
-    const printWindow =
-        window.open(
-            '',
-            '_blank',
-            'width=600,height=700'
-        )
+    qrError.value = ''
 
-    if (!printWindow) {
+    try {
+        await printQrLabels({
+            windowRef: window,
+            items: [{
+                identifier:
+                    document.value.qr_code.qr_token,
+                imageSource: qrDataUrl.value,
+            }],
+        })
+    } catch (err) {
         qrError.value =
-            'Unable to open print window. Please allow pop-ups.'
-        return
+            qrPrintFailureMessage(err)
     }
-
-    const qrToken =
-        document.value.qr_code.qr_token
-
-    const trackingNo =
-        document.value.tracking_no || ''
-
-    const title =
-        document.value.title || ''
-
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Issued QR - ${qrToken}</title>
-
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    text-align: center;
-                    padding: 40px;
-                }
-
-                .card {
-                    max-width: 420px;
-                    margin: auto;
-                    border: 1px solid #d1d5db;
-                    border-radius: 12px;
-                    padding: 30px;
-                }
-
-                img {
-                    width: 280px;
-                    height: 280px;
-                }
-
-                h2 {
-                    margin-bottom: 5px;
-                }
-
-                .token {
-                    font-family: monospace;
-                    font-size: 20px;
-                    font-weight: bold;
-                    margin-top: 15px;
-                }
-
-                .tracking {
-                    margin-top: 8px;
-                    font-size: 14px;
-                    color: #4b5563;
-                }
-
-                .title {
-                    margin-top: 8px;
-                    color: #4b5563;
-                }
-
-                .instruction {
-                    margin-top: 18px;
-                    font-size: 13px;
-                    color: #6b7280;
-                }
-            </style>
-        </head>
-
-        <body>
-
-            <div class="card">
-
-                <h2>
-                    LGU Tuao Document Tracking
-                </h2>
-
-                <img
-                    src="${qrDataUrl.value}"
-                    alt="Issued Document QR Code"
-                >
-
-                <div class="token">
-                    ${qrToken}
-                </div>
-
-                <div class="tracking">
-                    ${trackingNo}
-                </div>
-
-                <div class="title">
-                    ${title}
-                </div>
-
-                <div class="instruction">
-                    This is the issued QR linked to this document.
-                </div>
-
-            </div>
-
-            <script>
-                window.onload = function () {
-                    window.print();
-                };
-            <\/script>
-
-        </body>
-        </html>
-    `)
-
-    printWindow.document.close()
 }
 
 /*
