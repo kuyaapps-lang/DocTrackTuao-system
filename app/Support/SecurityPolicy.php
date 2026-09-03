@@ -43,11 +43,13 @@ final class SecurityPolicy
     {
         $script = ["'self'"];
         $style = ["'self'", "'unsafe-inline'"];
+        $image = ["'self'", 'data:', 'blob:'];
         $connect = ["'self'"];
 
         if ($local && ($origin = self::viteOrigin()) !== null) {
             $script[] = $origin;
             $style[] = $origin;
+            $image[] = $origin;
             $connect[] = $origin;
             $connect[] = preg_replace('/^http/', 'ws', $origin);
         }
@@ -60,7 +62,7 @@ final class SecurityPolicy
             "form-action 'self'",
             'script-src '.implode(' ', $script),
             'style-src '.implode(' ', $style),
-            "img-src 'self' data: blob:",
+            'img-src '.implode(' ', $image),
             "font-src 'self'",
             'connect-src '.implode(' ', $connect),
             "worker-src 'self'",

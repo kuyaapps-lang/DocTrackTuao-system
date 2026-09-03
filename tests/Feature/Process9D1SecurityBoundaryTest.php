@@ -392,6 +392,8 @@ class Process9D1SecurityBoundaryTest extends TestCase
         $development = SecurityPolicy::contentSecurityPolicy(true);
         $this->assertStringContainsString('http://127.0.0.1:5173', $development);
         $this->assertStringContainsString('ws://127.0.0.1:5173', $development);
+        $this->assertStringContainsString("img-src 'self' data: blob: http://127.0.0.1:5173", $development);
+        $this->assertStringNotContainsString("img-src 'self' data: blob: ws://127.0.0.1:5173", $development);
         $this->assertStringNotContainsString('127.0.0.1:5173', self::PRODUCTION_CSP);
 
         foreach (['https://example.test:5173', 'http://localhost:5173/path', 'http://user@localhost:5173'] as $unsafe) {
@@ -426,6 +428,8 @@ class Process9D1SecurityBoundaryTest extends TestCase
             if ($allowed) {
                 $this->assertStringContainsString('script-src \'self\' '.$url, $policy);
                 $this->assertStringContainsString('style-src \'self\' \'unsafe-inline\' '.$url, $policy);
+                $this->assertStringContainsString("img-src 'self' data: blob: ".$url, $policy);
+                $this->assertStringNotContainsString("img-src 'self' data: blob: ".$webSocketUrl, $policy);
                 $this->assertStringContainsString('connect-src \'self\' '.$url.' '.$webSocketUrl, $policy);
             } else {
                 $this->assertSame(self::PRODUCTION_CSP, $policy);

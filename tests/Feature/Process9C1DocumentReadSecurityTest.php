@@ -73,6 +73,7 @@ class Process9C1DocumentReadSecurityTest extends TestCase
             $table->string('tracking_no')->unique();
             $table->string('title');
             $table->text('description')->nullable();
+            $table->string('status')->default('pending');
             $table->unsignedBigInteger('document_type_id')->nullable();
             $table->unsignedBigInteger('status_id')->nullable();
             $table->unsignedBigInteger('priority_id')->nullable();
@@ -121,6 +122,22 @@ class Process9C1DocumentReadSecurityTest extends TestCase
             $table->string('status');
             $table->timestamps();
         });
+        Schema::create('audit_logs', function (Blueprint $table): void {
+            $table->id();
+            $table->string('action');
+        });
+        Schema::create('personal_access_tokens', function (Blueprint $table): void {
+            $table->id();
+            $table->string('tokenable_type');
+            $table->unsignedBigInteger('tokenable_id');
+            $table->string('name');
+            $table->string('token')->unique();
+            $table->text('abilities')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('document_attachments', function (Blueprint $table): void {
+            $table->id();
+        });
 
         $this->seedFixture();
     }
@@ -128,6 +145,7 @@ class Process9C1DocumentReadSecurityTest extends TestCase
     protected function tearDown(): void
     {
         foreach ([
+            'document_attachments', 'personal_access_tokens', 'audit_logs',
             'document_qr_codes', 'document_processing_logs', 'document_routes',
             'documents', 'route_actions', 'processing_actions',
             'confidentiality_levels', 'priorities', 'document_statuses',
@@ -206,6 +224,38 @@ class Process9C1DocumentReadSecurityTest extends TestCase
         }
     }
 
+    public function test_detail_serializers_use_loaded_status_relation_despite_legacy_column(): void
+    {
+        $user = $this->user('Administrator', null);
+        Sanctum::actingAs($user);
+
+        $relatedStatus = DB::table('document_statuses')
+            ->where('status_name', 'Received')
+            ->first();
+
+        foreach ([
+            "/api/documents/{$this->documentId}" => '',
+            "/api/documents/{$this->documentId}/routing-options" => 'document.',
+        ] as $endpoint => $pathPrefix) {
+            $before = $this->readOnlySnapshot();
+            $response = $this->getJson($endpoint)->assertOk();
+            $this->assertSame($before, $this->readOnlySnapshot());
+
+            $response->assertJsonPath($pathPrefix.'status', [
+                'id' => $relatedStatus->id,
+                'status_name' => 'Received',
+            ])
+                ->assertJsonMissing(['status' => 'legacy-scalar-status'])
+                ->assertJsonMissingPath($pathPrefix.'status.created_at')
+                ->assertJsonMissingPath($pathPrefix.'status.updated_at');
+
+            $this->assertStringNotContainsString(
+                'legacy-scalar-status',
+                $response->getContent()
+            );
+        }
+    }
+
     private function assertAllEndpointsAllowed(User $user): void
     {
         Sanctum::actingAs($user);
@@ -262,7 +312,8 @@ class Process9C1DocumentReadSecurityTest extends TestCase
 
         $this->documentId = DB::table('documents')->insertGetId([
             'tracking_no' => 'P9C1-'.uniqid(), 'title' => 'Scoped document',
-            'description' => 'Supported detail', 'document_type_id' => $type,
+            'description' => 'Supported detail',
+            'status' => 'legacy-scalar-status', 'document_type_id' => $type,
             'status_id' => $status, 'priority_id' => $priority,
             'confidentiality_level_id' => $confidentiality,
             'origin_office_id' => $this->offices['origin'],
@@ -293,6 +344,28 @@ class Process9C1DocumentReadSecurityTest extends TestCase
             'qr_token' => 'SAFE-QR-TOKEN', 'document_id' => $this->documentId,
             'status' => 'registered', 'created_at' => now(), 'updated_at' => now(),
         ]);
+    }
+
+    private function readOnlySnapshot(): array
+    {
+        return [
+            'documents' => $this->tableSnapshot('documents'),
+            'routes' => $this->tableSnapshot('document_routes'),
+            'processing' => $this->tableSnapshot('document_processing_logs'),
+            'qr' => $this->tableSnapshot('document_qr_codes'),
+            'audits' => $this->tableSnapshot('audit_logs'),
+            'tokens' => $this->tableSnapshot('personal_access_tokens'),
+            'attachments' => $this->tableSnapshot('document_attachments'),
+        ];
+    }
+
+    private function tableSnapshot(string $table): array
+    {
+        return DB::table($table)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (object $row): array => (array) $row)
+            ->all();
     }
 
     private function user(string $roleName, ?int $officeId): User

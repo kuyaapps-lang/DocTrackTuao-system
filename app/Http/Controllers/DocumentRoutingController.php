@@ -36,6 +36,9 @@ class DocumentRoutingController extends Controller
         ]);
 
         $user = $request->user();
+        $status = $document->relationLoaded('status')
+            ? $document->getRelation('status')
+            : null;
 
         return response()->json([
             'document' => [
@@ -46,10 +49,10 @@ class DocumentRoutingController extends Controller
                 'current_office_id' => $document->current_office_id,
                 'origin_office' => $this->officeShape($document->originOffice),
                 'current_office' => $this->officeShape($document->currentOffice),
-                'status' => $document->status
+                'status' => $status
                     ? [
-                        'id' => $document->status->id,
-                        'status_name' => $document->status->status_name,
+                        'id' => $status->id,
+                        'status_name' => $status->status_name,
                     ]
                     : null,
                 'current_action' => $document->currentAction

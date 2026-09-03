@@ -806,6 +806,10 @@ class DocumentController extends Controller
             ->latest('id')
             ->first();
 
+        $status = $document->relationLoaded('status')
+            ? $document->getRelation('status')
+            : null;
+
         return response()->json([
             'id' => $document->id,
             'tracking_no' => $document->tracking_no,
@@ -822,7 +826,7 @@ class DocumentController extends Controller
             'due_date' => $document->due_date,
             'type' => $this->namedRelation($document->type, 'type_name'),
             'status' => $this->namedRelation(
-                $document->status,
+                $status,
                 'status_name'
             ),
             'priority' => $this->namedRelation(
