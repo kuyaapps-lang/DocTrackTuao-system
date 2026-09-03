@@ -90,6 +90,74 @@ class Process9D1SecurityBoundaryTest extends TestCase
         $this->assertSecurityHeaders($redirect);
     }
 
+    #[DataProvider('htmlContentTypeCases')]
+    public function test_html_content_type_variants_are_not_cacheable(string $contentType): void
+    {
+        $response = $this->applyResponse(
+            response('<p>HTML</p>', 200, ['Content-Type' => $contentType]),
+            '/security-test-html'
+        );
+
+        $response->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertSecurityHeaders($response);
+    }
+
+    public static function htmlContentTypeCases(): iterable
+    {
+        yield 'media type only' => ['text/html'];
+        yield 'live lowercase charset' => ['text/html; charset=utf-8'];
+        yield 'framework uppercase charset' => ['text/html; charset=UTF-8'];
+        yield 'case and optional whitespace' => ["  TeXt/HtMl \t; ChArSeT = uTf-8  "];
+    }
+
+    public function test_api_json_keeps_no_store_while_non_html_and_downloads_are_not_reclassified(): void
+    {
+        $api = $this->applyResponse(response()->json(['message' => 'safe']), '/api/security-test/cache');
+        $api->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertSecurityHeaders($api);
+
+        $plain = $this->applyResponse(
+            response('plain', 200, ['Content-Type' => 'text/plain; charset=UTF-8']),
+            '/security-test-plain'
+        );
+        $plain->assertHeader('Cache-Control', 'no-cache, private');
+        $this->assertSecurityHeaders($plain);
+
+        $download = $this->applyResponse(
+            response()->streamDownload(
+                static function (): void {},
+                'safe.pdf',
+                ['Content-Type' => 'application/pdf']
+            ),
+            '/security-test-download'
+        );
+        $download->assertHeader('Content-Disposition', 'attachment; filename=safe.pdf');
+        $this->assertNotSame('no-store, private', $download->headers->get('Cache-Control'));
+        $this->assertSecurityHeaders($download);
+    }
+
+    #[DataProvider('ambiguousContentTypeCases')]
+    public function test_malformed_or_multi_valued_content_types_fail_closed(string $case): void
+    {
+        $response = response('ambiguous');
+
+        if ($case === 'multiple-values') {
+            $response->headers->set('Content-Type', ['text/html', 'application/json']);
+        } else {
+            $response->headers->set('Content-Type', 'application/pdf, text/html');
+        }
+
+        $result = $this->applyResponse($response, '/security-test-ambiguous');
+        $result->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertSecurityHeaders($result);
+    }
+
+    public static function ambiguousContentTypeCases(): iterable
+    {
+        yield 'multiple values' => ['multiple-values'];
+        yield 'comma ambiguous value' => ['comma-value'];
+    }
+
     #[DataProvider('debugValues')]
     public function test_unexpected_api_failures_are_generic_regardless_of_debug_or_accept(
         bool $debug,
@@ -565,6 +633,13 @@ class Process9D1SecurityBoundaryTest extends TestCase
 
         return \Illuminate\Testing\TestResponse::fromBaseResponse(
             SecurityHeaders::applyTo($response, $request)
+        );
+    }
+
+    private function applyResponse($response, string $path)
+    {
+        return \Illuminate\Testing\TestResponse::fromBaseResponse(
+            SecurityHeaders::applyTo($response, Request::create($path))
         );
     }
 

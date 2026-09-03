@@ -37,7 +37,7 @@ class SecurityHeaders
         $response->headers->remove('X-Powered-By');
 
         if (
-            ($request->is('api/*') || $response->headers->get('Content-Type') === 'text/html; charset=UTF-8') &&
+            ($request->is('api/*') || self::contentTypeRequiresNoStore($response)) &&
             !$request->is('build/*')
         ) {
             $response->headers->set('Cache-Control', 'no-store, private');
@@ -53,6 +53,50 @@ class SecurityHeaders
         }
 
         return $response;
+    }
+
+    private static function contentTypeRequiresNoStore(Response $response): bool
+    {
+        $values = $response->headers->all('Content-Type');
+
+        if ($values === []) {
+            return false;
+        }
+
+        if (count($values) !== 1 || !is_string($values[0])) {
+            return true;
+        }
+
+        $contentType = trim($values[0], " \t");
+        if (
+            $contentType === '' ||
+            preg_match('/[\x00-\x08\x0A-\x1F\x7F,]/', $contentType) === 1
+        ) {
+            return true;
+        }
+
+        $parts = explode(';', $contentType);
+        $mediaType = strtolower(trim(array_shift($parts), " \t"));
+
+        if ($mediaType === 'text/html') {
+            return true;
+        }
+
+        $token = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
+        if (preg_match("/\\A{$token}\\/{$token}\\z/D", $mediaType) !== 1) {
+            return true;
+        }
+
+        foreach ($parts as $parameter) {
+            if (preg_match(
+                "/\\A[ \\t]*{$token}[ \\t]*=[ \\t]*(?:{$token}|\"[^\"\\r\\n]*\")[ \\t]*\\z/D",
+                $parameter
+            ) !== 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function approvedApplicationFailure(Response $response, Request $request): ?array
