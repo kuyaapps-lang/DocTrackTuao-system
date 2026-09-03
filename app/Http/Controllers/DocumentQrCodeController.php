@@ -9,6 +9,8 @@ use App\Support\PublicLookupSecurity;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class DocumentQrCodeController extends Controller
 {
@@ -25,6 +27,69 @@ class DocumentQrCodeController extends Controller
             ->get();
 
         return response()->json($qrCodes);
+    }
+
+    /**
+     * Return a bounded token-free inventory for QR administration.
+     */
+    public function inventory(Request $request)
+    {
+        $supported = ['page', 'per_page', 'status'];
+        $unknown = array_diff(array_keys($request->query()), $supported);
+
+        if ($unknown !== []) {
+            throw ValidationException::withMessages([
+                'query' => ['Unsupported query parameter.'],
+            ]);
+        }
+
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', Rule::in([10, 25, 50])],
+            'status' => ['sometimes', 'string', Rule::in(['unused', 'registered', 'void'])],
+        ]);
+
+        $query = DocumentQrCode::query()
+            ->select(['id', 'status', 'document_id', 'generated_at', 'created_at'])
+            ->when(
+                isset($validated['status']),
+                fn ($builder) => $builder->where('status', $validated['status'])
+            )
+            ->orderByRaw('COALESCE(generated_at, created_at) DESC')
+            ->orderByDesc('id');
+
+        $paginator = $query->paginate(
+            (int) ($validated['per_page'] ?? 10),
+            ['*'],
+            'page',
+            (int) ($validated['page'] ?? 1)
+        );
+
+        if ($paginator->currentPage() > $paginator->lastPage()) {
+            throw ValidationException::withMessages([
+                'page' => ['The selected page is unavailable.'],
+            ]);
+        }
+
+        return response()->json([
+            'data' => collect($paginator->items())
+                ->map(fn (DocumentQrCode $qrCode): array => [
+                    'id' => (int) $qrCode->id,
+                    'status' => (string) $qrCode->status,
+                    'issued_at' => ($qrCode->generated_at ?? $qrCode->created_at)
+                        ->toIso8601String(),
+                    'linked' => $qrCode->document_id !== null,
+                ])
+                ->values(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+        ]);
     }
 
     /**
@@ -134,6 +199,12 @@ class DocumentQrCodeController extends Controller
             if ($qrCode->status === 'void') {
                 throw new HttpResponseException(response()->json([
                     'message' => 'This QR code has already been voided.',
+                ], 409));
+            }
+
+            if ($qrCode->document_id !== null) {
+                throw new HttpResponseException(response()->json([
+                    'message' => 'This QR code cannot be voided because it is linked.',
                 ], 409));
             }
 

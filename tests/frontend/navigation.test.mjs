@@ -11,6 +11,7 @@ const permissionSets = {
     administrator: [
         'documents.view',
         'qr.view',
+        'qr.manage',
         'master_data.view',
         'users.manage',
         'audit.view',
@@ -18,6 +19,7 @@ const permissionSets = {
     recordsOfficer: [
         'documents.view',
         'qr.view',
+        'qr.manage',
         'master_data.view',
         'audit.view',
     ],

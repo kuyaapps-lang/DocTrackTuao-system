@@ -187,6 +187,11 @@ Route::middleware('auth:sanctum')->group(function () {
     )->middleware('can:qr.manage');
 
     Route::get(
+        'qr-codes/inventory',
+        [DocumentQrCodeController::class, 'inventory']
+    )->middleware('can:qr.manage');
+
+    Route::get(
         'qr-codes/{qrCode}',
         [DocumentQrCodeController::class, 'show']
     )->middleware('can:qr.view');

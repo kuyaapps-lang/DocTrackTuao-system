@@ -1,6 +1,13 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import QRCode from 'qrcode'
+import { clearCurrentUser } from '@/lib/auth'
+import {
+    canBeginVoid,
+    canVoidInventoryItem,
+    createInventoryManager,
+    voidConfirmationText,
+} from '@/lib/qrInventory'
 
 import {
     Card,
@@ -43,6 +50,19 @@ const lastGeneratedBatch = ref([])
 
 const error = ref('')
 const successMessage = ref('')
+
+const inventory = ref([])
+const inventoryMeta = ref(null)
+const inventoryLoading = ref(true)
+const inventoryError = ref('')
+const inventoryNotice = ref('')
+const inventoryNoticeKind = ref('success')
+const inventoryStatus = ref('unused')
+const selectedQr = ref(null)
+const voidingId = ref(null)
+const confirmButton = ref(null)
+const inventoryHeading = ref(null)
+const voidReturnFocus = ref(null)
 
 /*
 |--------------------------------------------------------------------------
@@ -394,6 +414,79 @@ const fetchQrCodes = async () => {
     } finally {
         loading.value = false
     }
+}
+
+const clearAuthentication = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_user')
+    clearCurrentUser()
+    window.location.assign('/login')
+}
+
+const inventoryManager = createInventoryManager({
+    fetchImpl: (...arguments_) => fetch(...arguments_),
+    getToken,
+    onUnauthorized: clearAuthentication,
+    onVoided: id => {
+        qrCodes.value = qrCodes.value.map(qrCode => qrCode.id === id
+            ? { ...qrCode, status: 'void' }
+            : qrCode)
+    },
+    onState: state => {
+        inventory.value = state.items
+        inventoryMeta.value = state.meta
+        inventoryLoading.value = state.loading
+        inventoryError.value = state.error
+        inventoryNotice.value = state.notice
+        inventoryNoticeKind.value = state.noticeKind
+        voidingId.value = state.pendingId
+    },
+})
+
+const fetchInventory = (page = 1) => inventoryManager.load({
+    page,
+    perPage: 10,
+    status: inventoryStatus.value,
+})
+
+const restoreVoidFocus = async () => {
+    if (inventoryManager.isDisposed()) return
+    await nextTick()
+    if (inventoryManager.isDisposed()) return
+    const target = voidReturnFocus.value?.isConnected
+        ? voidReturnFocus.value
+        : inventoryHeading.value
+    target?.focus()
+    voidReturnFocus.value = null
+}
+
+const openVoidConfirmation = async (item, event) => {
+    if (inventoryManager.isDisposed()) return
+    if (!canBeginVoid(voidingId.value, item)) return
+    voidReturnFocus.value = event?.currentTarget || null
+    selectedQr.value = item
+    await nextTick()
+    confirmButton.value?.focus()
+}
+
+const closeVoidConfirmation = async () => {
+    if (inventoryManager.isDisposed()) return
+    if (voidingId.value !== null) return
+    selectedQr.value = null
+    await restoreVoidFocus()
+}
+
+const confirmVoid = async () => {
+    const item = selectedQr.value
+    if (!canBeginVoid(voidingId.value, item)) return
+    const result = await inventoryManager.voidItem(item, {
+        page: inventoryMeta.value?.current_page || 1,
+        perPage: 10,
+        status: inventoryStatus.value,
+    })
+    if (result.kind === 'duplicate' || inventoryManager.isDisposed()) return
+    selectedQr.value = null
+    await restoreVoidFocus()
 }
 
 /*
@@ -818,6 +911,11 @@ const formatDateTime = (date) => {
 
 onMounted(() => {
     fetchQrCodes()
+    fetchInventory()
+})
+
+onBeforeUnmount(() => {
+    inventoryManager.dispose()
 })
 </script>
 
@@ -1299,6 +1397,148 @@ onMounted(() => {
                 </CardContent>
 
             </Card>
+
+            <Card class="mt-6">
+                <CardHeader>
+                    <CardTitle>
+                        <span ref="inventoryHeading" tabindex="-1">Persisted QR Inventory</span>
+                    </CardTitle>
+                    <p class="text-sm text-gray-500">
+                        Token-free issuance records for lifecycle administration.
+                    </p>
+                </CardHeader>
+
+                <CardContent>
+                    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+                        <label class="text-sm font-medium text-gray-700">
+                            Lifecycle status
+                            <select
+                                v-model="inventoryStatus"
+                                :disabled="voidingId !== null"
+                                class="mt-1 block rounded-md border bg-white px-3 py-2"
+                                @change="fetchInventory(1)"
+                            >
+                                <option value="">All statuses</option>
+                                <option value="unused">Unused</option>
+                                <option value="registered">Registered</option>
+                                <option value="void">Void</option>
+                            </select>
+                        </label>
+
+                        <Button
+                            variant="outline"
+                            :disabled="inventoryLoading || voidingId !== null"
+                            @click="fetchInventory(inventoryMeta?.current_page || 1)"
+                        >
+                            Retry
+                        </Button>
+                    </div>
+
+                    <p
+                        aria-live="polite"
+                        class="mb-3 text-sm"
+                        :class="inventoryNoticeKind === 'conflict' ? 'text-amber-700' : 'text-green-700'"
+                    >
+                        {{ inventoryNotice }}
+                    </p>
+                    <p v-if="inventoryError" role="alert" class="mb-3 text-sm text-red-700">
+                        {{ inventoryError }}
+                    </p>
+
+                    <div v-if="inventoryLoading" class="py-6 text-center text-gray-500" role="status">
+                        Loading persisted QR inventory...
+                    </div>
+
+                    <div v-else-if="!inventoryError && inventory.length === 0" class="py-6 text-center text-gray-500">
+                        {{ inventoryStatus
+                            ? 'No QR records match the selected lifecycle status.'
+                            : 'No persisted QR records are available.' }}
+                    </div>
+
+                    <div v-else-if="!inventoryError" class="overflow-x-auto">
+                        <table class="min-w-full divide-y text-left text-sm">
+                            <caption class="sr-only">
+                                Persisted QR records with lifecycle status and void eligibility
+                            </caption>
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th scope="col" class="px-3 py-2">Record ID</th>
+                                    <th scope="col" class="px-3 py-2">Issued</th>
+                                    <th scope="col" class="px-3 py-2">Status</th>
+                                    <th scope="col" class="px-3 py-2">Link state</th>
+                                    <th scope="col" class="px-3 py-2">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                <tr v-for="item in inventory" :key="item.id">
+                                    <td class="whitespace-nowrap px-3 py-2 font-mono">#{{ item.id }}</td>
+                                    <td class="whitespace-nowrap px-3 py-2">{{ formatDateTime(item.issued_at) }}</td>
+                                    <td class="whitespace-nowrap px-3 py-2 capitalize">{{ item.status }}</td>
+                                    <td class="whitespace-nowrap px-3 py-2">{{ item.linked ? 'Linked' : 'Unlinked' }}</td>
+                                    <td class="whitespace-nowrap px-3 py-2">
+                                        <Button
+                                            v-if="canVoidInventoryItem(item)"
+                                            variant="destructive"
+                                            :disabled="voidingId !== null"
+                                            :aria-label="`Void QR record ${item.id}`"
+                                            @click="openVoidConfirmation(item, $event)"
+                                        >
+                                            Void
+                                        </Button>
+                                        <span v-else class="text-gray-500">Not available</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div v-if="inventoryMeta" class="mt-4 flex items-center justify-between gap-3 text-sm">
+                        <span>Page {{ inventoryMeta.current_page }} of {{ inventoryMeta.last_page }} / {{ inventoryMeta.total }} records</span>
+                        <div class="flex gap-2">
+                            <Button
+                                variant="outline"
+                                :disabled="inventoryLoading || voidingId !== null || inventoryMeta.current_page <= 1"
+                                @click="fetchInventory(inventoryMeta.current_page - 1)"
+                            >Previous</Button>
+                            <Button
+                                variant="outline"
+                                :disabled="inventoryLoading || voidingId !== null || inventoryMeta.current_page >= inventoryMeta.last_page"
+                                @click="fetchInventory(inventoryMeta.current_page + 1)"
+                            >Next</Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <div
+                v-if="selectedQr"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="void-confirm-title"
+                aria-describedby="void-confirm-description"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                @keydown.esc="closeVoidConfirmation"
+            >
+                <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+                    <h2 id="void-confirm-title" class="text-lg font-semibold">Confirm QR void</h2>
+                    <p id="void-confirm-description" class="mt-3 text-sm text-gray-700">
+                        {{ voidConfirmationText(selectedQr) }}
+                    </p>
+                    <div class="mt-5 flex justify-end gap-2">
+                        <Button variant="outline" :disabled="voidingId !== null" @click="closeVoidConfirmation">
+                            Cancel
+                        </Button>
+                        <Button
+                            ref="confirmButton"
+                            variant="destructive"
+                            :disabled="voidingId !== null"
+                            @click="confirmVoid"
+                        >
+                            {{ voidingId !== null ? 'Voiding...' : 'Void record' }}
+                        </Button>
+                    </div>
+                </div>
+            </div>
 
         </div>
 

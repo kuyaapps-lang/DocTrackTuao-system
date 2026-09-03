@@ -92,6 +92,17 @@ class Process5DQrAuditTest extends TestCase
             $table->timestamp('registered_at')->nullable();
             $table->timestamps();
         });
+        Schema::create('document_attachments', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('document_id');
+            $table->string('original_filename');
+            $table->string('stored_filename');
+            $table->string('file_path');
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->unsignedBigInteger('uploaded_by');
+            $table->timestamps();
+        });
         Schema::create('personal_access_tokens', function (Blueprint $table) {
             $table->id();
             $table->string('tokenable_type');
@@ -130,7 +141,7 @@ class Process5DQrAuditTest extends TestCase
     protected function tearDown(): void
     {
         foreach ([
-            'audit_logs', 'personal_access_tokens', 'document_qr_codes',
+            'audit_logs', 'personal_access_tokens', 'document_attachments', 'document_qr_codes',
             'document_processing_logs', 'document_routes', 'documents',
             'users', 'roles',
         ] as $table) {
@@ -183,6 +194,132 @@ class Process5DQrAuditTest extends TestCase
 
         $this->assertSame(0, DocumentQrCode::count());
         $this->assertSame(0, AuditLog::count());
+    }
+
+    public function test_inventory_is_manage_protected_and_rejected_reads_are_inert(): void
+    {
+        $owner = $this->user('Records Officer');
+        $this->qr($owner, 'INVENTORY-PROTECTED', 'unused');
+
+        $before = $this->completeSnapshot();
+        $this->getJson('/api/qr-codes/inventory')->assertUnauthorized();
+        $this->assertSame($before, $this->completeSnapshot());
+
+        foreach (['Viewer', 'Unexpected Role'] as $role) {
+            Sanctum::actingAs($this->user($role, strtolower(str_replace(' ', '-', $role)).'@example.test'));
+            $before = $this->completeSnapshot();
+            $this->getJson('/api/qr-codes/inventory')->assertForbidden();
+            $this->assertSame($before, $this->completeSnapshot());
+        }
+    }
+
+    public function test_empty_inventory_has_exact_safe_read_only_contract(): void
+    {
+        Sanctum::actingAs($this->user('Administrator'));
+        $before = $this->completeSnapshot();
+
+        $response = $this->getJson('/api/qr-codes/inventory?status=unused&per_page=10&page=1')
+            ->assertOk()
+            ->assertExactJson([
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => 10,
+                    'total' => 0,
+                    'from' => null,
+                    'to' => null,
+                ],
+            ]);
+
+        $this->assertSame($before, $this->completeSnapshot());
+        foreach (['qr_token', 'document_id', 'generated_by', 'email', 'title', 'links'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, strtolower($response->getContent()));
+        }
+    }
+
+    public function test_inventory_is_token_free_deterministic_paginated_and_read_only(): void
+    {
+        $user = $this->user('Administrator');
+        $ids = [];
+
+        for ($index = 1; $index <= 12; $index++) {
+            $ids[] = DocumentQrCode::create([
+                'qr_token' => 'SAFE-INVENTORY-'.str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+                'status' => $index === 1 ? 'registered' : 'unused',
+                'document_id' => $index === 1 ? 1 : null,
+                'generated_by' => $user->id,
+                'generated_at' => $index <= 2
+                    ? '2026-09-03 03:16:15'
+                    : '2026-09-03 03:13:05',
+            ])->id;
+        }
+
+        Sanctum::actingAs($user);
+        $before = $this->completeSnapshot();
+        $response = $this->getJson('/api/qr-codes/inventory?status=unused&per_page=10&page=1')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [['id', 'status', 'issued_at', 'linked']],
+                'meta' => ['current_page', 'last_page', 'per_page', 'total', 'from', 'to'],
+            ])
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.per_page', 10)
+            ->assertJsonPath('meta.total', 11);
+        $this->assertSame(['data', 'meta'], array_keys($response->json()));
+        $this->assertSame(
+            ['current_page', 'last_page', 'per_page', 'total', 'from', 'to'],
+            array_keys($response->json('meta'))
+        );
+        $this->assertSame($before, $this->completeSnapshot());
+
+        $data = $response->json('data');
+        $expectedIds = [
+            $ids[1],
+            ...array_reverse(array_slice($ids, 2)),
+        ];
+        $this->assertSame(array_slice($expectedIds, 0, 10), array_column($data, 'id'));
+        foreach ($data as $item) {
+            $this->assertSame(['id', 'status', 'issued_at', 'linked'], array_keys($item));
+            $this->assertSame('unused', $item['status']);
+            $this->assertFalse($item['linked']);
+        }
+
+        $serialized = strtolower($response->getContent());
+        foreach (['qr_token', 'safe-inventory', 'generated_by', 'document_id', 'email', 'title', 'description'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $serialized);
+        }
+
+        $beforePage = $this->completeSnapshot();
+        $this->getJson('/api/qr-codes/inventory?status=unused&per_page=10&page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $expectedIds[10]);
+        $this->assertSame($beforePage, $this->completeSnapshot());
+
+        $beforeRegistered = $this->completeSnapshot();
+        $this->getJson('/api/qr-codes/inventory?status=registered&per_page=25&page=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $ids[0])
+            ->assertJsonPath('data.0.status', 'registered')
+            ->assertJsonPath('data.0.linked', true)
+            ->assertJsonPath('meta.per_page', 25);
+        $this->assertSame($beforeRegistered, $this->completeSnapshot());
+    }
+
+    public function test_inventory_rejects_invalid_and_unknown_parameters_without_mutation(): void
+    {
+        Sanctum::actingAs($this->user('Records Officer'));
+
+        foreach ([
+            'page=0', 'page=1.5', 'per_page=11', 'status=quarantined',
+            'status[]=unused', 'unknown=value', 'page=999',
+        ] as $query) {
+            $before = $this->completeSnapshot();
+            $this->getJson('/api/qr-codes/inventory?'.$query)->assertUnprocessable();
+            $this->assertSame($before, $this->completeSnapshot());
+        }
     }
 
     public function test_void_creates_one_audit_and_conflicts_create_none(): void
@@ -260,6 +397,19 @@ class Process5DQrAuditTest extends TestCase
             $expectedAfterExternalChange,
             $this->completeSnapshot()
         );
+    }
+
+    public function test_linked_unused_qr_is_not_voidable(): void
+    {
+        $user = $this->user('Records Officer');
+        $qr = $this->qr($user, 'LINKED-UNUSED-TOKEN', 'unused');
+        $qr->update(['document_id' => 1]);
+        Sanctum::actingAs($user);
+        $before = $this->completeSnapshot();
+
+        $this->postJson("/api/qr-codes/{$qr->id}/void")->assertConflict();
+
+        $this->assertSame($before, $this->completeSnapshot());
     }
 
     public function test_unexpected_qr_state_is_rejected_without_any_side_effect(): void
@@ -380,6 +530,11 @@ class Process5DQrAuditTest extends TestCase
                 'id', 'qr_token', 'status', 'document_id', 'generated_by',
                 'generated_at', 'registered_at', 'created_at', 'updated_at',
             ], ['id'], ['document_id', 'generated_by']),
+            'attachments' => $this->normalizedRows('document_attachments', [
+                'id', 'document_id', 'original_filename', 'stored_filename',
+                'file_path', 'mime_type', 'file_size', 'uploaded_by',
+                'created_at', 'updated_at',
+            ], ['id', 'document_id', 'uploaded_by'], ['file_size']),
             'audits' => $audits,
             'audit_count' => count($audits),
             'tokens' => $this->normalizedRows('personal_access_tokens', [

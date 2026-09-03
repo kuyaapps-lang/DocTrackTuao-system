@@ -17,7 +17,7 @@ export const navigationItems = [
         key: 'qr-codes',
         label: 'QR Codes',
         path: '/qr-codes',
-        permission: 'qr.view',
+        permission: 'qr.manage',
         group: null,
     },
     {

@@ -539,6 +539,52 @@ GET {{base_url}}/api/qr-codes
 
 Permission: `qr.view`
 
+This legacy authorized list supports the existing issuance summary. Use the
+token-free inventory below for persisted-record administration.
+
+### Persisted QR Inventory
+
+```http
+GET {{base_url}}/api/qr-codes/inventory?page=1&per_page=10&status=unused
+```
+
+Permission: `qr.manage`
+
+Supported parameters are `page` (positive integer), `per_page` (`10`, `25`,
+or `50`), and optional `status` (`unused`, `registered`, or `void`). Unknown or
+invalid parameters return `422`. Results are ordered newest-first by issuance
+timestamp and then numeric ID.
+
+```json
+{
+  "data": [
+    {
+      "id": 42,
+      "status": "unused",
+      "issued_at": "2026-01-15T08:30:00+00:00",
+      "linked": false
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 10,
+    "total": 1,
+    "from": 1,
+    "to": 1
+  }
+}
+```
+
+The inventory uses explicit safe arrays and never returns QR tokens, encoded
+payloads, user details, document content, or raw model relationships. Inventory
+reads do not create audit events or mutate application data.
+
+Unauthenticated requests return `401`; authenticated users without
+`qr.manage` receive `403`. Invalid or unsupported inventory query parameters
+return `422`. Clients must show fixed safe messages and must not render raw
+error bodies.
+
 ### Generate QR Codes
 
 ```http
@@ -573,9 +619,16 @@ POST {{base_url}}/api/qr-codes/{qrCode}/void
 
 Permission: `qr.manage`
 
-Only unused QR codes may be voided. The QR row is re-read and locked inside
-the void transaction. Registered, already-void, and other invalid lifecycle
-states return `409`; replaying a successful void creates no additional audit.
+Only unused, unlinked QR codes may be voided. The QR row is re-read and locked
+inside the void transaction. Registered, linked, already-void, stale, and other
+invalid lifecycle states return `409`; replaying a successful void creates no
+additional audit. A successful void changes one lifecycle value and creates one
+safe audit event.
+
+Clients should treat `409` as a lifecycle conflict, refresh the affected
+inventory page, and show a generic fixed message. They should clear established
+authentication state on `401`; `403`, validation, network, and unexpected
+failures must not expose raw response details.
 
 ---
 
