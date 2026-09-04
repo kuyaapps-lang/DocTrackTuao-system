@@ -534,13 +534,38 @@ Permission: `documents.view`
 ### List QR Codes
 
 ```http
-GET {{base_url}}/api/qr-codes
+GET {{base_url}}/api/qr-codes?page=1&per_page=10&status=unused
 ```
 
 Permission: `qr.view`
 
-This legacy authorized list supports the existing issuance summary. Use the
-token-free inventory below for persisted-record administration.
+Supported parameters are `page` (positive integer), `per_page` (`10`, `25`,
+or `50`), and optional `status` (`unused`, `registered`, or `void`). Unknown or
+invalid parameters and pages beyond the last page return `422`. Results use
+effective issuance time descending, then ID descending. The exact response is
+the same token-free `data` and `meta` shape documented for inventory below.
+An empty list has page/last page `1`, total `0`, and null `from`/`to`.
+
+### QR Summary
+
+```http
+GET {{base_url}}/api/qr-codes/summary
+```
+
+Permission: `qr.view`
+
+```json
+{
+  "total_issued": 33,
+  "counts": { "unused": 9, "registered": 2, "void": 22 },
+  "latest_issued_at": "2026-09-03T03:13:05+00:00"
+}
+```
+
+`total_issued` includes every QR row. Named counts include only their matching
+supported state; unexpected states contribute to the total but not a named
+count. With no rows all counts are zero and `latest_issued_at` is null. The
+summary contains no records, IDs, tokens, URLs, or relationships.
 
 ### Persisted QR Inventory
 
@@ -610,6 +635,17 @@ GET {{base_url}}/api/qr-codes/{qrCode}
 ```
 
 Permission: `qr.view`
+
+The identifier must be numeric; malformed and unknown identifiers return
+`404`. The exact response contains only `id`, `status`, `issued_at`, and
+`linked`, matching one inventory record.
+
+The summary, list, inventory, and generic show intentionally exclude QR
+tokens, token-bearing URLs, user/document objects, and sensitive
+relationships. Generation still returns newly created batch tokens for
+immediate printing. The separate authenticated document-detail response keeps
+the registered QR identity needed for linked-document rendering and printing;
+registration and public resolution are unchanged.
 
 ### Void QR Code
 

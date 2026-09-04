@@ -322,6 +322,158 @@ class Process5DQrAuditTest extends TestCase
         }
     }
 
+    public function test_qr_summary_permissions_empty_contract_and_read_only_behavior(): void
+    {
+        $before = $this->completeSnapshot();
+        $this->getJson('/api/qr-codes/summary')->assertUnauthorized();
+        $this->assertSame($before, $this->completeSnapshot());
+
+        foreach (['Office User', 'Viewer'] as $role) {
+            Sanctum::actingAs($this->user($role, str_replace(' ', '-', strtolower($role)).'@example.test'));
+            $before = $this->completeSnapshot();
+            $this->getJson('/api/qr-codes/summary')->assertForbidden();
+            $this->assertSame($before, $this->completeSnapshot());
+        }
+
+        foreach (['Administrator', 'Records Officer'] as $role) {
+            Sanctum::actingAs($this->user($role, str_replace(' ', '-', strtolower($role)).'@example.test'));
+            $before = $this->completeSnapshot();
+            $this->getJson('/api/qr-codes/summary')->assertOk()->assertExactJson([
+                'total_issued' => 0,
+                'counts' => ['unused' => 0, 'registered' => 0, 'void' => 0],
+                'latest_issued_at' => null,
+            ]);
+            $this->assertSame($before, $this->completeSnapshot());
+        }
+    }
+
+    public function test_qr_summary_counts_supported_states_only_and_uses_aggregate_queries(): void
+    {
+        $user = $this->user('Administrator', 'sensitive-summary@example.test');
+        foreach ([
+            ['SUMMARY-UNUSED', 'unused', '2026-09-01 08:00:00'],
+            ['SUMMARY-REGISTERED', 'registered', '2026-09-02 08:00:00'],
+            ['SUMMARY-VOID', 'void', '2026-09-03 08:00:00'],
+            ['SUMMARY-UNEXPECTED', 'quarantined', '2026-09-04 08:00:00'],
+        ] as [$token, $status, $generatedAt]) {
+            $qr = $this->qr($user, $token, $status);
+            $qr->update(['generated_at' => $generatedAt]);
+        }
+
+        Sanctum::actingAs($user);
+        $before = $this->completeSnapshot();
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            if (str_contains(strtolower($query->sql), 'document_qr_codes')) {
+                $queries[] = strtolower($query->sql);
+            }
+        });
+        $response = $this->getJson('/api/qr-codes/summary')->assertOk()->assertExactJson([
+            'total_issued' => 4,
+            'counts' => ['unused' => 1, 'registered' => 1, 'void' => 1],
+            'latest_issued_at' => '2026-09-04T08:00:00+00:00',
+        ]);
+        $summaryQueries = $queries;
+        $this->assertSame($before, $this->completeSnapshot());
+
+        $responseKeys = array_keys($response->json());
+        $this->assertSame(['total_issued', 'counts', 'latest_issued_at'], $responseKeys);
+        $this->assertCount(3, $summaryQueries);
+        foreach ($summaryQueries as $query) {
+            $this->assertStringNotContainsString('select *', $query);
+            $this->assertStringNotContainsString(' join ', $query);
+            $this->assertTrue(str_contains($query, 'count(') || str_contains($query, 'max('));
+        }
+        $this->assertTrue(collect($summaryQueries)->contains(fn ($query) => str_contains($query, 'group by')));
+        $this->assertTrue(collect($summaryQueries)->contains(fn ($query) => str_contains($query, 'max(')));
+    }
+
+    public function test_legacy_index_is_bounded_allowlisted_deterministic_and_read_only(): void
+    {
+        $user = $this->user('Records Officer', 'sensitive-index@example.test');
+        $first = $this->qr($user, 'INDEX-SECRET-ONE', 'unused');
+        $second = $this->qr($user, 'INDEX-SECRET-TWO', 'unused');
+        $first->update(['generated_at' => '2026-09-03 03:13:05']);
+        $second->update(['generated_at' => '2026-09-03 03:13:05']);
+
+        $before = $this->completeSnapshot();
+        $this->getJson('/api/qr-codes')->assertUnauthorized();
+        $this->assertSame($before, $this->completeSnapshot());
+        Sanctum::actingAs($this->user('Office User', 'office-index@example.test'));
+        $before = $this->completeSnapshot();
+        $this->getJson('/api/qr-codes')->assertForbidden();
+        $this->assertSame($before, $this->completeSnapshot());
+        Sanctum::actingAs($user);
+
+        $before = $this->completeSnapshot();
+        $response = $this->getJson('/api/qr-codes?page=1&per_page=10&status=unused')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $second->id)
+            ->assertJsonPath('data.1.id', $first->id);
+        $this->assertSame($before, $this->completeSnapshot());
+        $this->assertSame(['data', 'meta'], array_keys($response->json()));
+        foreach ($response->json('data') as $record) {
+            $this->assertSame(['id', 'status', 'issued_at', 'linked'], array_keys($record));
+        }
+        $serialized = strtolower($response->getContent());
+        foreach (['qr_token', 'index-secret', 'generated_by', 'document_id', 'email', 'description', 'processing_note', 'file_path'] as $forbidden) {
+            $this->assertFalse(str_contains($serialized, $forbidden), 'Protected QR index exposed a forbidden field or fixture value.');
+        }
+
+        foreach (['page=0', 'page=1.5', 'per_page=51', 'per_page=11', 'status=other', 'unknown=1', 'page=2'] as $query) {
+            $before = $this->completeSnapshot();
+            $this->getJson('/api/qr-codes?'.$query)->assertUnprocessable();
+            $this->assertSame($before, $this->completeSnapshot());
+        }
+    }
+
+    public function test_legacy_index_empty_and_protected_show_have_exact_safe_contracts(): void
+    {
+        $owner = $this->user('Records Officer', 'sensitive-show@example.test');
+        Sanctum::actingAs($owner);
+        $before = $this->completeSnapshot();
+        $this->getJson('/api/qr-codes')->assertOk()->assertExactJson([
+            'data' => [],
+            'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 10, 'total' => 0, 'from' => null, 'to' => null],
+        ]);
+        $this->assertSame($before, $this->completeSnapshot());
+
+        $qr = $this->qr($owner, 'SHOW-SECRET-TOKEN', 'unused');
+        $before = $this->completeSnapshot();
+        $response = $this->getJson("/api/qr-codes/{$qr->id}")->assertOk();
+        $this->assertSame($before, $this->completeSnapshot());
+        $this->assertSame(['id', 'status', 'issued_at', 'linked'], array_keys($response->json()));
+        $this->assertFalse(str_contains(strtolower($response->getContent()), 'show-secret-token'), 'Protected QR show exposed its token.');
+
+        $before = $this->completeSnapshot();
+        $this->getJson('/api/qr-codes/not-a-number')->assertNotFound();
+        $this->getJson('/api/qr-codes/999999')->assertNotFound();
+        $this->assertSame($before, $this->completeSnapshot());
+
+        $this->app['auth']->forgetGuards();
+        $this->getJson("/api/qr-codes/{$qr->id}")->assertUnauthorized();
+        Sanctum::actingAs($this->user('Viewer', 'viewer-show@example.test'));
+        $this->getJson("/api/qr-codes/{$qr->id}")->assertForbidden();
+    }
+
+    public function test_generation_tokens_never_leak_to_protected_reads(): void
+    {
+        $user = $this->user('Administrator');
+        Sanctum::actingAs($user);
+        $generation = $this->postJson('/api/qr-codes', ['quantity' => 1])->assertCreated();
+        $token = $generation->json('qr_codes.0.qr_token');
+        $id = $generation->json('qr_codes.0.id');
+        $this->assertIsString($token);
+        $this->assertStringContainsString($token, $generation->json('scan_paths.0'));
+
+        foreach (['/api/qr-codes/summary', '/api/qr-codes', '/api/qr-codes/inventory', "/api/qr-codes/{$id}"] as $path) {
+            $before = $this->completeSnapshot();
+            $response = $this->getJson($path)->assertOk();
+            $this->assertSame($before, $this->completeSnapshot());
+            $this->assertFalse(str_contains($response->getContent(), $token), 'A protected persisted read exposed a generation token.');
+        }
+    }
+
     public function test_void_creates_one_audit_and_conflicts_create_none(): void
     {
         $user = $this->user('Records Officer');
@@ -494,6 +646,17 @@ class Process5DQrAuditTest extends TestCase
         ], ['id'], ['user_id', 'record_id']);
 
         return [
+            'users' => DB::table('users')->orderBy('id')->get([
+                'id', 'name', 'email', 'role_id', 'office_id', 'created_at', 'updated_at',
+            ])->map(fn ($user): array => [
+                'id' => (int) $user->id,
+                'name' => (string) $user->name,
+                'email_sha256' => hash('sha256', strtolower((string) $user->email)),
+                'role_id' => $user->role_id === null ? null : (int) $user->role_id,
+                'office_id' => $user->office_id === null ? null : (int) $user->office_id,
+                'created_at' => $user->created_at === null ? null : (string) $user->created_at,
+                'updated_at' => $user->updated_at === null ? null : (string) $user->updated_at,
+            ])->all(),
             'documents' => $this->normalizedRows('documents', [
                 'id', 'tracking_no', 'title', 'description', 'status',
                 'document_type_id', 'status_id', 'priority_id',

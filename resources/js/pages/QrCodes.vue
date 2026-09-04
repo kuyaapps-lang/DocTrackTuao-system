@@ -12,6 +12,10 @@ import {
     createInventoryManager,
     voidConfirmationText,
 } from '@/lib/qrInventory'
+import {
+    createQrSummaryManager,
+    emptyQrSummary,
+} from '@/lib/qrSummary'
 
 import {
     Card,
@@ -45,8 +49,9 @@ const maxBatchSize = 50
 |--------------------------------------------------------------------------
 */
 
-const qrCodes = ref([])
-const loading = ref(true)
+const summary = ref(emptyQrSummary())
+const summaryLoading = ref(true)
+const summaryError = ref('')
 const generating = ref(false)
 
 const quantity = ref(10)
@@ -368,58 +373,6 @@ const createQrImage = async (qr) => {
             )
         }
 
-/*
-|--------------------------------------------------------------------------
-| Fetch Existing QR Records
-|--------------------------------------------------------------------------
-|
-| The page intentionally does not render individual QR cards.
-| These records remain available in the database for later admin/report use.
-|
-*/
-
-const fetchQrCodes = async () => {
-    loading.value = true
-    error.value = ''
-
-    try {
-        const response = await fetch(
-            '/api/qr-codes',
-            {
-                headers: {
-                    Accept:
-                        'application/json',
-
-                    Authorization:
-                        `Bearer ${getToken()}`,
-                },
-            }
-        )
-
-        const data =
-            await response.json()
-
-        if (!response.ok) {
-            throw new Error(
-                data.message ||
-                'Unable to load QR records.'
-            )
-        }
-
-        qrCodes.value =
-            Array.isArray(data)
-                ? data
-                : []
-
-    } catch (err) {
-        error.value =
-            err.message ||
-            'Unable to load QR records.'
-    } finally {
-        loading.value = false
-    }
-}
-
 const clearAuthentication = () => {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
@@ -427,14 +380,25 @@ const clearAuthentication = () => {
     window.location.assign('/login')
 }
 
+const summaryManager = createQrSummaryManager({
+    fetchImpl: (...arguments_) => fetch(...arguments_),
+    getToken,
+    onUnauthorized: clearAuthentication,
+    onState: state => {
+        summary.value = state.summary
+        summaryLoading.value = state.loading
+        summaryError.value = state.error
+    },
+})
+
+const fetchSummary = () => summaryManager.load()
+
 const inventoryManager = createInventoryManager({
     fetchImpl: (...arguments_) => fetch(...arguments_),
     getToken,
     onUnauthorized: clearAuthentication,
-    onVoided: id => {
-        qrCodes.value = qrCodes.value.map(qrCode => qrCode.id === id
-            ? { ...qrCode, status: 'void' }
-            : qrCode)
+    onVoided: () => {
+        void fetchSummary()
     },
     onState: state => {
         inventory.value = state.items
@@ -567,7 +531,7 @@ const generateQrBatch = async () => {
             data.message ||
             `${quantity.value} QR codes generated successfully.`
 
-        await fetchQrCodes()
+        await fetchSummary()
 
     } catch (err) {
         error.value =
@@ -639,11 +603,12 @@ const formatDateTime = (date) => {
 */
 
 onMounted(() => {
-    fetchQrCodes()
+    fetchSummary()
     fetchInventory()
 })
 
 onBeforeUnmount(() => {
+    summaryManager.dispose()
     inventoryManager.dispose()
 })
 </script>
@@ -1033,7 +998,7 @@ onBeforeUnmount(() => {
                 <CardContent>
 
                     <div
-                        v-if="loading"
+                        v-if="summaryLoading"
                         class="py-5 text-center text-gray-500"
                     >
                         Loading QR records...
@@ -1057,7 +1022,7 @@ onBeforeUnmount(() => {
                                 class="mt-1 text-2xl font-bold text-gray-900"
                             >
                                 {{
-                                    qrCodes.length
+                                    summary.total_issued
                                 }}
                             </p>
                         </div>
@@ -1075,11 +1040,7 @@ onBeforeUnmount(() => {
                                 class="mt-1 text-2xl font-bold text-yellow-800"
                             >
                                 {{
-                                    qrCodes.filter(
-                                        qr =>
-                                            qr.status ===
-                                            'unused'
-                                    ).length
+                                    summary.counts.unused
                                 }}
                             </p>
                         </div>
@@ -1097,11 +1058,7 @@ onBeforeUnmount(() => {
                                 class="mt-1 text-2xl font-bold text-green-800"
                             >
                                 {{
-                                    qrCodes.filter(
-                                        qr =>
-                                            qr.status ===
-                                            'registered'
-                                    ).length
+                                    summary.counts.registered
                                 }}
                             </p>
                         </div>
@@ -1110,17 +1067,23 @@ onBeforeUnmount(() => {
 
                     <p
                         v-if="
-                            qrCodes.length > 0
+                            summary.latest_issued_at
                         "
                         class="mt-4 text-xs text-gray-500"
                     >
                         Latest issuance activity:
                         {{
                             formatDateTime(
-                                qrCodes[0]
-                                    ?.generated_at
+                                summary.latest_issued_at
                             )
                         }}
+                    </p>
+
+                    <p
+                        v-if="summaryError"
+                        class="mt-4 text-sm text-red-600"
+                    >
+                        {{ summaryError }}
                     </p>
 
                 </CardContent>

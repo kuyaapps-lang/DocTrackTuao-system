@@ -8,6 +8,7 @@ use App\Services\AuditLogger;
 use App\Support\PublicLookupSecurity;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -17,22 +18,48 @@ class DocumentQrCodeController extends Controller
     /**
      * Display issued QR codes.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $qrCodes = DocumentQrCode::with([
-            'generatedBy',
-            'document',
-        ])
-            ->latest('id')
-            ->get();
+        return $this->paginatedTokenFreeRecords($request);
+    }
 
-        return response()->json($qrCodes);
+    /**
+     * Return aggregate lifecycle totals without loading QR records.
+     */
+    public function summary()
+    {
+        $counts = DocumentQrCode::query()
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->whereIn('status', ['unused', 'registered', 'void'])
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $latest = DocumentQrCode::query()
+            ->selectRaw('MAX(COALESCE(generated_at, created_at)) as latest_issued_at')
+            ->value('latest_issued_at');
+
+        return response()->json([
+            'total_issued' => DocumentQrCode::query()->count(),
+            'counts' => [
+                'unused' => (int) ($counts['unused'] ?? 0),
+                'registered' => (int) ($counts['registered'] ?? 0),
+                'void' => (int) ($counts['void'] ?? 0),
+            ],
+            'latest_issued_at' => $latest === null
+                ? null
+                : Carbon::parse($latest)->toIso8601String(),
+        ]);
     }
 
     /**
      * Return a bounded token-free inventory for QR administration.
      */
     public function inventory(Request $request)
+    {
+        return $this->paginatedTokenFreeRecords($request);
+    }
+
+    private function paginatedTokenFreeRecords(Request $request)
     {
         $supported = ['page', 'per_page', 'status'];
         $unknown = array_diff(array_keys($request->query()), $supported);
@@ -73,13 +100,7 @@ class DocumentQrCodeController extends Controller
 
         return response()->json([
             'data' => collect($paginator->items())
-                ->map(fn (DocumentQrCode $qrCode): array => [
-                    'id' => (int) $qrCode->id,
-                    'status' => (string) $qrCode->status,
-                    'issued_at' => ($qrCode->generated_at ?? $qrCode->created_at)
-                        ->toIso8601String(),
-                    'linked' => $qrCode->document_id !== null,
-                ])
+                ->map(fn (DocumentQrCode $qrCode): array => $this->tokenFreeRecord($qrCode))
                 ->values(),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
@@ -167,12 +188,15 @@ class DocumentQrCodeController extends Controller
      */
     public function show($id)
     {
-        $qrCode = DocumentQrCode::with([
-            'generatedBy',
-            'document',
-        ])->findOrFail($id);
+        if (!ctype_digit((string) $id) || (int) $id < 1) {
+            abort(404);
+        }
 
-        return response()->json($qrCode);
+        $qrCode = DocumentQrCode::query()
+            ->select(['id', 'status', 'document_id', 'generated_at', 'created_at'])
+            ->findOrFail($id);
+
+        return response()->json($this->tokenFreeRecord($qrCode));
     }
 
     /**
@@ -301,6 +325,17 @@ class DocumentQrCodeController extends Controller
             'state' => 'invalid',
             'message' => 'The QR code is invalid or does not exist.',
         ], 404);
+    }
+
+    private function tokenFreeRecord(DocumentQrCode $qrCode): array
+    {
+        return [
+            'id' => (int) $qrCode->id,
+            'status' => (string) $qrCode->status,
+            'issued_at' => ($qrCode->generated_at ?? $qrCode->created_at)
+                ->toIso8601String(),
+            'linked' => $qrCode->document_id !== null,
+        ];
     }
 
     /**
