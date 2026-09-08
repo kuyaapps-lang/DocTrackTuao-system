@@ -718,11 +718,46 @@ Administrator-only via `users.manage`.
 GET {{base_url}}/api/users/form-options
 ```
 
+The response is restricted to the four supported application roles that exist
+in the database (`Administrator`, `Records Officer`, `Office User`, and
+`Viewer`) and the current offices:
+
+```json
+{
+  "roles": [{ "id": 1, "name": "Administrator" }],
+  "offices": [{ "id": 3, "office_name": "Records Office", "office_code": "REC", "department_id": 2 }]
+}
+```
+
+Role IDs are database values, not fixed application constants. Existing roles
+with any other name are intentionally excluded and cannot be assigned.
+
 ### List Users
 
 ```http
 GET {{base_url}}/api/users
 ```
+
+The response is an array of exact safe user objects:
+
+```json
+[
+  {
+    "id": 6,
+    "name": "API User Test",
+    "email": "apiuser@test.com",
+    "role_id": 3,
+    "department_id": 2,
+    "office_id": 3,
+    "role": { "id": 3, "name": "Office User" },
+    "office": { "id": 3, "office_name": "Records Office", "office_code": "REC", "department_id": 2 }
+  }
+]
+```
+
+Password/remember-token values, personal-access-token data, internal
+timestamps, and unrestricted relationships are excluded. Create and update
+responses contain `message` plus one user object with the same shape.
 
 ### Create User
 
@@ -744,6 +779,11 @@ Example JSON body:
 ```
 
 The backend automatically synchronizes `department_id` from the selected office.
+`role_id` must identify an existing role whose name exactly matches one of the
+four supported application roles. `office_id` is required and must identify an
+existing office, preserving the current UI/API behavior. Accepted create and
+update fields are exactly `name`, `email`, `role_id`, `office_id`, `password`,
+and `password_confirmation`; unknown fields return `422`.
 
 ### Update User
 
@@ -771,6 +811,10 @@ Example without changing the password:
 ```
 
 The current user cannot change their own role through this endpoint.
+This protects a sole Administrator from removing their own Administrator role.
+There is no user deletion or active/inactive account operation in the current
+API. Email, password, role, or office changes revoke only the target user's
+tokens; name-only changes retain them.
 
 ---
 

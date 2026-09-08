@@ -12,33 +12,58 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class UserManagementController extends Controller
 {
+    private const SUPPORTED_ROLE_NAMES = [
+        'Administrator',
+        'Records Officer',
+        'Office User',
+        'Viewer',
+    ];
+
+    private const MUTATION_FIELDS = [
+        'name',
+        'email',
+        'role_id',
+        'office_id',
+        'password',
+        'password_confirmation',
+    ];
+
     public function index(): JsonResponse
     {
         $users = User::query()
             ->with([
                 'role',
                 'office',
-                'department',
             ])
             ->orderBy('name')
             ->get();
 
-        return response()->json($users);
+        return response()->json(
+            $users->map(fn (User $user): array => $this->userShape($user))->values()
+        );
     }
 
     public function formOptions(): JsonResponse
     {
         return response()->json([
             'roles' => Role::query()
+                ->whereIn('name', self::SUPPORTED_ROLE_NAMES)
                 ->orderBy('name')
                 ->get([
                     'id',
                     'name',
-                    'description',
-                ]),
+                ])
+                ->filter(fn (Role $role): bool => in_array(
+                    $role->name,
+                    self::SUPPORTED_ROLE_NAMES,
+                    true
+                ))
+                ->map(fn (Role $role): array => $this->roleShape($role))
+                ->values(),
 
             'offices' => Office::query()
                 ->orderBy('office_name')
@@ -47,7 +72,9 @@ class UserManagementController extends Controller
                     'office_name',
                     'office_code',
                     'department_id',
-                ]),
+                ])
+                ->map(fn (Office $office): array => $this->officeShape($office))
+                ->values(),
         ]);
     }
 
@@ -56,6 +83,8 @@ class UserManagementController extends Controller
         AuditLogger $auditLogger
     ): JsonResponse
     {
+        $this->rejectUnknownMutationFields($request);
+
         $validated = $request->validate([
             'name' => [
                 'required',
@@ -86,6 +115,8 @@ class UserManagementController extends Controller
             ],
         ]);
 
+        $this->supportedRole((int) $validated['role_id']);
+
         $office = Office::query()->findOrFail(
             $validated['office_id']
         );
@@ -111,11 +142,10 @@ class UserManagementController extends Controller
 
         return response()->json([
             'message' => 'User created successfully.',
-            'user' => $user->load([
+            'user' => $this->userShape($user->load([
                 'role',
                 'office',
-                'department',
-            ]),
+            ])),
         ], 201);
     }
 
@@ -124,6 +154,8 @@ class UserManagementController extends Controller
         User $user,
         AuditLogger $auditLogger
     ): JsonResponse {
+        $this->rejectUnknownMutationFields($request);
+
         $validated = $request->validate([
             'name' => [
                 'required',
@@ -154,6 +186,8 @@ class UserManagementController extends Controller
                 'confirmed',
             ],
         ]);
+
+        $this->supportedRole((int) $validated['role_id']);
 
         if (
             $request->user()->is($user) &&
@@ -254,11 +288,68 @@ class UserManagementController extends Controller
 
         return response()->json([
             'message' => 'User updated successfully.',
-            'user' => $user->load([
+            'user' => $this->userShape($user->load([
                 'role',
                 'office',
-                'department',
-            ]),
+            ])),
         ]);
+    }
+
+    private function rejectUnknownMutationFields(Request $request): void
+    {
+        if (array_diff(array_keys($request->all()), self::MUTATION_FIELDS) !== []) {
+            throw ValidationException::withMessages([
+                'request' => ['The request contains unsupported fields.'],
+            ]);
+        }
+    }
+
+    private function supportedRole(int $id): Role
+    {
+        $role = Role::query()->find($id);
+
+        if (!$role || !in_array($role->name, self::SUPPORTED_ROLE_NAMES, true)) {
+            throw ValidationException::withMessages([
+                'role_id' => ['The selected role is invalid.'],
+            ]);
+        }
+
+        return $role;
+    }
+
+    private function userShape(User $user): array
+    {
+        return [
+            'id' => (int) $user->id,
+            'name' => (string) $user->name,
+            'email' => (string) $user->email,
+            'role_id' => $user->role_id === null ? null : (int) $user->role_id,
+            'department_id' => $user->department_id === null
+                ? null
+                : (int) $user->department_id,
+            'office_id' => $user->office_id === null ? null : (int) $user->office_id,
+            'role' => $user->role ? $this->roleShape($user->role) : null,
+            'office' => $user->office ? $this->officeShape($user->office) : null,
+        ];
+    }
+
+    private function roleShape(Role $role): array
+    {
+        return [
+            'id' => (int) $role->id,
+            'name' => (string) $role->name,
+        ];
+    }
+
+    private function officeShape(Office $office): array
+    {
+        return [
+            'id' => (int) $office->id,
+            'office_name' => (string) $office->office_name,
+            'office_code' => (string) $office->office_code,
+            'department_id' => $office->department_id === null
+                ? null
+                : (int) $office->department_id,
+        ];
     }
 }

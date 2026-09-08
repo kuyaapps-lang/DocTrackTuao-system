@@ -8,6 +8,7 @@ use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
@@ -346,6 +347,288 @@ class Process5CAuthUserAuditTest extends TestCase
         ]);
 
         $this->createAuditLogsTable();
+    }
+
+    public function test_user_management_reads_and_mutations_are_administrator_only(): void
+    {
+        [$administrator, $office] = $this->createAdministratorAndOffice();
+        $role = Role::query()->create(['name' => 'Viewer']);
+        $target = $this->createUser('Office User', 'target-access@example.test', $office);
+        $payload = $this->validUserPayload($role, $office, 'new-access@example.test');
+
+        foreach ([
+            ['GET', '/api/users', null],
+            ['GET', '/api/users/form-options', null],
+            ['POST', '/api/users', $payload],
+            ['PUT', "/api/users/{$target->id}", [...$payload, 'email' => $target->email]],
+        ] as [$method, $uri, $body]) {
+            $before = $this->securitySnapshot();
+            $this->json($method, $uri, $body ?? [])->assertUnauthorized();
+            $this->assertSame($before, $this->securitySnapshot());
+        }
+
+        foreach (['Records Officer', 'Office User', 'Viewer'] as $roleName) {
+            Sanctum::actingAs($this->createUser(
+                $roleName,
+                str_replace(' ', '-', strtolower($roleName)).'-access@example.test',
+                $office
+            ));
+            foreach ([
+                ['GET', '/api/users', null],
+                ['GET', '/api/users/form-options', null],
+                ['POST', '/api/users', $payload],
+                ['PUT', "/api/users/{$target->id}", [...$payload, 'email' => $target->email]],
+            ] as [$method, $uri, $body]) {
+                $before = $this->securitySnapshot();
+                $this->json($method, $uri, $body ?? [])->assertForbidden();
+                $this->assertSame($before, $this->securitySnapshot());
+            }
+        }
+
+        Sanctum::actingAs($administrator);
+        $this->getJson('/api/users')->assertOk();
+        $this->getJson('/api/users/form-options')->assertOk();
+    }
+
+    public function test_each_supported_database_role_is_assignable_without_hard_coded_ids(): void
+    {
+        [$administrator, $office] = $this->createAdministratorAndOffice();
+        Sanctum::actingAs($administrator);
+
+        foreach (['Administrator', 'Records Officer', 'Office User', 'Viewer'] as $index => $name) {
+            $role = Role::query()->firstOrCreate(['name' => $name]);
+            $response = $this->postJson('/api/users', $this->validUserPayload(
+                $role,
+                $office,
+                "supported-{$index}@example.test"
+            ))->assertCreated();
+
+            $this->assertSame($role->id, $response->json('user.role_id'));
+            $this->assertSame($name, $response->json('user.role.name'));
+            $this->assertDatabaseHas('users', [
+                'id' => $response->json('user.id'),
+                'role_id' => $role->id,
+                'office_id' => $office->id,
+                'department_id' => $office->department_id,
+            ]);
+        }
+    }
+
+    public function test_existing_unsupported_roles_are_rejected_on_create_and_update(): void
+    {
+        [$administrator, $office] = $this->createAdministratorAndOffice();
+        $target = $this->createUser('Office User', 'unsupported-target@example.test', $office);
+        $target->createToken('target-session');
+        $administrator->createToken('administrator-session');
+        Sanctum::actingAs($administrator);
+
+        foreach (['Unexpected Role', 'administrator'] as $index => $name) {
+            $unsupported = Role::query()->create(['name' => $name]);
+            $before = $this->securitySnapshot();
+            $this->postJson('/api/users', $this->validUserPayload(
+                $unsupported,
+                $office,
+                "unsupported-{$index}@example.test"
+            ))->assertUnprocessable()->assertJsonValidationErrors('role_id');
+            $this->assertSame($before, $this->securitySnapshot());
+
+            $before = $this->securitySnapshot();
+            $this->putJson("/api/users/{$target->id}", [
+                'name' => $target->name,
+                'email' => $target->email,
+                'role_id' => $unsupported->id,
+                'office_id' => $office->id,
+                'password' => null,
+                'password_confirmation' => null,
+            ])->assertUnprocessable()->assertJsonValidationErrors('role_id');
+            $this->assertSame($before, $this->securitySnapshot());
+        }
+    }
+
+    public function test_role_office_and_unknown_field_validation_is_inert(): void
+    {
+        [$administrator, $office] = $this->createAdministratorAndOffice();
+        $role = Role::query()->create(['name' => 'Viewer']);
+        $target = $this->createUser('Office User', 'validation-target@example.test', $office);
+        $target->createToken('target-session');
+        Sanctum::actingAs($administrator);
+
+        foreach ([
+            ['role_id' => 999999],
+            ['role_id' => 'invalid'],
+            ['role_id' => null],
+            ['office_id' => 999999],
+            ['office_id' => 'invalid'],
+            ['office_id' => null],
+            ['permissions' => ['*']],
+            ['token' => 'crafted-token'],
+            ['remember_token' => 'crafted-remember-token'],
+            ['created_at' => '2000-01-01 00:00:00'],
+            ['is_active' => false],
+            ['status' => 'disabled'],
+        ] as $index => $override) {
+            $payload = [
+                'name' => $target->name,
+                'email' => $target->email,
+                'role_id' => $role->id,
+                'office_id' => $office->id,
+                'password' => null,
+                'password_confirmation' => null,
+                ...$override,
+            ];
+            $before = $this->securitySnapshot();
+            $this->putJson("/api/users/{$target->id}", $payload)
+                ->assertUnprocessable();
+            $this->assertSame($before, $this->securitySnapshot(), "validation case {$index}");
+        }
+    }
+
+    public function test_user_and_form_option_responses_are_exact_safe_allowlists(): void
+    {
+        [$administrator, $office] = $this->createAdministratorAndOffice();
+        $supported = [];
+        foreach (['Records Officer', 'Office User', 'Viewer'] as $name) {
+            $supported[$name] = Role::query()->create([
+                'name' => $name,
+                'description' => 'Internal role description',
+            ]);
+        }
+        Role::query()->create(['name' => 'Unsupported', 'description' => 'Must not be assignable']);
+        Sanctum::actingAs($administrator);
+
+        $before = $this->securitySnapshot();
+        $options = $this->getJson('/api/users/form-options')->assertOk();
+        $this->assertSame($before, $this->securitySnapshot());
+        $this->assertSame(['roles', 'offices'], array_keys($options->json()));
+        $this->assertSame(
+            ['Administrator', 'Office User', 'Records Officer', 'Viewer'],
+            array_column($options->json('roles'), 'name')
+        );
+        foreach ($options->json('roles') as $item) {
+            $this->assertSame(['id', 'name'], array_keys($item));
+        }
+        foreach ($options->json('offices') as $item) {
+            $this->assertSame(['id', 'office_name', 'office_code', 'department_id'], array_keys($item));
+        }
+
+        $before = $this->securitySnapshot();
+        $list = $this->getJson('/api/users')->assertOk();
+        $this->assertSame($before, $this->securitySnapshot());
+        foreach ($list->json() as $item) {
+            $this->assertSafeUserShape($item);
+        }
+        $serialized = strtolower($list->getContent().$options->getContent());
+        foreach (['password', 'remember_token', 'personal_access', 'token', 'abilities', 'description', 'created_at', 'updated_at'] as $forbidden) {
+            $this->assertFalse(str_contains($serialized, $forbidden), 'User-management read response leaked a forbidden field.');
+        }
+
+        $created = $this->postJson('/api/users', $this->validUserPayload(
+            $supported['Viewer'],
+            $office,
+            'safe-response@example.test'
+        ))->assertCreated();
+        $this->assertSame(['message', 'user'], array_keys($created->json()));
+        $this->assertSafeUserShape($created->json('user'));
+
+        $updated = $this->putJson('/api/users/'.$created->json('user.id'), [
+            'name' => 'Updated Safe Response',
+            'email' => 'safe-response@example.test',
+            'role_id' => $supported['Viewer']->id,
+            'office_id' => $office->id,
+            'password' => null,
+            'password_confirmation' => null,
+        ])->assertOk();
+        $this->assertSame(['message', 'user'], array_keys($updated->json()));
+        $this->assertSafeUserShape($updated->json('user'));
+    }
+
+    public function test_self_role_guard_protects_the_sole_administrator_and_preserves_state(): void
+    {
+        [$administrator, $office] = $this->createAdministratorAndOffice();
+        $viewer = Role::query()->create(['name' => 'Viewer']);
+        $administrator->createToken('sole-administrator-session');
+        Sanctum::actingAs($administrator);
+        $before = $this->securitySnapshot();
+
+        $this->putJson("/api/users/{$administrator->id}", [
+            'name' => $administrator->name,
+            'email' => $administrator->email,
+            'role_id' => $viewer->id,
+            'office_id' => $office->id,
+            'password' => null,
+            'password_confirmation' => null,
+        ])->assertUnprocessable()->assertExactJson([
+            'message' => 'You cannot change your own role.',
+        ]);
+
+        $this->assertSame($before, $this->securitySnapshot());
+        $this->assertSame(1, User::query()->where('role_id', $administrator->role_id)->count());
+    }
+
+    private function assertSafeUserShape(array $user): void
+    {
+        $this->assertSame([
+            'id', 'name', 'email', 'role_id', 'department_id', 'office_id', 'role', 'office',
+        ], array_keys($user));
+        if ($user['role'] !== null) {
+            $this->assertSame(['id', 'name'], array_keys($user['role']));
+        }
+        if ($user['office'] !== null) {
+            $this->assertSame(
+                ['id', 'office_name', 'office_code', 'department_id'],
+                array_keys($user['office'])
+            );
+        }
+    }
+
+    private function securitySnapshot(): array
+    {
+        return [
+            'users' => DB::table('users')->orderBy('id')->get([
+                'id', 'name', 'email', 'role_id', 'department_id', 'office_id',
+                'email_verified_at', 'created_at', 'updated_at',
+            ])->map(fn ($row): array => [
+                'id' => (int) $row->id,
+                'name' => (string) $row->name,
+                'email_sha256' => hash('sha256', strtolower((string) $row->email)),
+                'role_id' => $row->role_id === null ? null : (int) $row->role_id,
+                'department_id' => $row->department_id === null ? null : (int) $row->department_id,
+                'office_id' => $row->office_id === null ? null : (int) $row->office_id,
+                'email_verified_at' => $row->email_verified_at === null ? null : (string) $row->email_verified_at,
+                'created_at' => $row->created_at === null ? null : (string) $row->created_at,
+                'updated_at' => $row->updated_at === null ? null : (string) $row->updated_at,
+            ])->all(),
+            'roles' => $this->normalizedRows('roles', ['id', 'name', 'description', 'created_at', 'updated_at']),
+            'departments' => $this->normalizedRows('departments', ['id', 'department_name', 'department_code', 'description', 'created_at', 'updated_at']),
+            'offices' => $this->normalizedRows('offices', ['id', 'department_id', 'office_name', 'office_code', 'description', 'created_at', 'updated_at']),
+            'tokens' => DB::table('personal_access_tokens')->orderBy('id')->get([
+                'id', 'tokenable_type', 'tokenable_id', 'name', 'abilities',
+                'last_used_at', 'expires_at', 'created_at', 'updated_at',
+            ])->map(fn ($row): array => [
+                'id' => (int) $row->id,
+                'tokenable_type' => (string) $row->tokenable_type,
+                'tokenable_id' => (int) $row->tokenable_id,
+                'name' => (string) $row->name,
+                'abilities' => $row->abilities === null ? null : json_decode((string) $row->abilities, true),
+                'last_used_at' => $row->last_used_at === null ? null : (string) $row->last_used_at,
+                'expires_at' => $row->expires_at === null ? null : (string) $row->expires_at,
+                'created_at' => $row->created_at === null ? null : (string) $row->created_at,
+                'updated_at' => $row->updated_at === null ? null : (string) $row->updated_at,
+            ])->all(),
+            'audits' => $this->normalizedRows('audit_logs', [
+                'id', 'user_id', 'module', 'action', 'record_id', 'description',
+                'ip_address', 'user_agent', 'created_at', 'updated_at',
+            ]),
+        ];
+    }
+
+    private function normalizedRows(string $table, array $columns): array
+    {
+        return DB::table($table)->orderBy('id')->get($columns)
+            ->map(fn ($row): array => array_combine(
+                $columns,
+                array_map(fn (string $column) => $row->{$column}, $columns)
+            ))->all();
     }
 
     private function createAdministratorAndOffice(): array
