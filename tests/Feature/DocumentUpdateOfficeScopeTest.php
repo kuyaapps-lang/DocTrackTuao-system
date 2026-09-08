@@ -10,6 +10,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class DocumentUpdateOfficeScopeTest extends TestCase
@@ -136,10 +137,32 @@ class DocumentUpdateOfficeScopeTest extends TestCase
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();
         });
+
+        Schema::create('document_qr_codes', function (Blueprint $table) {
+            $table->id();
+            $table->string('qr_token')->unique();
+            $table->string('status')->default('unused');
+            $table->unsignedBigInteger('document_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('document_attachments', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('document_id');
+            $table->string('original_filename');
+            $table->string('stored_filename');
+            $table->string('file_path');
+            $table->string('mime_type')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+            $table->unsignedBigInteger('uploaded_by');
+            $table->timestamps();
+        });
     }
 
     protected function tearDown(): void
     {
+        Schema::dropIfExists('document_attachments');
+        Schema::dropIfExists('document_qr_codes');
         Schema::dropIfExists('personal_access_tokens');
         Schema::dropIfExists('document_processing_logs');
         Schema::dropIfExists('document_routes');
@@ -313,6 +336,168 @@ class DocumentUpdateOfficeScopeTest extends TestCase
         $this->assertSame($beforeUnauthenticated, $this->businessSnapshot());
     }
 
+    public static function editingRoles(): array
+    {
+        return [['Administrator'], ['Records Officer']];
+    }
+
+    #[DataProvider('editingRoles')]
+    public function test_locked_update_rejects_custody_changed_after_initial_observation(string $role): void
+    {
+        [$user, $document, $otherOffice] = $this->custodyFixture($role);
+        $before = $this->businessSnapshot();
+        $expected = $before;
+        $expected['documents'][0]['current_office_id'] = $otherOffice;
+
+        $this->afterInitialDocumentRead($document, function () use ($document, $otherOffice): void {
+            DB::table('documents')->where('id', $document->id)->update([
+                'current_office_id' => $otherOffice,
+            ]);
+        }, function () use ($document): void {
+            $this->patchJson('/api/documents/'.$document->id, [
+                'title' => 'Must not change',
+                'description' => 'Must not change either',
+                'document_date' => '2026-09-08',
+                'due_date' => '2026-09-09',
+            ])->assertForbidden()->assertExactJson([
+                'message' => 'You cannot update this document because it is not currently assigned to your office.',
+            ]);
+        });
+
+        $this->assertSame($expected, $this->businessSnapshot());
+        $this->assertSame(0, AuditLog::count());
+    }
+
+    #[DataProvider('editingRoles')]
+    public function test_valid_locked_update_uses_reloaded_state_and_audits_exactly_once(string $role): void
+    {
+        [$user, $document] = $this->custodyFixture($role);
+        $this->freezeTime();
+        $before = $this->businessSnapshot();
+
+        $this->afterInitialDocumentRead($document, function () use ($document): void {
+            DB::table('documents')->where('id', $document->id)->update([
+                'description' => 'Newer stored description',
+            ]);
+        }, function () use ($document): void {
+            $this->patchJson('/api/documents/'.$document->id, [
+                'title' => 'Locked update',
+            ])->assertOk()
+                ->assertJsonPath('message', 'Document updated successfully')
+                ->assertJsonPath('document.id', $document->id)
+                ->assertJsonPath('document.title', 'Locked update')
+                ->assertJsonPath('document.description', 'Newer stored description');
+        });
+
+        $after = $this->businessSnapshot();
+        $before['documents'][0]['title'] = 'Locked update';
+        $before['documents'][0]['description'] = 'Newer stored description';
+        $before['documents'][0]['updated_at'] = now()->toDateTimeString();
+        $this->assertCount(1, $after['audits']);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $user->id,
+            'module' => AuditLog::MODULE_DOCUMENTS,
+            'action' => AuditLog::ACTION_UPDATED,
+            'record_id' => $document->id,
+            'description' => 'Document updated successfully.',
+        ]);
+        $after['audits'] = [];
+        $this->assertSame($before, $after);
+    }
+
+    #[DataProvider('editingRoles')]
+    public function test_concurrent_disappearance_keeps_existing_not_found_behavior(string $role): void
+    {
+        config(['app.debug' => false]);
+        [, $document] = $this->custodyFixture($role);
+        $before = $this->businessSnapshot();
+        $response = null;
+
+        $this->afterInitialDocumentRead($document, function () use ($document): void {
+            DB::table('documents')->where('id', $document->id)->delete();
+        }, function () use ($document, &$response): void {
+            $response = $this->patchJson('/api/documents/'.$document->id, ['title' => 'Must not return success'])
+                ->assertNotFound();
+        }, 1);
+
+        $this->patchJson('/api/documents/'.$document->id, ['title' => 'Missing'])
+            ->assertNotFound()->assertExactJson($response->json());
+        $this->assertSame(['message'], array_keys($response->json()));
+        array_shift($before['documents']);
+        $this->assertSame($before, $this->businessSnapshot());
+    }
+
+    private function afterInitialDocumentRead(
+        Document $target,
+        callable $change,
+        callable $request,
+        int $expectedReads = 2
+    ): void {
+        $originalDispatcher = Document::getEventDispatcher();
+        Document::setEventDispatcher(clone $originalDispatcher);
+        $reads = 0;
+
+        try {
+            Document::retrieved(function (Document $document) use ($target, $change, &$reads): void {
+                if (!$document->is($target)) {
+                    return;
+                }
+
+                $reads++;
+                if ($reads === 1) {
+                    $this->assertSame(0, DB::transactionLevel());
+                    // Query builder avoids recursive model events; the old instance stays stale.
+                    $change();
+                } else {
+                    $this->assertSame(1, DB::transactionLevel());
+                }
+            });
+            $request();
+            $this->assertSame($expectedReads, $reads);
+        } finally {
+            Document::setEventDispatcher($originalDispatcher);
+        }
+    }
+
+    private function custodyFixture(string $role): array
+    {
+        $office = $this->createOffice('CURRENT');
+        $otherOffice = $this->createOffice('OTHER');
+        $user = $this->createUser($role, $office);
+        $otherUser = $this->createUser('Viewer', $otherOffice);
+        $target = $this->createDocument($office);
+        $unrelated = $this->createDocument($otherOffice);
+        foreach ([$target, $unrelated] as $document) {
+            DB::table('document_routes')->insert([
+                'document_id' => $document->id,
+                'from_office_id' => $office,
+                'to_office_id' => $otherOffice,
+            ]);
+            DB::table('document_processing_logs')->insert([
+                'document_id' => $document->id,
+                'event_type' => 'processing',
+            ]);
+            DB::table('document_qr_codes')->insert([
+                'document_id' => $document->id,
+                'qr_token' => 'isolated-test-qr-'.$document->id,
+                'status' => 'registered',
+            ]);
+            // Metadata fixtures only: no attachment files or policy actions.
+            DB::table('document_attachments')->insert([
+                'document_id' => $document->id,
+                'original_filename' => 'fixture.pdf',
+                'stored_filename' => 'fixture-'.$document->id.'.pdf',
+                'file_path' => 'isolated/fixture-'.$document->id.'.pdf',
+                'uploaded_by' => $otherUser->id,
+            ]);
+        }
+        $user->createToken('target-office-session');
+        $otherUser->createToken('unrelated-session');
+        Sanctum::actingAs($user);
+
+        return [$user, $target, $otherOffice];
+    }
+
     private function createOffice(string $code): int
     {
         return Schema::getConnection()->table('offices')->insertGetId([
@@ -371,6 +556,14 @@ class DocumentUpdateOfficeScopeTest extends TestCase
                 ])
                 ->map(fn ($row): array => (array) $row)->all(),
             'token_count' => DB::table('personal_access_tokens')->count(),
+            'qr_records' => DB::table('document_qr_codes')->orderBy('id')->get()
+                ->map(fn ($row): array => (array) $row)->all(),
+            'attachments' => DB::table('document_attachments')->orderBy('id')->get()
+                ->map(fn ($row): array => (array) $row)->all(),
+            'users' => DB::table('users')->orderBy('id')->get([
+                'id', 'name', 'email', 'role_id', 'department_id', 'office_id',
+                'created_at', 'updated_at',
+            ])->map(fn ($row): array => (array) $row)->all(),
         ];
     }
 }

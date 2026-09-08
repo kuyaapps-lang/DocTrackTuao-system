@@ -919,44 +919,57 @@ class DocumentController extends Controller
             'status_id' => ['prohibited'],
         ]);
 
-            DB::transaction(
-                function () use (
-                    $document,
-                    $validated,
-                    $request,
-                    $auditLogger
-                ) {
-                    $document->update($validated);
+        return DB::transaction(
+            function () use (
+                $id,
+                $user,
+                $validated,
+                $request,
+                $auditLogger
+            ) {
+                $document = Document::query()
+                    ->lockForUpdate()
+                    ->findOrFail($id);
 
-                    $auditLogger->log(
-                        module: AuditLog::MODULE_DOCUMENTS,
-                        action: AuditLog::ACTION_UPDATED,
-                        recordId: $document->id,
-                        description: 'Document updated successfully.',
-                        userId: $request->user()->id
-                    );
+                // Custody may have changed since the initial office check.
+                if ((int) $user->office_id !== (int) $document->current_office_id) {
+                    return response()->json([
+                        'message' =>
+                            'You cannot update this document because it is not currently assigned to your office.',
+                    ], 403);
                 }
-            );
 
-        $document->load([
-            'type',
-            'status',
-            'priority',
-            'confidentiality',
-            'originOffice',
-            'currentOffice',
-            'currentAction',
-            'currentActionUpdatedBy',
-            'creator',
-        ]);
+                $document->update($validated);
 
-        return response()->json([
-            'message' =>
-                'Document updated successfully',
+                $auditLogger->log(
+                    module: AuditLog::MODULE_DOCUMENTS,
+                    action: AuditLog::ACTION_UPDATED,
+                    recordId: $document->id,
+                    description: 'Document updated successfully.',
+                    userId: $request->user()->id
+                );
 
-            'document' =>
-                $document,
-        ]);
+                $document->load([
+                    'type',
+                    'status',
+                    'priority',
+                    'confidentiality',
+                    'originOffice',
+                    'currentOffice',
+                    'currentAction',
+                    'currentActionUpdatedBy',
+                    'creator',
+                ]);
+
+                return response()->json([
+                    'message' =>
+                        'Document updated successfully',
+
+                    'document' =>
+                        $document,
+                ]);
+            }
+        );
     }
 
     private function namedRelation($model, string $nameField): ?array
