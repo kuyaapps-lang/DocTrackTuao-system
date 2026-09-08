@@ -74,6 +74,7 @@ export const ensureCurrentUser = async (force = false) => {
 
             const data = await response.json()
 
+            localStorage.removeItem('auth_user')
             currentUser.value = data
             resolvedToken = token
 

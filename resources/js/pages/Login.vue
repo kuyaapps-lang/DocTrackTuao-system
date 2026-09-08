@@ -131,12 +131,7 @@ const login = async () => {
             data.token
         )
 
-        localStorage.setItem(
-            'auth_user',
-            JSON.stringify(
-                data.user
-            )
-        )
+        localStorage.removeItem('auth_user')
 
         success.value =
             'Login successful!'

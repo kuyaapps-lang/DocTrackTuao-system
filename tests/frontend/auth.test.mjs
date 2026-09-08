@@ -86,6 +86,7 @@ for (const unauthorizedResponse of [
             })
             await auth.ensureCurrentUser(true)
             assert.equal(auth.useAuth().currentUser.value?.id, 7)
+            localStorage.setItem('auth_user', '{"stale":true}')
 
             globalThis.fetch = async () => ({
                 ok: false,
@@ -138,17 +139,33 @@ for (const unauthorizedResponse of [
 }
 
 for (const failure of [
-    {
-        name: 'non-401 response',
-        fetch: async () => response(503, {
+    ...[403, 429, 500, 503].map(status => ({
+        name: `${status} response`,
+        fetch: async () => response(status, {
             message: 'raw-temporary-response-detail',
         }),
-    },
+    })),
     {
         name: 'network failure',
         fetch: async () => {
             throw new Error('raw-network-exception-detail')
         },
+    },
+    {
+        name: 'abort failure',
+        fetch: async () => {
+            throw new DOMException('raw-abort-detail', 'AbortError')
+        },
+    },
+    {
+        name: 'malformed successful response',
+        fetch: async () => ({
+            ok: true,
+            status: 200,
+            json: async () => {
+                throw new SyntaxError('raw-success-parser-detail')
+            },
+        }),
     },
     {
         name: 'malformed non-401 response',
@@ -178,6 +195,8 @@ for (const failure of [
                 permissions: ['documents.view'],
             })
             await auth.ensureCurrentUser(true)
+            const retainedUser = auth.useAuth().currentUser.value
+            localStorage.setItem('auth_user', '{"cached":true}')
 
             globalThis.fetch = failure.fetch
             await assert.rejects(
@@ -196,6 +215,7 @@ for (const failure of [
                 '{"cached":true}'
             )
             assert.equal(auth.useAuth().currentUser.value?.id, 8)
+            assert.equal(auth.useAuth().currentUser.value, retainedUser)
             assert.equal(
                 auth.useAuth().authError.value,
                 'Unable to verify authentication right now.'
@@ -206,6 +226,16 @@ for (const failure of [
                 auth
             )
             assert.equal(decision, true)
+
+            // An unresolved session must also survive the guard's temporary-failure path.
+            const unresolvedAuth = await loadFreshAuth()
+            assert.equal(await resolveAuthenticationNavigation(protectedRoute, unresolvedAuth), true)
+            assert.equal(localStorage.getItem('auth_token'), 'local-test-token')
+            assert.equal(localStorage.getItem('auth_user'), '{"cached":true}')
+            assert.equal(unresolvedAuth.useAuth().currentUser.value, null)
+            assert.equal(await resolveAuthenticationNavigation({
+                path: '/login', meta: { public: true },
+            }, unresolvedAuth), true)
         } finally {
             globalThis.localStorage = originalStorage
             globalThis.fetch = originalFetch
@@ -243,4 +273,36 @@ test('guard preserves safe QR redirect and permission-denial behavior', async ()
         path: '/dashboard',
         query: { forbidden: '1' },
     })
+})
+
+test('successful production user resolution removes legacy data and retains only reactive profile', async () => {
+    const originalStorage = globalThis.localStorage
+    const originalFetch = globalThis.fetch
+    try {
+        const storage = createStorage({ auth_token: 'local-test-token', auth_user: '{"legacy":true}' })
+        globalThis.localStorage = {
+            ...storage,
+            getItem: key => {
+                assert.notEqual(key, 'auth_user', 'Cached profiles must never be read')
+                return storage.getItem(key)
+            },
+            setItem: () => assert.fail('Current-user resolution must not persist profiles'),
+        }
+        const auth = await loadFreshAuth()
+        let calls = 0
+        globalThis.fetch = async () => {
+            calls++
+            return response(200, { id: 12, name: 'Resolved User', permissions: ['documents.view'] })
+        }
+        await auth.ensureCurrentUser()
+        assert.equal(storage.getItem('auth_user'), null)
+        assert.equal(storage.getItem('auth_token'), 'local-test-token')
+        assert.equal(auth.useAuth().currentUser.value.id, 12)
+        await auth.ensureCurrentUser()
+        assert.equal(calls, 1)
+        assert.equal(auth.useAuth().authError.value, '')
+    } finally {
+        globalThis.localStorage = originalStorage
+        globalThis.fetch = originalFetch
+    }
 })
