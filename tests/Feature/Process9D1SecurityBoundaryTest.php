@@ -242,6 +242,112 @@ class Process9D1SecurityBoundaryTest extends TestCase
         $response->assertHeader('Cache-Control', 'no-store, private');
     }
 
+    #[DataProvider('safeVaryOriginCases')]
+    public function test_approved_failures_canonicalize_only_singleton_vary_origin(string $name, string $value): void
+    {
+        foreach ($this->approvedVaryFailures() as [$action, $middleware, $status, $message]) {
+            $original = response()->json(['message' => $message], $status, [$name => $value]);
+            $this->assertSame([$value], $original->headers->all('VARY'));
+            $result = $this->applyResponseForRoute($action, $original, $middleware);
+            $this->assertNotSame($original, $result->baseResponse);
+            $result->assertStatus($status)->assertExactJson(['message' => $message]);
+            $this->assertSame(['Origin'], $result->headers->all('vary'));
+            $this->assertRebuiltVaryResponseIsSafe($result);
+        }
+    }
+
+    public static function safeVaryOriginCases(): iterable
+    {
+        yield 'canonical' => ['Vary', 'Origin'];
+        yield 'lowercase' => ['vary', 'origin'];
+        yield 'mixed casing and OWS' => ['vArY', " \t oRiGiN\t "];
+    }
+
+    #[DataProvider('unsafeVaryOriginCases')]
+    public function test_approved_failures_reject_ambiguous_or_unsafe_vary_values(array|string $values): void
+    {
+        foreach ($this->approvedVaryFailures() as [$action, $middleware, $status, $message]) {
+            $original = response()->json(['message' => $message], $status);
+            $original->headers->set('Vary', $values);
+            $result = $this->applyResponseForRoute($action, $original, $middleware);
+            $this->assertGenericAppliedResponse($result, [$message]);
+            $result->assertHeaderMissing('Vary');
+            $this->assertRebuiltVaryResponseIsSafe($result);
+        }
+    }
+
+    public static function unsafeVaryOriginCases(): iterable
+    {
+        yield 'duplicate values' => [['Origin', 'Origin']];
+        yield 'multiple values' => [['Origin', 'Accept']];
+        yield 'comma list' => ['Origin, Accept'];
+        yield 'comma duplicate' => ['Origin, Origin'];
+        yield 'trailing comma' => ['Origin,'];
+        yield 'wildcard' => ['*'];
+        yield 'empty array' => [[]];
+        yield 'empty value' => [''];
+        yield 'only OWS' => [" \t "];
+        yield 'non-Origin' => ['Accept-Encoding'];
+        yield 'internal whitespace' => ["Ori\tgin"];
+        yield 'near match' => ['Origins'];
+        foreach (["\0", "\r", "\n", "\v", "\f", "\x1f", "\x7f"] as $control) {
+            yield 'control '.bin2hex($control) => ['Origin'.$control];
+        }
+        yield 'header injection' => ["Origin\r\nX-Injected: hostile-marker"];
+    }
+
+    public function test_duplicate_header_lines_with_different_casing_are_rejected(): void
+    {
+        $original = response()->json(['message' => 'Authentication is temporarily unavailable.'], 500);
+        $original->headers->set('Vary', 'Origin');
+        $original->headers->set('vArY', 'origin', false);
+        $this->assertSame(['Origin', 'origin'], $original->headers->all('vary'));
+        $result = $this->applyResponseForRoute([AuthController::class, 'login'], $original);
+        $this->assertGenericAppliedResponse($result, ['authentication is temporarily unavailable']);
+        $result->assertHeaderMissing('Vary');
+        $this->assertRebuiltVaryResponseIsSafe($result);
+    }
+
+    public function test_framework_cors_vary_is_accepted_without_hostile_origin_permissions(): void
+    {
+        foreach ($this->approvedVaryFailures() as [$action, $middleware, $status, $message]) {
+            $request = Request::create('/api/security-test/allowlist');
+            $request->headers->set('Origin', 'https://hostile-marker.test');
+            $original = app(\Illuminate\Http\Middleware\HandleCors::class)->handle(
+                $request, fn () => response()->json(['message' => $message], $status)
+            );
+            $this->assertSame(['Origin'], $original->headers->all('vary'));
+            $result = $this->applyResponseForRoute($action, $original, $middleware);
+            $result->assertStatus($status)->assertExactJson(['message' => $message]);
+            $this->assertSame(['Origin'], $result->headers->all('vary'));
+            $this->assertRebuiltVaryResponseIsSafe($result);
+        }
+    }
+
+    private function approvedVaryFailures(): array
+    {
+        return [
+            [[AuthController::class, 'login'], [], 500, 'Authentication is temporarily unavailable.'],
+            [[\App\Http\Controllers\DashboardController::class, 'summary'], [], 500, 'Dashboard summary is temporarily unavailable.'],
+            [[\App\Http\Controllers\DocumentAttachmentController::class, 'store'], [], 500, 'Attachment could not be stored.'],
+            [[\App\Http\Controllers\DocumentAttachmentController::class, 'destroy'], [], 500, 'Attachment could not be deleted.'],
+            [fn () => null, ['throttle:public-document-tracking'], 503, 'Public lookup is temporarily unavailable.'],
+            [fn () => null, ['throttle:public-qr-resolution'], 503, 'Public lookup is temporarily unavailable.'],
+        ];
+    }
+
+    private function assertRebuiltVaryResponseIsSafe($response): void
+    {
+        $this->assertSecurityHeaders($response);
+        $response->assertHeader('Cache-Control', 'no-store, private')
+            ->assertHeaderMissing('Access-Control-Allow-Origin')
+            ->assertHeaderMissing('Access-Control-Allow-Credentials')
+            ->assertHeaderMissing('Access-Control-Expose-Headers')
+            ->assertHeaderMissing('Set-Cookie');
+        $this->assertSame([], $response->headers->getCookies());
+        $this->assertStringNotContainsString('hostile-marker', json_encode($response->headers->all()));
+    }
+
     #[DataProvider('unapprovedControllerFailureCases')]
     public function test_controller_failure_near_matches_are_generic(
         array $action,
@@ -256,9 +362,12 @@ class Process9D1SecurityBoundaryTest extends TestCase
             'extra-field' => response()->json(['message' => $message, 'detail' => 'Hostile extra field'], 500),
             'unsafe-header' => response()->json(['message' => $message], 500, ['X-Internal-Diagnostic' => 'Hostile header']),
         };
+        $response->headers->set('Vary', 'Origin');
         $result = $this->applyResponseForRoute($action, $response);
 
         $this->assertGenericAppliedResponse($result, [$marker]);
+        $result->assertHeaderMissing('Vary');
+        $this->assertRebuiltVaryResponseIsSafe($result);
     }
 
     public static function unapprovedControllerFailureCases(): iterable
@@ -313,9 +422,12 @@ class Process9D1SecurityBoundaryTest extends TestCase
             'wrong-content-type' => response($body['message'], 503, ['Content-Type' => 'text/plain']),
             'unsafe-header' => response()->json($body, 503, ['Set-Cookie' => 'unsafe-marker=value']),
         };
+        $response->headers->set('Vary', 'Origin');
         $result = $this->applyResponseForRoute(fn () => null, $response, $middleware);
 
         $this->assertGenericAppliedResponse($result, [$marker]);
+        $result->assertHeaderMissing('Vary');
+        $this->assertRebuiltVaryResponseIsSafe($result);
     }
 
     public static function unapprovedPublicLookupFailureCases(): iterable
@@ -346,8 +458,11 @@ class Process9D1SecurityBoundaryTest extends TestCase
             'control-date' => $response->headers->set('Date', "Wed, 02 Sep 2026 13:27:30 GMT\r\nX-Injected: hostile-marker"),
         };
 
+        $response->headers->set('Vary', 'Origin');
         $result = $this->applyResponseForRoute([AuthController::class, 'login'], $response);
         $this->assertGenericAppliedResponse($result, [$marker]);
+        $result->assertHeaderMissing('Vary');
+        $this->assertRebuiltVaryResponseIsSafe($result);
     }
 
     public static function unapprovedTransportHeaderCases(): iterable

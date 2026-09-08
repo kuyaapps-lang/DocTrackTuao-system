@@ -18,9 +18,13 @@ class SecurityHeaders
     {
         if ($request->is('api', 'api/*') && $response->getStatusCode() >= 500) {
             $approved = self::approvedApplicationFailure($response, $request);
+            $varyOrigin = $approved !== null && $response->headers->has('Vary');
             $response = $approved === null
                 ? response()->json(['message' => 'An unexpected error occurred.'], 500)
                 : response()->json($approved['body'], $approved['status']);
+            if ($varyOrigin) {
+                $response->headers->set('Vary', 'Origin');
+            }
         }
 
         $response->headers->set(
@@ -148,17 +152,25 @@ class SecurityHeaders
         if (
             array_diff(
                 array_keys($headers),
-                ['content-type', 'cache-control', 'date', 'access-control-allow-origin']
+                ['content-type', 'cache-control', 'date', 'access-control-allow-origin', 'vary']
             ) !== [] ||
             ($headers['content-type'] ?? null) !== ['application/json'] ||
             ($headers['cache-control'] ?? null) !== ['no-cache, private'] ||
-            !self::validHttpDateValues($headers['date'] ?? null)
+            !self::validHttpDateValues($headers['date'] ?? null) ||
+            (array_key_exists('vary', $headers) && !self::validVaryOriginValues($headers['vary']))
         ) {
             return false;
         }
 
         return !isset($headers['access-control-allow-origin']) ||
             $headers['access-control-allow-origin'] === ['*'];
+    }
+
+    private static function validVaryOriginValues(mixed $values): bool
+    {
+        // Symfony normalizes header names, but preserves separate values and OWS.
+        return is_array($values) && count($values) === 1 && is_string($values[0]) &&
+            preg_match('/\A[ \t]*Origin[ \t]*\z/iD', $values[0]) === 1;
     }
 
     private static function validHttpDateValues(mixed $values): bool
