@@ -450,18 +450,21 @@ class DocumentController extends Controller
     {
         return response()->json([
             'document_types' =>
-                DocumentType::orderBy('type_name')->get(),
+                DocumentType::orderBy('type_name')->get(['id', 'type_name'])
+                    ->map(fn ($type) => ['id' => (int) $type->id, 'type_name' => $type->type_name]),
 
             'priorities' =>
-                Priority::orderBy('id')->get(),
+                Priority::orderBy('id')->get(['id', 'priority_name'])
+                    ->map(fn ($priority) => ['id' => (int) $priority->id, 'priority_name' => $priority->priority_name]),
 
             'confidentiality_levels' =>
-                ConfidentialityLevel::orderBy('id')->get(),
+                ConfidentialityLevel::orderBy('id')->get(['id', 'level_name'])
+                    ->map(fn ($level) => ['id' => (int) $level->id, 'level_name' => $level->level_name]),
 
             'offices' =>
-                Office::with('department')
-                    ->orderBy('office_name')
-                    ->get(),
+                Office::orderBy('office_name')->get(['id', 'office_name', 'office_code'])
+                    ->map(fn ($office) => ['id' => (int) $office->id,
+                        'office_name' => $office->office_name, 'office_code' => $office->office_code]),
         ]);
     }
 

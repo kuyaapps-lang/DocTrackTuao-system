@@ -820,6 +820,61 @@ tokens; name-only changes retain them.
 
 ## 09 - Offices
 
+Process 9D2I master-data contract (Offices and Document Types):
+
+- All four established authenticated roles may list/show master data. Only
+  Administrator may POST, PUT/PATCH, or DELETE, enforced by the existing route
+  permissions. Unauthenticated requests return 401; forbidden mutations return 403
+  before payload validation or record lookup.
+- Office responses contain exactly `id`, `department_id`, `office_name`,
+  `office_code`, `description`, and `department` (null or `{ department_name }`).
+  Document Type responses contain exactly `id`, `type_name`, and `description`.
+  Lists remain arrays in name order; show returns one object. Create returns 201
+  and update returns 200 with the existing `message` and `office`/`document_type`
+  wrapper. Delete returns 200 with the existing success message. Timestamps,
+  internal metadata and unrestricted relationships are not exposed.
+- Office create/update accepts only `department_id`, `office_name`, `office_code`,
+  `description`. Name and code remain required on both PUT and PATCH, with maxima
+  of 150 and 20 characters respectively; code must be unique. Office names need
+  not be unique. Department is optional/nullable; a supplied non-null value must
+  be a positive integer (or decimal integer string) referencing a department.
+- Document Type create/update accepts only `type_name` and `description`.
+  `type_name` is required, unique, and at most 100 characters. Updates exclude
+  their own record from uniqueness checks; database collation governs uniqueness.
+- Existing global trimming/empty-string normalization applies: required blank
+  strings are rejected, optional blank strings become null. Description is
+  optional/nullable text, bounded to 65,535 characters and 65,535 UTF-8 bytes to
+  fit the existing MySQL TEXT column. Omitted optional update fields remain
+  unchanged. Arrays/objects are not valid text.
+- Unsupported mutation fields return 422 with a fixed `request` validation
+  error; DELETE accepts no fields. Other invalid values return normal 422
+  validation responses without echoing submitted values. Resource identifiers
+  must be canonical positive decimal IDs, at most 19 digits; malformed or missing
+  records return safe 404 responses without model/SQL diagnostics.
+- Referenced deletion returns 409 and preserves the entire record graph. Office
+  checks cover users, origin/current document custody, from/to routes, and
+  processing logs, including references whose schema uses SET NULL. Document
+  Types retain their existing document-reference 409 message. Both checks and
+  deletion run in a transaction with the parent record locked; no foreign keys
+  are disabled and no business records are cascaded or detached.
+- Each successful mutation writes exactly one `master_data` audit with the
+  authenticated actor and affected record ID, atomically with the mutation.
+  Actions and fixed descriptions are `office_created` / `Office created.`,
+  `office_updated` / `Office updated.`, `office_deleted` / `Office deleted.`,
+  `document_type_created` / `Document type created.`, `document_type_updated` /
+  `Document type updated.`, and `document_type_deleted` / `Document type deleted.`
+  Descriptions never include submitted values. Audit insertion failure returns a
+  generic safe 500 and rolls back the mutation. Reads, rejected requests, and
+  rollbacks create no successful audits. Isolated tests compare pre-existing
+  audits and complete normalized fixture rows for rejected requests, including
+  safe token metadata (excluding token hashes).
+- `/api/document-form-options` retains its stricter `documents.create` permission
+  (Administrator and Records Officer). Its exact lookup shapes are:
+  `document_types: [{ id, type_name }]`, `priorities: [{ id, priority_name }]`,
+  `confidentiality_levels: [{ id, level_name }]`, and
+  `offices: [{ id, office_name, office_code }]`. Existing name/ID ordering and
+  registration selections remain unchanged. No registration workflow is modified.
+
 ### List Offices
 
 ```http
