@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php" colors="true" cacheResult="false">
+    <testsuites>
+        <testsuite name="Process10B opt-in">
+            <file>tests/Concurrency/Process10BConcurrencyTest.php</file>
+        </testsuite>
+    </testsuites>
+    <php>
+        <ini name="display_errors" value="0"/>
+        <ini name="log_errors" value="0"/>
+        <ini name="zend.exception_ignore_args" value="1"/>
+        <env name="APP_ENV" value="testing"/>
+    </php>
+</phpunit>
