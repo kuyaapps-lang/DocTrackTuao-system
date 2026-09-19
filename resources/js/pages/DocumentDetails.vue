@@ -15,12 +15,18 @@ import { Button } from '@/components/ui/button'
 import {
     ArrowLeft,
     ArrowRight,
+    CheckCircle,
     Send,
     Paperclip,
     Upload,
 } from 'lucide-vue-next'
 
 import { can } from '@/lib/auth'
+import {
+    canCompleteDocument,
+    completeDocumentRequest,
+    isTerminalDocument,
+} from '@/lib/document-detail'
 import {
     printQrLabels,
     qrPrintFailureMessage,
@@ -44,6 +50,7 @@ const actionLoading = ref(false)
 
 const error = ref('')
 const successMessage = ref('')
+const completeError = ref('')
 
 /*
 |--------------------------------------------------------------------------
@@ -791,7 +798,8 @@ const fetchProcessing = async () => {
 const canUpdateProcessing = computed(() => {
     return (
         can('documents.process') &&
-        processingInfo.value?.can_update === true
+        processingInfo.value?.can_update === true &&
+        !isTerminalDocument(document.value)
     )
 })
 
@@ -801,6 +809,7 @@ const processingEventLabel = (eventType) => {
         action_updated: 'Processing Update',
         forwarded: 'Route Forward',
         received: 'Route Receive',
+        completed: 'Document Complete',
     }
 
     return (
@@ -1034,6 +1043,14 @@ const historyRows = computed(() => {
 
                 byOffice =
                     toOffice
+            }
+
+            if (
+                item?.event_type ===
+                'completed'
+            ) {
+                status = 'Completed'
+                actionTaken = 'Document Complete'
             }
 
             return {
@@ -1425,7 +1442,8 @@ const canReceive = computed(() => {
     if (
         !can('documents.route') ||
         !pendingRoute.value ||
-        !routingOptions.value?.user
+        !routingOptions.value?.user ||
+        documentIsTerminal.value
     ) {
         return false
     }
@@ -1440,10 +1458,15 @@ const canReceive = computed(() => {
     )
 })
 
+const documentIsTerminal = computed(() => (
+    isTerminalDocument(document.value)
+))
+
 const canForward = computed(() => {
     if (
         !can('documents.route') ||
-        !routingOptions.value?.can_act
+        !routingOptions.value?.can_act ||
+        documentIsTerminal.value
     ) {
         return false
     }
@@ -1456,6 +1479,56 @@ const canForward = computed(() => {
 
     return pendingRoute.value === null
 })
+
+const canComplete = computed(() => canCompleteDocument({
+    document: document.value,
+    routingOptions: routingOptions.value,
+    pendingRoute: pendingRoute.value,
+    hasProcessPermission: can('documents.process'),
+}))
+
+const completeDocument = async () => {
+    completeError.value = ''
+    successMessage.value = ''
+
+    if (!canComplete.value) {
+        completeError.value =
+            'This document cannot be completed in its current state.'
+
+        return
+    }
+
+    const confirmed = window.confirm(
+        'Complete this document? Completed documents cannot be forwarded or updated.'
+    )
+
+    if (!confirmed) {
+        return
+    }
+
+    actionLoading.value = true
+
+    try {
+        await completeDocumentRequest({
+            fetchImpl: fetch,
+            documentId: route.params.id,
+            token: getToken(),
+        })
+
+        successMessage.value =
+            'Document completed successfully.'
+
+        await loadPage()
+
+    } catch (err) {
+        completeError.value =
+            err.message ||
+            'Unable to complete document.'
+
+    } finally {
+        actionLoading.value = false
+    }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -1836,8 +1909,29 @@ onMounted(() => {
                                         Forward Document        
                                 </Button>
 
+                                <Button
+                                    v-if="canComplete"
+                                    class="bg-emerald-600 text-white hover:bg-emerald-700"
+                                    :disabled="actionLoading"
+                                    @click="completeDocument"
+                                >
+                                    <CheckCircle class="mr-2 h-4 w-4" />
+                                    {{
+                                        actionLoading
+                                            ? 'Completing...'
+                                            : 'Complete Document'
+                                    }}
+                                </Button>
+
                             </div>
 
+                        </div>
+
+                        <div
+                            v-if="completeError"
+                            class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
+                        >
+                            {{ completeError }}
                         </div>
 
                     </CardHeader>
