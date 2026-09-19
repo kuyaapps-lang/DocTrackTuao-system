@@ -8,19 +8,23 @@ secrets, SQL row contents or `.env` values in this document.
 
 - Start from `C:\xampp\htdocs\DocTrackTuao-system`.
 - Verify Git is on `main`, clean, and synced before the demo.
-- Use the LAN fallback server for client devices:
+- Apache public-root on port 80 is the deployment target on Device 1.
+- If LAN clients still cannot reach Apache port 80, use the proven temporary LAN
+  fallback server for client devices:
 
 ```powershell
 php artisan serve --host=192.168.100.107 --port=8000
 ```
 
 - Device 2 and Device 3 should use `http://192.168.100.107:8000`.
+- Stop the fallback server after the demo; it is not the final serving model.
 - Confirm `public/hot` is absent and compiled assets exist under `public/build`.
 - Log out demo devices when testing is complete.
 
-## Apache public-root status
+## Serving decision
 
-- A local Apache virtual host has been proven on Device 1 with document root:
+- Apache public-root is the selected deployment serving model. The local virtual
+  host on Device 1 uses document root:
 
 ```text
 C:/xampp/htdocs/DocTrackTuao-system/public
@@ -28,9 +32,16 @@ C:/xampp/htdocs/DocTrackTuao-system/public
 
 - Device 1 can serve `/login`, `/build/manifest.json`, built JS/CSS assets and
   `/api/user` correctly through Apache.
+- Process 15F verified local Apache health after restart:
+  `/login` returns `200` HTML, `/api/user` returns `401` JSON, and public
+  tracking for `DOC-20260823024024684` returns `200`.
 - LAN clients currently cannot reach Device 1 on port 80 because of environment
-  or network policy. Do not keep adding firewall rules blindly.
-- For the office demo, prefer the known-working `php artisan serve` LAN fallback.
+  or network/admin policy. Treat that as an external deployment task; do not keep
+  adding firewall rules blindly.
+- `php artisan serve --host=192.168.100.107 --port=8000` remains a demo fallback
+  only.
+- HTTPS, certificate selection, and HSTS are deferred until the final host/domain
+  decision. Do not enable HSTS while serving plain HTTP.
 
 ## Environment checklist
 
@@ -47,6 +58,12 @@ C:/xampp/htdocs/DocTrackTuao-system/public
 - Web root must point to `public`, not the project root.
 - Verify these paths do not expose raw contents: `/.env`, `/vendor/`, `/app/`,
   `/routes/`, `/database/`, and `/storage/dev-db-backups/`.
+- Process 15F PHP/Apache hardening is active locally: `X-Powered-By` is absent,
+  `Server` is reduced to `Apache`, PHP `expose_php` is off, PHP display errors
+  are off, PHP timezone is `Asia/Manila`, Apache `ServerTokens` is `Prod`, and
+  `ServerSignature` is off.
+- MySQL is currently listening on loopback (`127.0.0.1:3306`) for local-only DB
+  access.
 - Keep SQL backups outside Git and out of any served public path.
 - Keep `storage` and `bootstrap/cache` writable only for the service account that
   needs them.
@@ -79,7 +96,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
   `doctrack_tuao_restore_rehearsal` and verified table/document counts; the live
   database was not touched.
 
-## Scheduler plan
+## Scheduler
 
 - Laravel currently schedules:
 
@@ -87,19 +104,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
 sanctum:prune-expired --hours=24
 ```
 
-- For a real deployment, create one Windows Scheduled Task that runs every minute:
+- Process 15E installed and verified the Windows Scheduled Task:
 
 ```text
+Task:      DocTrack Laravel Scheduler
 Program:   C:\xampp\php\php.exe
 Arguments: artisan schedule:run
 Start in:  C:\xampp\htdocs\DocTrackTuao-system
+Frequency: every minute
 ```
 
-- Demo can run without this task because the current scheduled work is housekeeping
-  for expired Sanctum tokens.
-- For real deployment, prefer a dedicated service account with read access to the
-  project, execute access to PHP, write access to `storage` and `bootstrap/cache`,
-  and database access through the configured Laravel connection.
+- The task manual trigger returned `LastTaskResult: 0`.
+- Current task principal is the local interactive user. For real deployment,
+  prefer a dedicated service account with read access to the project, execute
+  access to PHP, write access to `storage` and `bootstrap/cache`, and database
+  access through the configured Laravel connection.
 - Log scheduler failures through Task Scheduler history and/or a protected
   `storage/logs/scheduler.log` wrapper.
 
@@ -122,10 +141,10 @@ Start in:  C:\xampp\htdocs\DocTrackTuao-system
   restart only Apache if the config test passes.
 - If temporary DocTrack Apache LAN firewall rules are recreated, remove only those
   DocTrack-specific rules during cleanup.
-- Scheduler rollback, if the task is created later:
+- Scheduler rollback:
 
 ```powershell
-schtasks /Delete /TN "DocTrack Laravel Scheduler" /F
+Unregister-ScheduledTask -TaskName "DocTrack Laravel Scheduler" -Confirm:$false
 ```
 
 - Before any restore to the live development DB, use the restore script's safety
