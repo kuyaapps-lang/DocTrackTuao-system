@@ -18,6 +18,14 @@ test('other login failures retain the existing safe fallback behavior', () => {
     assert.equal(loginErrorMessage(500, ''), 'Login failed.')
 })
 
+test('login page shows administrator reset guidance instead of a dead forgot-password link', async () => {
+    const source = await readFile(new URL('../../resources/js/pages/Login.vue', import.meta.url), 'utf8')
+
+    assert.match(source, /Please contact the administrator\s+to reset your password\./)
+    assert.doesNotMatch(source, /href="#"/)
+    assert.doesNotMatch(source, /Forgot Password\?/)
+})
+
 // Execute the actual SFC setup handlers; only imports and UI lifecycle wiring are supplied.
 const loadSetup = async (path, bindings, exposed) => {
     const source = await readFile(new URL(path, import.meta.url), 'utf8')

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useAuth } from '@/lib/auth'
-import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, dashboardRequestKey, isValidDashboardResponse, normalizeDashboardMonth } from '@/lib/dashboard'
+import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, normalizeDashboardMonth } from '@/lib/dashboard'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +17,7 @@ const state = ref('loading')
 let activeController = null
 let requestSequence = 0
 let mounted = true
+let allTimeRequested = false
 
 const metrics = computed(() => dashboard.value ? [
     ['Total Documents', dashboard.value.summary.total_documents],
@@ -91,10 +92,22 @@ const loadDashboard = async month => {
 }
 
 const updateMonth = () => router.push({ path: route.path, query: buildDashboardQuery(selectedMonth.value) })
-const clearMonth = () => { selectedMonth.value = ''; return updateMonth() }
+const clearMonth = () => {
+    allTimeRequested = true
+    selectedMonth.value = ''
+    return updateMonth()
+}
 const retry = () => loadDashboard(normalizeDashboardMonth(route.query.month))
 
 watch(() => route.query.month, async rawMonth => {
+    if (rawMonth === undefined && !allTimeRequested) {
+        const defaultMonth = currentDashboardMonth()
+        if (defaultMonth !== null) {
+            await router.replace({ path: route.path, query: buildDashboardQuery(defaultMonth) })
+            return
+        }
+    }
+    allTimeRequested = false
     const month = normalizeDashboardMonth(rawMonth)
     selectedMonth.value = month || ''
     if (rawMonth !== undefined && month === null) {

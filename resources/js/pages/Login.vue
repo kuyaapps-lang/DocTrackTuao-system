@@ -397,17 +397,16 @@ const login = async () => {
                     }}
                 </Button>
 
-                <!-- Forgot Password -->
+                <!-- Password reset guidance -->
                 <div class="flex justify-end">
 
-                    <a
-                        href="#"
-                        class="text-sm text-cyan-700
-                        hover:text-cyan-900
-                        hover:underline"
+                    <p
+                        class="text-right text-sm
+                        text-gray-600"
                     >
-                        Forgot Password?
-                    </a>
+                        Please contact the administrator
+                        to reset your password.
+                    </p>
 
                 </div>
 

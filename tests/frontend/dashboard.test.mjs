@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, dashboardRequestKey, isValidDashboardResponse, isValidDashboardTimestamp, normalizeDashboardMonth } from '../../resources/js/lib/dashboard.js'
+import { readFile } from 'node:fs/promises'
+import { runInNewContext } from 'node:vm'
+import { computed, ref } from 'vue'
+import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, isValidDashboardTimestamp, normalizeDashboardMonth } from '../../resources/js/lib/dashboard.js'
 
 const validResponse = {
     filters: { month: null, timezone: 'Asia/Manila' }, scope: { type: 'system', office: null },
@@ -19,6 +22,50 @@ test('normalizes strict supported months', () => {
 test('builds canonical URL and omits all-time default', () => {
     assert.deepEqual(buildDashboardQuery(null), {}); assert.deepEqual(buildDashboardQuery('invalid'), {}); assert.deepEqual(buildDashboardQuery('2026-08'), { month: '2026-08' })
     assert.equal(buildDashboardRequestUrl(null), '/api/dashboard/summary'); assert.equal(buildDashboardRequestUrl('2026-08'), '/api/dashboard/summary?month=2026-08')
+})
+test('calculates the current dashboard month in the reporting timezone', () => {
+    assert.equal(currentDashboardMonth(new Date('2026-09-30T16:01:00Z')), '2026-10')
+    assert.equal(currentDashboardMonth(new Date('2026-09-30T15:59:00Z')), '2026-09')
+})
+test('dashboard redirects an empty initial filter to the current reporting month', async () => {
+    const replacements = []
+    let watcher = null
+    await loadDashboardSetup({
+        route: { path: '/dashboard', query: {} },
+        router: { replace: value => replacements.push(value), push: () => {} },
+        watch: (getter, callback, options) => {
+            watcher = { getter, callback }
+            if (options?.immediate) return callback(getter())
+        },
+        currentDashboardMonth: () => '2026-09',
+    })
+
+    assert.ok(watcher)
+    assert.deepEqual(JSON.parse(JSON.stringify(replacements)), [{ path: '/dashboard', query: { month: '2026-09' } }])
+})
+test('dashboard clear keeps the all-time query instead of reapplying the default month', async () => {
+    const pushes = []
+    const requests = []
+    let watcher = null
+    const page = await loadDashboardSetup({
+        route: { path: '/dashboard', query: { month: '2026-09' } },
+        router: { replace: () => {}, push: value => pushes.push(value) },
+        watch: (getter, callback, options) => {
+            watcher = { getter, callback }
+            if (options?.immediate) return callback(getter())
+        },
+        fetch: async url => {
+            requests.push(url)
+            return { ok: true, status: 200, json: async () => validResponse }
+        },
+        currentDashboardMonth: () => '2026-09',
+    })
+
+    await page.clearMonth()
+    await watcher.callback(undefined)
+
+    assert.deepEqual(JSON.parse(JSON.stringify(pushes)), [{ path: '/dashboard', query: {} }])
+    assert.equal(requests.at(-1), '/api/dashboard/summary')
 })
 test('uses stable request keys', () => { assert.equal(dashboardRequestKey(null), 'all-time'); assert.equal(dashboardRequestKey('invalid'), 'all-time'); assert.equal(dashboardRequestKey('2026-08'), '2026-08') })
 test('accepts complete response without mutation', () => { const payload = structuredClone(validResponse); const before = structuredClone(payload); assert.equal(isValidDashboardResponse(payload), true); assert.deepEqual(payload, before) })
@@ -246,3 +293,36 @@ test('percentage and response validation helpers do not mutate inputs', () => {
     assert.equal(isValidDashboardResponse(payload), true)
     assert.deepEqual(payload, before)
 })
+
+const loadDashboardSetup = async ({
+    route,
+    router,
+    watch,
+    fetch = async () => ({ ok: true, status: 200, json: async () => validResponse }),
+    currentDashboardMonth: currentMonth = () => '2026-09',
+}) => {
+    const source = await readFile(new URL('../../resources/js/pages/Dashboard.vue', import.meta.url), 'utf8')
+    const setup = source.match(/<script setup>([\s\S]*?)<\/script>/)[1]
+        .replace(/^import\s[\s\S]*?from\s+['"][^'"]+['"];?\r?$/gm, '')
+
+    return runInNewContext(`${setup}\n;({ clearMonth, selectedMonth })`, {
+        ref, computed,
+        onBeforeUnmount: () => {},
+        watch,
+        useRoute: () => route,
+        useRouter: () => router,
+        useAuth: () => ({ clearCurrentUser: () => {}, getToken: () => 'test-token' }),
+        buildDashboardQuery,
+        buildDashboardRequestUrl,
+        calculateDashboardPercentage,
+        currentDashboardMonth: currentMonth,
+        dashboardRequestKey,
+        isValidDashboardResponse,
+        normalizeDashboardMonth,
+        fetch,
+        AbortController,
+        localStorage: { removeItem: () => {} },
+        Button: {}, Card: {}, CardContent: {}, CardHeader: {}, CardTitle: {},
+        Table: {}, TableBody: {}, TableCell: {}, TableHead: {}, TableHeader: {}, TableRow: {},
+    })
+}

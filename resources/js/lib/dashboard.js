@@ -25,6 +25,17 @@ const isRecentDocument = value => hasExactKeys(value, ['id', 'tracking_no', 'sta
 const isRoutingActivity = value => hasExactKeys(value, ['document', 'event_type', 'from_office', 'to_office', 'occurred_at']) && hasExactKeys(value.document, ['id', 'tracking_no']) && isPositiveSafeInteger(value.document.id) && isSafeText(value.document.tracking_no) && ['forwarded', 'received'].includes(value.event_type) && isNamedReference(value.from_office) && value.from_office.id !== null && isNamedReference(value.to_office) && value.to_office.id !== null && isValidDashboardTimestamp(value.occurred_at)
 
 export const normalizeDashboardMonth = value => typeof value === 'string' && MONTH_PATTERN.test(value) ? value : null
+export const currentDashboardMonth = (date = new Date(), timeZone = 'Asia/Manila') => {
+    const parts = new Intl.DateTimeFormat('en', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+    }).formatToParts(date)
+    const year = parts.find(part => part.type === 'year')?.value
+    const month = parts.find(part => part.type === 'month')?.value
+
+    return normalizeDashboardMonth(`${year}-${month}`)
+}
 export const buildDashboardQuery = month => normalizeDashboardMonth(month) ? { month: normalizeDashboardMonth(month) } : {}
 export const buildDashboardRequestUrl = month => {
     const suffix = new URLSearchParams(buildDashboardQuery(month)).toString()
