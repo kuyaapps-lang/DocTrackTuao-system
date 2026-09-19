@@ -146,6 +146,30 @@ class Process9D2HProductionSecurityTest extends TestCase
         }
     }
 
+    public function test_api_authentication_failures_are_json_without_accept_header(): void
+    {
+        foreach ([
+            $this->getJson('/api/user'),
+            $this->get('/api/user'),
+        ] as $response) {
+            $response->assertUnauthorized()
+                ->assertHeader('Content-Type', 'application/json')
+                ->assertExactJson(['message' => 'Unauthenticated.']);
+            $this->assertNoCorsPermission($response);
+            $this->assertSecurityHeaders($response);
+        }
+    }
+
+    public function test_web_spa_login_route_remains_html(): void
+    {
+        $response = $this->get('/login')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8');
+
+        $this->assertStringContainsString('<div id="app"></div>', $response->getContent());
+        $this->assertSecurityHeaders($response);
+    }
+
     #[DataProvider('compatibleOrigins')]
     public function test_real_bearer_authentication_remains_compatible(?string $origin): void
     {

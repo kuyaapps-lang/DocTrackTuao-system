@@ -17,12 +17,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo(function (Request $request): ?string {
+            return $request->is('api', 'api/*') ? null : '/login';
+        });
+
         $middleware->prepend([
             SecurityHeaders::class,
             TrustConfiguredHosts::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->shouldRenderJsonWhen(function (Request $request, \Throwable $_exception): bool {
+            return $request->is('api', 'api/*') || $request->expectsJson();
+        });
+
         $exceptions->respond(function ($response, \Throwable $_exception, Request $request) {
             if ($request->is('api', 'api/*') && $response->getStatusCode() >= 500) {
                 $response = response()->json([

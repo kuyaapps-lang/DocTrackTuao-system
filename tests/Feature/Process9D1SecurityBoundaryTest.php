@@ -24,7 +24,8 @@ class Process9D1SecurityBoundaryTest extends TestCase
         parent::setUp();
 
         config([
-            'security.trusted_hosts' => 'localhost,127.0.0.1,::1,portal.test,192.0.2.10,2001:db8::10',
+            'app.url' => 'http://localhost',
+            'security.trusted_hosts' => 'localhost,127.0.0.1,::1,portal.test,192.0.2.10,192.168.100.107,2001:db8::10',
             'security.hsts_enabled' => false,
             'security.vite_dev_server_url' => null,
         ]);
