@@ -11,6 +11,71 @@ $MySql = "C:\xampp\mysql\bin\mysql.exe"
 $MySqlDump = "C:\xampp\mysql\bin\mysqldump.exe"
 $Database = "doctrack_tuao"
 
+function Test-DumpHeader {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DatabaseName
+    )
+
+    $Header = Get-Content -Path $Path -TotalCount 20
+
+    return (($Header -match "^(-- )?(MariaDB|MySQL) dump").Count -gt 0) -and
+        (($Header -match "Database:\s+$([regex]::Escape($DatabaseName))").Count -gt 0)
+}
+
+function Test-DumpCompletionMarker {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $Tail = Get-Content -Path $Path -Tail 20
+
+    return ($Tail -match "^-- Dump completed on ").Count -gt 0
+}
+
+function Confirm-DumpFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DatabaseName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    if (-not (Test-Path $Path)) {
+        throw "$Label file was not found: $Path"
+    }
+
+    $Size = (Get-Item $Path).Length
+
+    if ($Size -le 0) {
+        throw "$Label file is empty: $Path"
+    }
+
+    if (-not (Test-DumpHeader -Path $Path -DatabaseName $DatabaseName)) {
+        throw "$Label file does not contain the expected dump header for $DatabaseName."
+    }
+
+    if (-not (Test-DumpCompletionMarker -Path $Path)) {
+        throw "$Label file does not contain a dump completion marker."
+    }
+
+    $Sha256 = (Get-FileHash -Path $Path -Algorithm SHA256).Hash
+
+    return [pscustomobject]@{
+        Path = $Path
+        Size = $Size
+        Sha256 = $Sha256
+    }
+}
+
 if (-not (Test-Path $MySql)) {
     throw "mysql.exe not found at $MySql"
 }
@@ -20,10 +85,14 @@ if (-not (Test-Path $MySqlDump)) {
 }
 
 $BackupFile = (Resolve-Path $BackupFile).Path
+$SourceInfo = Confirm-DumpFile -Path $BackupFile -DatabaseName $Database -Label "Source backup"
 
 Write-Host "`n=== DocTrack Database Restore ===" -ForegroundColor Cyan
 Write-Host "Target DB: $Database"
 Write-Host "Source:    $BackupFile"
+Write-Host "Source size: $($SourceInfo.Size) bytes"
+Write-Host "Source SHA-256: $($SourceInfo.Sha256)"
+Write-Host "Warning: SQL backups may contain sensitive document, user, audit, and token-related data." -ForegroundColor Yellow
 
 Write-Host "`nWARNING:" -ForegroundColor Yellow
 Write-Host "The current $Database database will be replaced by the backup." -ForegroundColor Yellow
@@ -55,8 +124,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "Safety backup failed. Restore stopped."
 }
 
+$SafetyInfo = Confirm-DumpFile -Path $SafetyBackup -DatabaseName $Database -Label "Safety backup"
+
 Write-Host "Safety backup created:" -ForegroundColor Green
 Write-Host $SafetyBackup
+Write-Host "Safety backup size: $($SafetyInfo.Size) bytes"
+Write-Host "Safety backup SHA-256: $($SafetyInfo.Sha256)"
 
 Write-Host "`nDropping and recreating development database..." -ForegroundColor Yellow
 
