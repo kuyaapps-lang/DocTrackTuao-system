@@ -8,6 +8,7 @@ use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentAttachmentController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\DocumentLifecycleController;
 use App\Http\Controllers\DocumentProcessingController;
 use App\Http\Controllers\DocumentQrCodeController;
 use App\Http\Controllers\DocumentRoutingController;
@@ -253,6 +254,11 @@ Route::middleware('auth:sanctum')->group(function () {
         'documents/{document}/receive',
         [DocumentRoutingController::class, 'receive']
     )->middleware('can:documents.route');
+
+    Route::post(
+        'documents/{document}/complete',
+        [DocumentLifecycleController::class, 'complete']
+    )->middleware('can:documents.process');
 
     Route::get(
         'documents/{document}/history',

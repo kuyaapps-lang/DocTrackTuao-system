@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\DocumentRoute;
 use App\Models\DocumentProcessingLog;
+use App\Models\DocumentStatus;
 use App\Models\ProcessingAction;
 use App\Services\AuditLogger;
 use App\Services\DocumentReadScope;
@@ -51,9 +52,17 @@ class DocumentProcessingController extends Controller
             (int) $user->office_id ===
             (int) $document->current_office_id;
 
+        $status = $document->relationLoaded('status')
+            ? $document->getRelation('status')
+            : $document->status()->first();
+        $isTerminal =
+            $status &&
+            in_array($status->status_name, ['Completed', 'Archived'], true);
+
         $canUpdate =
             $sameOffice &&
-            !$pendingRoute;
+            !$pendingRoute &&
+            !$isTerminal;
 
         $restrictionReason = null;
 
@@ -66,6 +75,9 @@ class DocumentProcessingController extends Controller
         } elseif ($pendingRoute) {
             $restrictionReason =
                 'This document is currently in transit and must be received before its processing action can be updated.';
+        } elseif ($isTerminal) {
+            $restrictionReason =
+                'Completed or archived documents cannot receive new processing updates.';
         }
 
         /*
@@ -283,6 +295,16 @@ class DocumentProcessingController extends Controller
 
                 if ((int) $user->office_id !== (int) $document->current_office_id) {
                     abort(403, 'You cannot update the processing action because this document is not currently assigned to your office.');
+                }
+
+                $currentStatus = DocumentStatus::whereKey($document->status_id)
+                    ->first();
+
+                if (
+                    $currentStatus &&
+                    in_array($currentStatus->status_name, ['Completed', 'Archived'], true)
+                ) {
+                    abort(409, 'Completed or archived documents cannot receive new processing updates.');
                 }
 
                 if (

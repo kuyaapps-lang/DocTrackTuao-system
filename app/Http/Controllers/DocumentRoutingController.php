@@ -124,6 +124,16 @@ class DocumentRoutingController extends Controller
                     abort(403, 'You cannot forward this document because it is not currently assigned to your office.');
                 }
 
+                $currentStatus = DocumentStatus::whereKey($document->status_id)
+                    ->first();
+
+                if (
+                    $currentStatus &&
+                    in_array($currentStatus->status_name, ['Completed', 'Archived'], true)
+                ) {
+                    abort(409, 'Completed or archived documents cannot be forwarded.');
+                }
+
                 if (
                     DocumentRoute::where('document_id', $document->id)
                         ->whereNull('received_at')
@@ -374,6 +384,16 @@ class DocumentRoutingController extends Controller
 
                 if ($pendingRoutes->count() !== 1) {
                     abort(409, 'This document has an invalid pending routing state.');
+                }
+
+                $currentStatus = DocumentStatus::whereKey($document->status_id)
+                    ->first();
+
+                if (
+                    $currentStatus &&
+                    in_array($currentStatus->status_name, ['Completed', 'Archived'], true)
+                ) {
+                    abort(409, 'Completed or archived documents cannot be received.');
                 }
 
                 $route = $pendingRoutes->first();

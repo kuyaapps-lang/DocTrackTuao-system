@@ -27,6 +27,8 @@ class Document extends Model
         'current_action_updated_at',
 
         'created_by',
+        'completed_at',
+        'completed_by',
 
         'document_date',
         'due_date',
@@ -42,6 +44,9 @@ class Document extends Model
                 'date',
 
             'current_action_updated_at' =>
+                'datetime',
+
+            'completed_at' =>
                 'datetime',
         ];
     }
@@ -133,6 +138,14 @@ class Document extends Model
         return $this->belongsTo(
             User::class,
             'current_action_updated_by'
+        );
+    }
+
+    public function completedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'completed_by'
         );
     }
 
