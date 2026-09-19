@@ -186,10 +186,21 @@ class Process10ASequentialAcceptanceTest extends TestCase
         $this->assertWorkflowState($id, 'C', 'FOR_ACTION', 0);
         $this->reject('c', 'POST', $base.'/receive', [], 409);
         $this->reject('records', 'POST', '/api/documents', $payload, 422);
+        foreach (['admin', 'records', 'b', 'missing', 'viewer'] as $actor) {
+            $this->reject($actor, 'POST', $base.'/complete', [], 403);
+        }
+        $completed = $this->requestAs('c', 'POST', $base.'/complete', [], 200);
+        $this->assertSame('Document completed successfully.', $completed->json('message'));
+        $this->assertSame('Completed', $completed->json('document.status.status_name'));
+        $this->assertSame($this->users['c']->id, $completed->json('document.completed_by.id'));
+        $this->assertNotNull($completed->json('document.completed_at'));
         foreach (['admin', 'records', 'b'] as $actor) {
             $this->reject($actor, 'PUT', $base.'/processing', $process, 403);
             $this->reject($actor, 'POST', $base.'/forward', ['to_office_id' => $this->offices['D']], 403);
         }
+        $this->reject('c', 'POST', $base.'/complete', [], 409);
+        $this->reject('c', 'POST', $base.'/forward', ['to_office_id' => $this->offices['D']], 409);
+        $this->reject('c', 'PUT', $base.'/processing', $process, 409);
 
         $document = DB::table('documents')->where('id', $id)->first();
         $this->assertSame($this->offices['A'], $document->origin_office_id);
@@ -198,6 +209,13 @@ class Process10ASequentialAcceptanceTest extends TestCase
         $this->assertSame($this->users['c']->id, $document->current_action_updated_by);
         $this->assertSame($this->action('FOR_ACTION'), $document->current_action_id);
         $this->assertNull($document->processing_note);
+        $this->assertSame($this->statusId('Completed'), $document->status_id);
+        $this->assertSame($this->users['c']->id, $document->completed_by);
+        $this->assertNotNull($document->completed_at);
+        $tracked = $this->readUnchanged(null, '/api/track/'.$document->tracking_no, 200);
+        $this->assertSame('Completed', $tracked->json('status'));
+        $this->assertSame('Synthetic Office C', $tracked->json('current_office'));
+        $this->assertSame([$first, $second], array_column($tracked->json('movement_history'), 'id'));
         $resolved = $this->readUnchanged(null, '/api/q/'.$qrToken, 200);
         $this->assertSame('registered', $resolved->json('state'));
         $this->assertTrue($resolved->json('qr_token') === $qrToken, 'QR association must survive routing');
@@ -219,27 +237,28 @@ class Process10ASequentialAcceptanceTest extends TestCase
             $this->assertSame('Received', DB::table('document_statuses')->where('id', $row->status_id)->value('status_name'));
         }
         $logs = DB::table('document_processing_logs')->orderBy('id')->get();
-        $this->assertSame(['registered', 'forwarded', 'received', 'action_updated', 'forwarded', 'received'], $logs->pluck('event_type')->all());
+        $this->assertSame(['registered', 'forwarded', 'received', 'action_updated', 'forwarded', 'received', 'completed'], $logs->pluck('event_type')->all());
         $this->assertSame(array_map(fn ($actor) => $this->users[$actor]->id,
-            ['records', 'records', 'b', 'b', 'b', 'c']), $logs->pluck('user_id')->all());
-        $this->assertSame([null, $first, $first, null, $second, $second], $logs->pluck('document_route_id')->all());
-        $this->assertSame(array_fill(0, 6, $id), $logs->pluck('document_id')->all());
+            ['records', 'records', 'b', 'b', 'b', 'c', 'c']), $logs->pluck('user_id')->all());
+        $this->assertSame([null, $first, $first, null, $second, $second, null], $logs->pluck('document_route_id')->all());
+        $this->assertSame(array_fill(0, 7, $id), $logs->pluck('document_id')->all());
         // Awaiting-receipt history belongs to the destination, with the sender as actor.
-        $this->assertSame(array_map(fn ($office) => $this->offices[$office], ['A', 'B', 'B', 'B', 'C', 'C']),
+        $this->assertSame(array_map(fn ($office) => $this->offices[$office], ['A', 'B', 'B', 'B', 'C', 'C', 'C']),
             $logs->pluck('office_id')->all());
         $this->assertSame(array_map(fn ($code) => $this->action($code),
-            ['REGISTERED', 'AWAITING_RECEIPT', 'FOR_ACTION', 'UNDER_REVIEW', 'AWAITING_RECEIPT', 'FOR_ACTION']),
+            ['REGISTERED', 'AWAITING_RECEIPT', 'FOR_ACTION', 'UNDER_REVIEW', 'AWAITING_RECEIPT', 'FOR_ACTION', 'FOR_ACTION']),
             $logs->pluck('processing_action_id')->all());
         $this->assertSame('Synthetic processing note.', $logs[3]->processing_note);
+        $this->assertSame('Document completed.', $logs[6]->event_note);
         $audits = DB::table('audit_logs')->where('id', '>', $baselineAuditId)->orderBy('id')->get();
-        $this->assertSame(['generated', 'registered', 'created', 'forwarded', 'received', 'processing_updated', 'forwarded', 'received'], $audits->pluck('action')->all());
+        $this->assertSame(['generated', 'registered', 'created', 'forwarded', 'received', 'processing_updated', 'forwarded', 'received', 'completed'], $audits->pluck('action')->all());
         $this->assertSame(['qr_codes', 'qr_codes', 'documents', 'document_routing', 'document_routing',
-            'document_processing', 'document_routing', 'document_routing'], $audits->pluck('module')->all());
-        $this->assertSame([$qrId, $qrId, $id, $id, $id, $id, $id, $id], $audits->pluck('record_id')->all());
+            'document_processing', 'document_routing', 'document_routing', 'documents'], $audits->pluck('module')->all());
+        $this->assertSame([$qrId, $qrId, $id, $id, $id, $id, $id, $id, $id], $audits->pluck('record_id')->all());
         $this->assertSame(array_map(fn ($actor) => $this->users[$actor]->id,
-            ['records', 'records', 'records', 'records', 'b', 'b', 'b', 'c']), $audits->pluck('user_id')->all());
-        $this->assertSame(array_fill(0, 8, '192.0.2.10'), $audits->pluck('ip_address')->all());
-        $this->assertSame(array_fill(0, 8, 'Process10A-Synthetic/1.0'), $audits->pluck('user_agent')->all());
+            ['records', 'records', 'records', 'records', 'b', 'b', 'b', 'c', 'c']), $audits->pluck('user_id')->all());
+        $this->assertSame(array_fill(0, 9, '192.0.2.10'), $audits->pluck('ip_address')->all());
+        $this->assertSame(array_fill(0, 9, 'Process10A-Synthetic/1.0'), $audits->pluck('user_agent')->all());
         foreach ($audits as $audit) {
             $this->assertNotNull($audit->created_at);
             foreach (array_merge([$qrToken, $process['processing_note']], array_values($this->tokens)) as $sensitive) {
@@ -252,8 +271,10 @@ class Process10ASequentialAcceptanceTest extends TestCase
             $history = $this->readUnchanged($actor, $base.'/history', 200);
             $this->assertSame([$first, $second], array_column($history->json(), 'id'));
             $processing = $this->readUnchanged($actor, $base.'/processing', 200);
-            $this->assertSame(6, count($processing->json('history')));
+            $this->assertSame(7, count($processing->json('history')));
             $this->assertSame(array_reverse($logs->pluck('id')->all()), array_column($processing->json('history'), 'id'));
+            $this->assertSame('completed', $processing->json('history.0.event_type'));
+            $this->assertFalse($processing->json('can_update'));
             $this->assertSame($this->offices['C'], $processing->json('current_office.id'));
         }
         foreach (['d', 'missing'] as $actor) {
@@ -263,17 +284,17 @@ class Process10ASequentialAcceptanceTest extends TestCase
         }
         foreach (['admin', 'records'] as $actor) {
             $auditResponse = $this->readUnchanged($actor, '/api/audit-logs?per_page=25', 200);
-            $this->assertSame(15, $auditResponse->json('total'));
+            $this->assertSame(16, $auditResponse->json('total'));
             $this->assertSame(array_reverse($audits->pluck('id')->all()),
-                array_slice(array_column($auditResponse->json('data'), 'id'), 0, 8));
+                array_slice(array_column($auditResponse->json('data'), 'id'), 0, 9));
             $summary = $this->readUnchanged($actor, '/api/dashboard/summary', 200);
             $this->assertSame(['total_documents' => 1, 'incoming_movements' => 2,
-                'outgoing_movements' => 2, 'in_transit_documents' => 0, 'received_documents' => 1], $summary->json('summary'));
+                'outgoing_movements' => 2, 'in_transit_documents' => 0, 'received_documents' => 0], $summary->json('summary'));
         }
         foreach (['b' => [1, 1, 1], 'c' => [1, 1, 0], 'viewer' => [1, 1, 1], 'd' => [0, 0, 0]] as $actor => [$total, $incoming, $outgoing]) {
             $summary = $this->readUnchanged($actor, '/api/dashboard/summary', 200);
             $this->assertSame(['total_documents' => $total, 'incoming_movements' => $incoming,
-                'outgoing_movements' => $outgoing, 'in_transit_documents' => 0, 'received_documents' => $total], $summary->json('summary'));
+                'outgoing_movements' => $outgoing, 'in_transit_documents' => 0, 'received_documents' => 0], $summary->json('summary'));
             $this->readUnchanged($actor, '/api/audit-logs', 403);
         }
         $this->readUnchanged('missing', '/api/dashboard/summary', 403);
@@ -294,7 +315,7 @@ class Process10ASequentialAcceptanceTest extends TestCase
         }
         $after = $this->snapshot();
         $effects = ['documents' => 1, 'document_qr_codes' => 1, 'document_routes' => 2,
-            'document_processing_logs' => 6, 'audit_logs' => 8, 'document_attachments' => 0];
+            'document_processing_logs' => 7, 'audit_logs' => 9, 'document_attachments' => 0];
         foreach (self::TABLES as $table) {
             $this->assertSame($effects[$table] ?? 0, count($after[$table]) - count($baseline[$table]), $table.' row delta');
             $this->assertSame($baseline[$table], array_slice($after[$table], 0, count($baseline[$table])), $table.' baseline preservation');
@@ -372,6 +393,11 @@ class Process10ASequentialAcceptanceTest extends TestCase
         return (int) DB::table('processing_actions')->where('action_code', $code)->value('id');
     }
 
+    private function statusId(string $name): int
+    {
+        return (int) DB::table('document_statuses')->where('status_name', $name)->value('id');
+    }
+
     // Fixture schema and lookups copied from DocumentWorkflowAuditTest; no migrations run.
     private function seedLookups(): void
     {
@@ -381,7 +407,7 @@ class Process10ASequentialAcceptanceTest extends TestCase
             'created_at' => $now,
             'updated_at' => $now,
         ]);
-        foreach (['Pending', 'Forwarded', 'Received'] as $status) {
+        foreach (['Pending', 'Forwarded', 'Received', 'Completed'] as $status) {
             DB::table('document_statuses')->insert([
                 'status_name' => $status,
                 'created_at' => $now,
@@ -513,6 +539,8 @@ class Process10ASequentialAcceptanceTest extends TestCase
             $table->unsignedBigInteger('created_by')->nullable();
             $table->date('document_date')->nullable();
             $table->date('due_date')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->unsignedBigInteger('completed_by')->nullable();
             $table->timestamps();
         });
         Schema::create('document_qr_codes', function (Blueprint $table) {
