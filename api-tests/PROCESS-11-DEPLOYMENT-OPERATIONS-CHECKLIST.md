@@ -17,8 +17,24 @@ secrets, SQL row contents or `.env` values in this document.
   Apache port 80, and Laravel `:8000` should remain unused.
 - Confirm `public/hot` is absent and compiled assets exist under `public/build`.
 - Log out demo devices when testing is complete.
-- Future station rollout item, not a blocker: add a DocTrack app icon and desktop
-  shortcut on client stations after the serving path is stable.
+
+## Station rollout shortcuts
+
+- Process 15N recommended the simplest current station entry point: create a
+  desktop browser shortcut named `DocTrack Tuao` that opens
+  `http://192.168.100.107/login`.
+- Add the shortcut on Device 1, Device 2, and Device 3 after confirming each
+  device can open the login page through Apache port 80. Do not point stations
+  at Laravel `:8000`.
+- A browser bookmark or homepage can be used instead of, or alongside, the
+  desktop shortcut for stations whose users prefer opening DocTrack from the
+  browser. Use the same URL: `http://192.168.100.107/login`.
+- Do not create or change shortcuts, browser homepages, bookmarks, pinned apps,
+  icons, or PWA settings until separately approved for the specific station.
+- Future polish item, not a blocker: add a DocTrack favicon/app icon and review
+  whether a simple PWA install prompt is worthwhile after the serving URL is
+  stable. Keep that as UI/asset work, separate from Apache, database, firewall,
+  scheduler, or service configuration.
 
 ## Serving decision
 
