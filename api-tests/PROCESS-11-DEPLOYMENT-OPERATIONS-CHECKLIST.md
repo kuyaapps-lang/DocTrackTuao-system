@@ -12,7 +12,7 @@ secrets, SQL row contents or `.env` values in this document.
 - Final station URL for Device 1, Device 2, and Device 3:
   `http://192.168.100.107/login`.
 - Keep Laravel's `php artisan serve` stopped during station rollout.
-- After Device 1 restarts, Apache and MySQL/MariaDB should come back
+- After Device 1 restarts, Apache and the active database service should come back
   automatically, `http://192.168.100.107/login` should remain available through
   Apache port 80, and Laravel `:8000` should remain unused.
 - Confirm `public/hot` is absent and compiled assets exist under `public/build`.
@@ -55,7 +55,8 @@ C:/xampp/htdocs/DocTrackTuao-system/public
 - `APP_DEBUG=false` for demo/deployment-style checks.
 - `APP_URL` should match the active serving URL.
 - `TRUSTED_HOSTS` should include only the intended hostnames/IPs for the run.
-- Keep MySQL bound to loopback unless a reviewed deployment requires otherwise.
+- Keep the DocTrack database connection on loopback unless a reviewed deployment
+  requires otherwise.
 - Keep SPA and API same-origin; frontend API calls should use `/api`.
 - Do not commit `.env`, credentials, SQL backups, `vendor`, `node_modules`,
   uploaded files or generated runtime data.
@@ -69,8 +70,8 @@ C:/xampp/htdocs/DocTrackTuao-system/public
   `Server` is reduced to `Apache`, PHP `expose_php` is off, PHP display errors
   are off, PHP timezone is `Asia/Manila`, Apache `ServerTokens` is `Prod`, and
   `ServerSignature` is off.
-- MySQL is currently listening on loopback (`127.0.0.1:3306`) for local-only DB
-  access.
+- Process 15M confirmed Laravel connects to `doctrack_tuao` through
+  `127.0.0.1:3306`.
 - Keep SQL backups outside Git and out of any served public path.
 - Keep `storage` and `bootstrap/cache` writable only for the service account that
   needs them.
@@ -124,6 +125,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
 - Never commit `.env`, SQL backups, uploaded files, credentials, bearer tokens,
   QR token values, `vendor`, `node_modules`, generated runtime data, or sensitive
   row contents to Git.
+- Database service clarity from Process 15M:
+  Laravel uses `.env` values `DB_HOST=127.0.0.1`, `DB_PORT=3306`, and
+  `DB_DATABASE=doctrack_tuao`. The live Laravel connection reported
+  `10.4.32-MariaDB`, matching the XAMPP `mysql` Windows service at
+  `C:\xampp\mysql\bin\mysqld.exe`. Key tables were readable after reboot:
+  `users`, `documents`, `document_routes`, `document_processing_logs`, and
+  `document_qr_codes`.
+- XAMPP Control Panel may show a MySQL port warning because a standalone
+  `MariaDB` Windows service also exists at
+  `C:\Program Files\MariaDB 12.2\bin\mysqld.exe` and listens on port 3306 for
+  wildcard/IPv6 addresses. This warning is acceptable for the current demo while
+  DocTrack continues to work through `127.0.0.1:3306`, but it means two database
+  services are present and the setup must not be treated as clean production
+  topology.
+- Do not start a second MySQL/MariaDB instance on port 3306 during station
+  operation. For the current demo path, leave the working XAMPP `mysql` service
+  as the DocTrack database provider. Any later consolidation, disabling, port
+  change, or migration between XAMPP MariaDB and standalone MariaDB 12.2 must be
+  planned with a verified backup, restore rehearsal, and explicit approval.
+- The current backup and restore helper scripts call
+  `C:\xampp\mysql\bin\mysqldump.exe` and `C:\xampp\mysql\bin\mysql.exe`, so
+  they are compatible with the active XAMPP-backed DocTrack database path. Review
+  and retest those scripts before changing the active database provider or port.
 - The `DocTrack Laravel Scheduler` task is disabled for now to avoid the
   recurring console pop-up. Process 15K confirmed that even a hidden PowerShell
   interactive-user action could still surface a visible window every minute.
