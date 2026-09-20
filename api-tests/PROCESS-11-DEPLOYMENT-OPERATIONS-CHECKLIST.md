@@ -9,17 +9,13 @@ secrets, SQL row contents or `.env` values in this document.
 - Start from `C:\xampp\htdocs\DocTrackTuao-system`.
 - Verify Git is on `main`, clean, and synced before the demo.
 - Apache public-root on port 80 is the deployment target on Device 1.
-- If LAN clients still cannot reach Apache port 80, use the proven temporary LAN
-  fallback server for client devices:
-
-```powershell
-php artisan serve --host=192.168.100.107 --port=8000
-```
-
-- Device 2 and Device 3 should use `http://192.168.100.107:8000`.
-- Stop the fallback server after the demo; it is not the final serving model.
+- Final station URL for Device 1, Device 2, and Device 3:
+  `http://192.168.100.107/login`.
+- Keep Laravel's `php artisan serve` stopped during station rollout.
 - Confirm `public/hot` is absent and compiled assets exist under `public/build`.
 - Log out demo devices when testing is complete.
+- Future station rollout item, not a blocker: add a DocTrack app icon and desktop
+  shortcut on client stations after the serving path is stable.
 
 ## Serving decision
 
@@ -35,11 +31,12 @@ C:/xampp/htdocs/DocTrackTuao-system/public
 - Process 15F verified local Apache health after restart:
   `/login` returns `200` HTML, `/api/user` returns `401` JSON, and public
   tracking for `DOC-20260823024024684` returns `200`.
-- LAN clients currently cannot reach Device 1 on port 80 because of environment
-  or network/admin policy. Treat that as an external deployment task; do not keep
-  adding firewall rules blindly.
-- `php artisan serve --host=192.168.100.107 --port=8000` remains a demo fallback
-  only.
+- Process 15I closed the LAN port 80 remediation on Device 1. Device 1 network
+  profile is Private; Device 2 and Device 3 can connect to
+  `192.168.100.107:80` and open `http://192.168.100.107/login`.
+- Laravel's `php artisan serve` on `:8000` is not part of the final station path
+  and should remain stopped unless a separately approved troubleshooting step
+  explicitly starts it.
 - HTTPS, certificate selection, and HSTS are deferred until the final host/domain
   decision. Do not enable HSTS while serving plain HTTP.
 
@@ -115,6 +112,10 @@ Frequency: every minute
 ```
 
 - The task manual trigger returned `LastTaskResult: 0`.
+- Process 15I disabled this task to stop the recurring black console pop-up on
+  Device 1 during station operation. Re-enable it only after replacing the
+  interactive task with a non-popup scheduler approach, such as a hidden wrapper
+  or dedicated service account setup.
 - Current task principal is the local interactive user. For real deployment,
   prefer a dedicated service account with read access to the project, execute
   access to PHP, write access to `storage` and `bootstrap/cache`, and database
@@ -122,10 +123,31 @@ Frequency: every minute
 - Log scheduler failures through Task Scheduler history and/or a protected
   `storage/logs/scheduler.log` wrapper.
 
+## LAN firewall
+
+- Process 15I disabled only the enabled inbound TCP Block rule for Apache:
+  `C:\xampp\apache\bin\httpd.exe`, display name `Apache HTTP Server`, Public
+  profile, protocol TCP, local port Any. The Apache UDP Block rule was left
+  unchanged.
+- Process 15I added the narrow inbound Allow rule:
+
+```text
+Name:        DocTrack Apache HTTP Private LAN 80
+Program:     C:\xampp\apache\bin\httpd.exe
+Direction:   Inbound
+Action:      Allow
+Profile:     Private
+Protocol:    TCP
+Local port:  80
+Remote IP:   LocalSubnet
+```
+
+- Do not loosen unrelated firewall rules for DocTrack station access.
+
 ## Printer and QR scanner acceptance
 
 - LAN and physical hard-copy QR acceptance passed.
-- Device 1 served DocTrack on `http://192.168.100.107:8000` and printed the QR
+- Device 1 served DocTrack on `http://192.168.100.107/login` and printed the QR
   through Epson.
 - Device 2 scanned the physical QR and opened the correct public tracking page.
 - Device 3 participated as Mayor Office.
@@ -139,12 +161,17 @@ Frequency: every minute
 - Apache vhost rollback: restore the timestamped backup of
   `C:\xampp\apache\conf\extra\httpd-vhosts.conf`, then run Apache config test and
   restart only Apache if the config test passes.
-- If temporary DocTrack Apache LAN firewall rules are recreated, remove only those
-  DocTrack-specific rules during cleanup.
+- LAN firewall rollback:
+
+```powershell
+netsh advfirewall firewall set rule name="Apache HTTP Server" dir=in program="C:\xampp\apache\bin\httpd.exe" protocol=TCP new enable=yes
+netsh advfirewall firewall delete rule name="DocTrack Apache HTTP Private LAN 80"
+```
+
 - Scheduler rollback:
 
 ```powershell
-Unregister-ScheduledTask -TaskName "DocTrack Laravel Scheduler" -Confirm:$false
+Enable-ScheduledTask -TaskName "DocTrack Laravel Scheduler"
 ```
 
 - Before any restore to the live development DB, use the restore script's safety
