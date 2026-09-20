@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 
 import {
+    Archive,
     ArrowLeft,
     ArrowRight,
     CheckCircle,
@@ -23,6 +24,8 @@ import {
 
 import { can } from '@/lib/auth'
 import {
+    archiveDocumentRequest,
+    canArchiveDocument,
     canCompleteDocument,
     completeDocumentRequest,
     isTerminalDocument,
@@ -51,6 +54,7 @@ const actionLoading = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const completeError = ref('')
+const archiveError = ref('')
 
 /*
 |--------------------------------------------------------------------------
@@ -305,7 +309,8 @@ const fetchAttachments = async () => {
 const canManageAttachments = computed(() => {
     return (
         can('attachments.manage') &&
-        routingOptions.value?.can_act === true
+        routingOptions.value?.can_act === true &&
+        !documentIsTerminal.value
     )
 })
 
@@ -1487,8 +1492,16 @@ const canComplete = computed(() => canCompleteDocument({
     hasProcessPermission: can('documents.process'),
 }))
 
+const canArchive = computed(() => canArchiveDocument({
+    document: document.value,
+    routingOptions: routingOptions.value,
+    pendingRoute: pendingRoute.value,
+    hasProcessPermission: can('documents.process'),
+}))
+
 const completeDocument = async () => {
     completeError.value = ''
+    archiveError.value = ''
     successMessage.value = ''
 
     if (!canComplete.value) {
@@ -1524,6 +1537,50 @@ const completeDocument = async () => {
         completeError.value =
             err.message ||
             'Unable to complete document.'
+
+    } finally {
+        actionLoading.value = false
+    }
+}
+
+const archiveDocument = async () => {
+    archiveError.value = ''
+    completeError.value = ''
+    successMessage.value = ''
+
+    if (!canArchive.value) {
+        archiveError.value =
+            'This document cannot be archived in its current state.'
+
+        return
+    }
+
+    const confirmed = window.confirm(
+        'Archive this document? Archived documents cannot be forwarded or updated.'
+    )
+
+    if (!confirmed) {
+        return
+    }
+
+    actionLoading.value = true
+
+    try {
+        await archiveDocumentRequest({
+            fetchImpl: fetch,
+            documentId: route.params.id,
+            token: getToken(),
+        })
+
+        successMessage.value =
+            'Document archived successfully.'
+
+        await loadPage()
+
+    } catch (err) {
+        archiveError.value =
+            err.message ||
+            'Unable to archive document.'
 
     } finally {
         actionLoading.value = false
@@ -1923,6 +1980,20 @@ onMounted(() => {
                                     }}
                                 </Button>
 
+                                <Button
+                                    v-if="canArchive"
+                                    class="bg-slate-700 text-white hover:bg-slate-800"
+                                    :disabled="actionLoading"
+                                    @click="archiveDocument"
+                                >
+                                    <Archive class="mr-2 h-4 w-4" />
+                                    {{
+                                        actionLoading
+                                            ? 'Archiving...'
+                                            : 'Archive Document'
+                                    }}
+                                </Button>
+
                             </div>
 
                         </div>
@@ -1932,6 +2003,13 @@ onMounted(() => {
                             class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
                         >
                             {{ completeError }}
+                        </div>
+
+                        <div
+                            v-if="archiveError"
+                            class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
+                        >
+                            {{ archiveError }}
                         </div>
 
                     </CardHeader>

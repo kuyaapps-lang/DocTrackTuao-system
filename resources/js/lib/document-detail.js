@@ -22,6 +22,18 @@ export const canCompleteDocument = ({
     !isTerminalDocument(document)
 )
 
+export const canArchiveDocument = ({
+    document,
+    routingOptions,
+    pendingRoute,
+    hasProcessPermission,
+} = {}) => (
+    hasProcessPermission === true &&
+    routingOptions?.can_act === true &&
+    pendingRoute === null &&
+    documentStatusName(document).toLowerCase() === 'completed'
+)
+
 export const completeDocumentFailureMessage = status => {
     if (status === 403) {
         return 'You are not allowed to complete this document.'
@@ -36,6 +48,22 @@ export const completeDocumentFailureMessage = status => {
     }
 
     return 'Unable to complete document.'
+}
+
+export const archiveDocumentFailureMessage = status => {
+    if (status === 403) {
+        return 'You are not allowed to archive this document.'
+    }
+
+    if (status === 409) {
+        return 'This document cannot be archived in its current state.'
+    }
+
+    if (status === 422) {
+        return 'Unable to archive document. Please check the document state and try again.'
+    }
+
+    return 'Unable to archive document.'
 }
 
 export const completeDocumentRequest = async ({
@@ -58,6 +86,32 @@ export const completeDocumentRequest = async ({
     if (!response.ok) {
         throw new Error(
             completeDocumentFailureMessage(response.status)
+        )
+    }
+
+    return response.json()
+}
+
+export const archiveDocumentRequest = async ({
+    fetchImpl,
+    documentId,
+    token,
+} = {}) => {
+    const response = await fetchImpl(
+        `/api/documents/${documentId}/archive`,
+        {
+            method: 'POST',
+
+            headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    )
+
+    if (!response.ok) {
+        throw new Error(
+            archiveDocumentFailureMessage(response.status)
         )
     }
 
