@@ -12,6 +12,9 @@ secrets, SQL row contents or `.env` values in this document.
 - Final station URL for Device 1, Device 2, and Device 3:
   `http://192.168.100.107/login`.
 - Keep Laravel's `php artisan serve` stopped during station rollout.
+- After Device 1 restarts, Apache and MySQL/MariaDB should come back
+  automatically, `http://192.168.100.107/login` should remain available through
+  Apache port 80, and Laravel `:8000` should remain unused.
 - Confirm `public/hot` is absent and compiled assets exist under `public/build`.
 - Log out demo devices when testing is complete.
 - Future station rollout item, not a blocker: add a DocTrack app icon and desktop
@@ -34,6 +37,13 @@ C:/xampp/htdocs/DocTrackTuao-system/public
 - Process 15I closed the LAN port 80 remediation on Device 1. Device 1 network
   profile is Private; Device 2 and Device 3 can connect to
   `192.168.100.107:80` and open `http://192.168.100.107/login`.
+- Process 15L passed the restart/startup test after Device 1 reboot. Apache and
+  MySQL/MariaDB were running automatically, Device 1 remained on
+  `192.168.100.107` with a Private network profile, `/login` returned `200`
+  HTML, `/api/user` returned expected unauthenticated `401` JSON,
+  `/build/manifest.json` returned `200` JSON, Device 2 and Device 3 could still
+  open the login page through `192.168.100.107:80`, Laravel `:8000` had no
+  listener, and no scheduler pop-up was observed.
 - Laravel's `php artisan serve` on `:8000` is not part of the final station path
   and should remain stopped unless a separately approved troubleshooting step
   explicitly starts it.
@@ -117,6 +127,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
 - The `DocTrack Laravel Scheduler` task is disabled for now to avoid the
   recurring console pop-up. Process 15K confirmed that even a hidden PowerShell
   interactive-user action could still surface a visible window every minute.
+  Process 15L confirmed the task remained disabled after reboot and no black
+  scheduler pop-up was observed.
   Before depending on scheduled jobs in deployment, recreate the scheduler under
   a dedicated account configured to run whether the user is logged on or run it
   through a Windows service wrapper.
@@ -159,6 +171,8 @@ Frequency: every minute
   0`, but the recurring task still produced a visible pop-up every minute.
   The task was disabled again. This is acceptable temporarily because the only
   current scheduled Laravel command is daily Sanctum token pruning.
+- Process 15L confirmed after Device 1 reboot that the scheduler task remained
+  disabled and that no scheduler console pop-up appeared during startup checks.
 - Current task principal is the local interactive user. For real deployment,
   prefer a dedicated service account task configured to run whether the user is
   logged on or use a Windows service wrapper such as NSSM or WinSW. The runtime
