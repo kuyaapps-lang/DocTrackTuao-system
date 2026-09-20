@@ -4,6 +4,93 @@ This checklist captures the current demo-ready operating path for DocTrackTuao.
 It is not a final production runbook. Do not store passwords, bearer tokens, QR
 secrets, SQL row contents or `.env` values in this document.
 
+## Final deployment handoff: Process 15P
+
+Process 15O passed the final local deployment smoke test on Device 1, Device 2
+and Device 3. The current station entry point is:
+
+```text
+http://192.168.100.107/login
+```
+
+Daily startup check:
+
+- Start Device 1 and confirm XAMPP Apache and the active XAMPP-backed database
+  service are running.
+- Open `http://192.168.100.107/login` on Device 1.
+- Confirm Device 2 and Device 3 can open the same station URL.
+- Confirm Laravel `:8000` is not listening; the station rollout uses Apache port
+  80, not `php artisan serve`.
+- Confirm the network remains Private and the existing private-LAN firewall rule
+  still permits Apache on port 80.
+- Log in with the intended station user only when an operational check requires
+  it, then log out when finished.
+
+User access rule:
+
+- Users should open DocTrack through a browser shortcut, bookmark or manually
+  entered URL pointing to `http://192.168.100.107/login`.
+- Do not start `php artisan serve` for normal station use. Laravel `:8000` is a
+  development troubleshooting path only and is not part of the handoff.
+
+XAMPP and database warning:
+
+- The XAMPP Control Panel may show a MySQL port warning because a standalone
+  MariaDB service also exists on the machine. For the current handoff, DocTrack
+  uses the working XAMPP-backed MariaDB path through `127.0.0.1:3306`.
+- Do not start, stop, consolidate, migrate or change database services during
+  daily station operation unless a verified backup, restore rehearsal and explicit
+  approval are in place.
+
+Scheduler status:
+
+- The `DocTrack Laravel Scheduler` Windows task is intentionally disabled because
+  previous attempts caused a recurring visible console pop-up.
+- This is acceptable for the current station handoff because the known scheduled
+  Laravel work is token pruning.
+- Future fix: recreate the scheduler under a dedicated service account configured
+  to run whether the user is logged on, or use a Windows service wrapper. Retest
+  that it runs without pop-ups before enabling it for daily use.
+
+Backup rule after real activity:
+
+- Create a new SQL backup after meaningful document or administration activity:
+  registration, routing, receiving, processing, completion, attachment changes,
+  user or master-data changes, or any test data that must be preserved.
+- Do not create duplicate SQL backups for read-only checks, expected login/logout
+  audit rows, firewall-only checks, scheduler-only checks or documentation-only
+  commits.
+- After a DB-changing session, upload the newest trusted verified SQL backup to
+  Google Drive. Confirm file name, size, completion marker and SHA-256 before
+  treating the upload as the shared source of truth.
+
+Restart recovery:
+
+- If stations cannot open the login page after a restart, check Device 1 IP,
+  Private network profile, Apache running state and the private-LAN port 80
+  firewall rule.
+- If the app loads but database-backed pages fail, confirm the active XAMPP-backed
+  database service is running and that Laravel still connects to
+  `doctrack_tuao`.
+- Keep `php artisan serve` stopped while recovering the station path; fix Apache
+  or database service health instead.
+
+Rollback notes:
+
+- Firewall rollback: remove the `DocTrack Apache HTTP Private LAN 80` allow rule
+  and re-enable the prior Apache TCP block rule only if the station LAN exposure
+  needs to be withdrawn.
+- Scheduler rollback: keep the task disabled if pop-ups return; only re-enable it
+  after the service-account or service-wrapper fix is verified.
+
+Known deferred items:
+
+- HTTPS and certificate/domain decision.
+- Scheduler service account or service wrapper.
+- DocTrack app icon, favicon and optional PWA install polish.
+- Final UI polish.
+- Archive workflow.
+
 ## Office demo startup
 
 - Start from `C:\xampp\htdocs\DocTrackTuao-system`.
