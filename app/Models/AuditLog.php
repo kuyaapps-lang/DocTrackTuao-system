@@ -24,6 +24,7 @@ class AuditLog extends Model
     public const ACTION_RECEIVED = 'received';
     public const ACTION_PROCESSING_UPDATED = 'processing_updated';
     public const ACTION_COMPLETED = 'completed';
+    public const ACTION_ARCHIVED = 'archived';
     public const ACTION_GENERATED = 'generated';
     public const ACTION_REGISTERED = 'registered';
     public const ACTION_VOIDED = 'voided';

@@ -942,6 +942,19 @@ class DocumentController extends Controller
                     ], 403);
                 }
 
+                $currentStatus = DocumentStatus::whereKey($document->status_id)
+                    ->first();
+
+                if (
+                    $currentStatus &&
+                    in_array($currentStatus->status_name, ['Completed', 'Archived'], true)
+                ) {
+                    return response()->json([
+                        'message' =>
+                            'Completed or archived documents cannot be updated.',
+                    ], 409);
+                }
+
                 $document->update($validated);
 
                 $auditLogger->log(

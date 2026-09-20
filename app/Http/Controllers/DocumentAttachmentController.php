@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Document;
 use App\Models\DocumentAttachment;
+use App\Models\DocumentStatus;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -94,6 +96,13 @@ class DocumentAttachmentController extends Controller
                 'message' =>
                     'You cannot upload attachments because this document is not currently assigned to your office.',
             ], 403);
+        }
+
+        if ($this->isTerminalDocument($document)) {
+            return response()->json([
+                'message' =>
+                    'Completed or archived documents cannot receive attachment changes.',
+            ], 409);
         }
 
         $validated = $request->validate([
@@ -299,6 +308,13 @@ class DocumentAttachmentController extends Controller
             ], 403);
         }
 
+        if ($this->isTerminalDocument($attachment->document)) {
+            return response()->json([
+                'message' =>
+                    'Completed or archived documents cannot receive attachment changes.',
+            ], 409);
+        }
+
         try {
             $disk = Storage::disk('local');
 
@@ -333,5 +349,17 @@ class DocumentAttachmentController extends Controller
             'message' =>
                 'Attachment deleted successfully.',
         ]);
+    }
+
+    private function isTerminalDocument(Document $document): bool
+    {
+        if (!$document->status_id || !Schema::hasTable('document_statuses')) {
+            return false;
+        }
+
+        $status = DocumentStatus::whereKey($document->status_id)->first();
+
+        return $status &&
+            in_array($status->status_name, ['Completed', 'Archived'], true);
     }
 }

@@ -29,6 +29,8 @@ class Document extends Model
         'created_by',
         'completed_at',
         'completed_by',
+        'archived_at',
+        'archived_by',
 
         'document_date',
         'due_date',
@@ -47,6 +49,9 @@ class Document extends Model
                 'datetime',
 
             'completed_at' =>
+                'datetime',
+
+            'archived_at' =>
                 'datetime',
         ];
     }
@@ -146,6 +151,14 @@ class Document extends Model
         return $this->belongsTo(
             User::class,
             'completed_by'
+        );
+    }
+
+    public function archivedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'archived_by'
         );
     }
 

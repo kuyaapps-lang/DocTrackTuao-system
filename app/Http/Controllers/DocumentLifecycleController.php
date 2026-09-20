@@ -134,4 +134,125 @@ class DocumentLifecycleController extends Controller
             ],
         ]);
     }
+
+    public function archive(
+        Request $request,
+        AuditLogger $auditLogger,
+        $documentId
+    ) {
+        $user = $request->user();
+
+        $document = DB::transaction(
+            function () use ($documentId, $user, $auditLogger) {
+                $document = Document::whereKey($documentId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if (
+                    !$user->office_id ||
+                    !Office::whereKey($user->office_id)->exists()
+                ) {
+                    abort(403, 'Your user account is not assigned to a valid office.');
+                }
+
+                if ((int) $user->office_id !== (int) $document->current_office_id) {
+                    abort(403, 'You cannot archive this document because it is not currently assigned to your office.');
+                }
+
+                if (
+                    DocumentRoute::where('document_id', $document->id)
+                        ->whereNull('received_at')
+                        ->lockForUpdate()
+                        ->exists()
+                ) {
+                    abort(409, 'This document must be received before it can be archived.');
+                }
+
+                $currentStatus = DocumentStatus::whereKey($document->status_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($currentStatus && $currentStatus->status_name === 'Archived') {
+                    abort(409, 'This document has already been archived.');
+                }
+
+                if (!$currentStatus || $currentStatus->status_name !== 'Completed') {
+                    abort(409, 'Only completed documents can be archived.');
+                }
+
+                $archivedStatus = DocumentStatus::where('status_name', 'Archived')
+                    ->firstOrFail();
+
+                $archivedAt = now();
+
+                $document->update([
+                    'status_id' => $archivedStatus->id,
+                    'archived_at' => $archivedAt,
+                    'archived_by' => $user->id,
+                ]);
+
+                DocumentProcessingLog::create([
+                    'document_id' => $document->id,
+                    'office_id' => $document->current_office_id,
+                    'user_id' => $user->id,
+                    'processing_action_id' => $document->current_action_id,
+                    'event_type' => 'archived',
+                    'processing_note' => null,
+                    'event_note' => 'Document archived.',
+                ]);
+
+                $auditLogger->log(
+                    module: AuditLog::MODULE_DOCUMENTS,
+                    action: AuditLog::ACTION_ARCHIVED,
+                    recordId: $document->id,
+                    description: 'Document archived.',
+                    userId: $user->id
+                );
+
+                return $document;
+            }
+        );
+
+        $document->load([
+            'status',
+            'currentOffice',
+            'currentAction',
+            'archivedBy',
+        ]);
+        $status = $document->getRelation('status');
+
+        return response()->json([
+            'message' => 'Document archived successfully.',
+            'document' => [
+                'id' => $document->id,
+                'tracking_no' => $document->tracking_no,
+                'status' => $status
+                    ? [
+                        'id' => $status->id,
+                        'status_name' => $status->status_name,
+                    ]
+                    : null,
+                'current_office' => $document->currentOffice
+                    ? [
+                        'id' => $document->currentOffice->id,
+                        'office_name' => $document->currentOffice->office_name,
+                    ]
+                    : null,
+                'current_action' => $document->currentAction
+                    ? [
+                        'id' => $document->currentAction->id,
+                        'action_code' => $document->currentAction->action_code,
+                        'action_name' => $document->currentAction->action_name,
+                    ]
+                    : null,
+                'archived_at' => $document->archived_at,
+                'archived_by' => $document->archivedBy
+                    ? [
+                        'id' => $document->archivedBy->id,
+                        'name' => $document->archivedBy->name,
+                    ]
+                    : null,
+            ],
+        ]);
+    }
 }

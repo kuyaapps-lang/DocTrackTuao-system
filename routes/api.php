@@ -260,6 +260,11 @@ Route::middleware('auth:sanctum')->group(function () {
         [DocumentLifecycleController::class, 'complete']
     )->middleware('can:documents.process');
 
+    Route::post(
+        'documents/{document}/archive',
+        [DocumentLifecycleController::class, 'archive']
+    )->middleware('can:documents.process');
+
     Route::get(
         'documents/{document}/history',
         [DocumentRoutingController::class, 'history']
