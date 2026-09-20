@@ -80,6 +80,44 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
 - Backups are written to `storage/dev-db-backups/` and must remain Git-ignored.
 - Upload the newest trusted verified backup to Google Drive when closing a DB
   changing session.
+- The newest local backup as of Process 15J is
+  `storage/dev-db-backups/doctrack_tuao_20260919_173656.sql`. It is 87,512
+  bytes, has SHA-256
+  `6223844A6A478FB7F358212FA3C8CBD9DBC7DAADAD2FE1F3997EC144B044250C`, and
+  ends with `Dump completed on 2026-09-19 17:36:59`.
+
+## Daily operations routine
+
+- Start check:
+  verify Device 1 is on the intended Private network, Apache is running, Laravel
+  `:8000` is stopped, `http://192.168.100.107/login` opens locally and from
+  client stations, and Git is clean on the expected branch/commit.
+- Closeout backup rule:
+  create a new SQL backup only after meaningful database-changing activity, such
+  as document registration, routing, receiving, processing, attachment changes,
+  user/master-data changes, or test data that must be preserved. Do not create a
+  duplicate backup after read-only checks, firewall changes, scheduler changes,
+  or documentation-only Git commits.
+- Google Drive upload rule:
+  upload the newest trusted verified SQL backup after every DB-changing session.
+  Confirm the uploaded file name, size, completion marker, and SHA-256 against
+  the local file before treating it as the shared source of truth.
+- Backup custody:
+  the system owner or assigned administrator should keep the Google Drive copy;
+  Device 1 may keep local working backups under `storage/dev-db-backups/`, but
+  those files are operational data and must not be committed.
+- Weekly restore rehearsal:
+  rehearse the newest trusted backup at least weekly, or before major demos, into
+  a disposable database such as `doctrack_tuao_restore_rehearsal`; never rehearse
+  restore against the live `doctrack_tuao` database without explicit approval and
+  the restore script's safety-backup workflow.
+- Never commit `.env`, SQL backups, uploaded files, credentials, bearer tokens,
+  QR token values, `vendor`, `node_modules`, generated runtime data, or sensitive
+  row contents to Git.
+- The `DocTrack Laravel Scheduler` task is disabled for now to avoid the
+  recurring console pop-up. Before depending on scheduled jobs in deployment,
+  recreate or change the scheduler path so it runs silently under an appropriate
+  account.
 
 ## Restore rehearsal rule
 
