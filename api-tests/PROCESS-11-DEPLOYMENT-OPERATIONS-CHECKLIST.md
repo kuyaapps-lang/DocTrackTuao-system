@@ -115,9 +115,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
   QR token values, `vendor`, `node_modules`, generated runtime data, or sensitive
   row contents to Git.
 - The `DocTrack Laravel Scheduler` task is disabled for now to avoid the
-  recurring console pop-up. Before depending on scheduled jobs in deployment,
-  recreate or change the scheduler path so it runs silently under an appropriate
-  account.
+  recurring console pop-up. Process 15K confirmed that even a hidden PowerShell
+  interactive-user action could still surface a visible window every minute.
+  Before depending on scheduled jobs in deployment, recreate the scheduler under
+  a dedicated account configured to run whether the user is logged on or run it
+  through a Windows service wrapper.
 
 ## Restore rehearsal rule
 
@@ -151,13 +153,18 @@ Frequency: every minute
 
 - The task manual trigger returned `LastTaskResult: 0`.
 - Process 15I disabled this task to stop the recurring black console pop-up on
-  Device 1 during station operation. Re-enable it only after replacing the
-  interactive task with a non-popup scheduler approach, such as a hidden wrapper
-  or dedicated service account setup.
+  Device 1 during station operation.
+- Process 15K tried a hidden PowerShell action that logged to
+  `storage/logs/scheduler.log`; the manual run succeeded with `LastTaskResult:
+  0`, but the recurring task still produced a visible pop-up every minute.
+  The task was disabled again. This is acceptable temporarily because the only
+  current scheduled Laravel command is daily Sanctum token pruning.
 - Current task principal is the local interactive user. For real deployment,
-  prefer a dedicated service account with read access to the project, execute
-  access to PHP, write access to `storage` and `bootstrap/cache`, and database
-  access through the configured Laravel connection.
+  prefer a dedicated service account task configured to run whether the user is
+  logged on or use a Windows service wrapper such as NSSM or WinSW. The runtime
+  account needs read access to the project, execute access to PHP, write access
+  to `storage` and `bootstrap/cache`, and database access through the configured
+  Laravel connection.
 - Log scheduler failures through Task Scheduler history and/or a protected
   `storage/logs/scheduler.log` wrapper.
 
