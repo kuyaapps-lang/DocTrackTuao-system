@@ -84,14 +84,72 @@ Backup metadata:
 - Header confirms database `doctrack_tuao` through host `127.0.0.1`.
 - Completion marker: `Dump completed on 2026-09-21 17:52:43`.
 - Git ignored: yes.
+- Google Drive upload: user-confirmed complete for this backup during Process
+  17C. Local metadata was rechecked before recording the upload confirmation.
 
 Required handoff action:
 
-- Upload `storage/dev-db-backups/doctrack_tuao_20260921_175243.sql` to Google
-  Drive.
-- After upload, verify the uploaded file name, size, completion marker, and
-  SHA-256 before treating it as the shared source of truth.
+- Keep the Google Drive copy as the shared source of truth for this v1.0
+  handoff backup.
+- If a future backup is uploaded, verify the uploaded file name, size,
+  completion marker, and SHA-256 before treating it as the new shared source of
+  truth.
 - Do not place SQL backups in Git or public web paths.
+
+## v1.0 handoff summary
+
+Deployable v1.0 status: ready for controlled station use.
+
+Deployment URL:
+
+```text
+http://192.168.100.107/login
+```
+
+Devices tested:
+
+- Device 1: Apache station host and local browser smoke passed.
+- Device 2: station login/workflow read-only smoke passed.
+- Device 3: station login/workflow read-only smoke passed.
+
+Workflows complete for v1.0:
+
+- Login/logout and authenticated API access.
+- Role-aware navigation and server-enforced permissions.
+- User and master-data administration needed for deployment.
+- Document registration, QR linking/resolution, public tracking, forwarding,
+  receiving, processing notes/actions, route history, completion, archive, audit
+  trail, incoming/outgoing views, attachments, dashboard, and essential reports.
+- Apache port 80 station serving path with Laravel `:8000` stopped.
+
+Backup status:
+
+- Local verified SQL backup exists under `storage/dev-db-backups/`.
+- Matching Google Drive backup upload was user-confirmed in Process 17C.
+- Git source is pushed to `origin/main` through the Process 17B closeout commit.
+
+Do-not-touch warnings:
+
+- Do not click Complete Process, Archive, Forward, Receive, Save Current
+  Processing, Edit, or attachment mutation controls during read-only checks.
+- Do not change `.env`, Apache/PHP config, firewall, scheduler, services,
+  database provider, or database data without an explicit approved task.
+- Do not run `php artisan migrate:fresh`, drop the live database, or restore over
+  `doctrack_tuao` without the restore script's safety backup and explicit
+  confirmation.
+- Do not commit `.env`, SQL backups, uploaded files, credentials, tokens, or
+  sensitive row contents.
+- Keep feature freeze active unless a true v1.0 blocker appears.
+
+Next optional v1.1 items:
+
+- HTTPS/domain/certificate decision and HSTS only after stable host/domain.
+- Scheduler service account or Windows service-wrapper implementation.
+- Full forgot-password email workflow.
+- App icon, favicon, and optional PWA polish.
+- Advanced reports/export polish.
+- Final UI polish.
+- Database service consolidation or production topology cleanup.
 
 ## Known limitations and deferred items
 
@@ -128,7 +186,7 @@ Required handoff action:
 
 ## Next 2-3 day tasks
 
-1. Upload the newest verified SQL backup to Google Drive and verify its metadata.
+1. Preserve the Google Drive backup as the v1.0 shared source of truth.
 2. Reconfirm Device 1, Device 2, and Device 3 can open
    `http://192.168.100.107/login`.
 3. If a final handoff rehearsal is requested, keep it read-only: login,
