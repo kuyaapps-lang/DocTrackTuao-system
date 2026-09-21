@@ -14,10 +14,14 @@ class AuditLog extends Model
     public const MODULE_DOCUMENT_PROCESSING = 'document_processing';
     public const MODULE_QR_CODES = 'qr_codes';
     public const MODULE_ATTACHMENTS = 'attachments';
+    public const MODULE_PASSWORD_RESET_REQUESTS = 'password_reset_requests';
 
     public const ACTION_LOGIN = 'login';
     public const ACTION_LOGOUT = 'logout';
     public const ACTION_PASSWORD_RESET = 'password_reset';
+    public const ACTION_PASSWORD_RESET_REQUESTED = 'password_reset_requested';
+    public const ACTION_PASSWORD_RESET_REQUEST_RESOLVED = 'password_reset_request_resolved';
+    public const ACTION_PASSWORD_RESET_REQUEST_REJECTED = 'password_reset_request_rejected';
     public const ACTION_PASSWORD_CHANGED = 'password_changed';
     public const ACTION_CREATED = 'created';
     public const ACTION_UPDATED = 'updated';

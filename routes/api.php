@@ -17,6 +17,7 @@ use App\Http\Controllers\DocumentTrackingController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Middleware\EnsurePasswordChangeIsComplete;
 use App\Http\Controllers\OfficeController;
+use App\Http\Controllers\PasswordResetRequestController;
 use App\Http\Controllers\UserManagementController;
 
 /*
@@ -34,6 +35,11 @@ Route::post(
     '/logout',
     [AuthController::class, 'logout']
 )-> middleware('auth:sanctum');
+
+Route::post(
+    '/password-reset-requests',
+    [PasswordResetRequestController::class, 'store']
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -168,6 +174,21 @@ Route::middleware([
     Route::post(
         'users/{user}/reset-password',
         [UserManagementController::class, 'resetPassword']
+    )->middleware('can:users.manage');
+
+    Route::get(
+        'password-reset-requests',
+        [PasswordResetRequestController::class, 'index']
+    )->middleware('can:users.manage');
+
+    Route::post(
+        'password-reset-requests/{passwordResetRequest}/resolve',
+        [PasswordResetRequestController::class, 'resolve']
+    )->middleware('can:users.manage');
+
+    Route::post(
+        'password-reset-requests/{passwordResetRequest}/reject',
+        [PasswordResetRequestController::class, 'reject']
     )->middleware('can:users.manage');
 
     /*

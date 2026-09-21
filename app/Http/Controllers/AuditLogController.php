@@ -17,11 +17,17 @@ class AuditLogController extends Controller
         AuditLog::MODULE_DOCUMENT_PROCESSING,
         AuditLog::MODULE_QR_CODES,
         AuditLog::MODULE_ATTACHMENTS,
+        AuditLog::MODULE_PASSWORD_RESET_REQUESTS,
     ];
 
     private const ACTIONS = [
         AuditLog::ACTION_LOGIN,
         AuditLog::ACTION_LOGOUT,
+        AuditLog::ACTION_PASSWORD_RESET,
+        AuditLog::ACTION_PASSWORD_RESET_REQUESTED,
+        AuditLog::ACTION_PASSWORD_RESET_REQUEST_RESOLVED,
+        AuditLog::ACTION_PASSWORD_RESET_REQUEST_REJECTED,
+        AuditLog::ACTION_PASSWORD_CHANGED,
         AuditLog::ACTION_CREATED,
         AuditLog::ACTION_UPDATED,
         AuditLog::ACTION_DELETED,
