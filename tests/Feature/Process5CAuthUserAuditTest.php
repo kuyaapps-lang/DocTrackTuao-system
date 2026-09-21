@@ -518,7 +518,8 @@ class Process5CAuthUserAuditTest extends TestCase
             $this->assertSafeUserShape($item);
         }
         $serialized = strtolower($list->getContent().$options->getContent());
-        foreach (['password', 'remember_token', 'personal_access', 'token', 'abilities', 'description', 'created_at', 'updated_at'] as $forbidden) {
+        $this->assertFalse(str_contains($serialized, '"password":'), 'User-management read response leaked a password field.');
+        foreach (['remember_token', 'personal_access', 'token', 'abilities', 'description', 'created_at', 'updated_at'] as $forbidden) {
             $this->assertFalse(str_contains($serialized, $forbidden), 'User-management read response leaked a forbidden field.');
         }
 
@@ -568,7 +569,15 @@ class Process5CAuthUserAuditTest extends TestCase
     private function assertSafeUserShape(array $user): void
     {
         $this->assertSame([
-            'id', 'name', 'email', 'role_id', 'department_id', 'office_id', 'role', 'office',
+            'id',
+            'name',
+            'email',
+            'role_id',
+            'must_change_password',
+            'department_id',
+            'office_id',
+            'role',
+            'office',
         ], array_keys($user));
         if ($user['role'] !== null) {
             $this->assertSame(['id', 'name'], array_keys($user['role']));

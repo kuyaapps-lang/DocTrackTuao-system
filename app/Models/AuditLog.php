@@ -17,6 +17,8 @@ class AuditLog extends Model
 
     public const ACTION_LOGIN = 'login';
     public const ACTION_LOGOUT = 'logout';
+    public const ACTION_PASSWORD_RESET = 'password_reset';
+    public const ACTION_PASSWORD_CHANGED = 'password_changed';
     public const ACTION_CREATED = 'created';
     public const ACTION_UPDATED = 'updated';
     public const ACTION_DELETED = 'deleted';

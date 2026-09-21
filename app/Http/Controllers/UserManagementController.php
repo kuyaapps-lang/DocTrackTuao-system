@@ -295,6 +295,63 @@ class UserManagementController extends Controller
         ]);
     }
 
+    public function resetPassword(
+        Request $request,
+        User $user,
+        AuditLogger $auditLogger
+    ): JsonResponse {
+        if ($request->user()->is($user)) {
+            return response()->json([
+                'message' => 'Administrators cannot issue a temporary password for their own account.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'confirmed',
+            ],
+        ]);
+
+        DB::transaction(function () use (
+            $user,
+            $validated,
+            $auditLogger,
+            $request
+        ): void {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $lockedUser->password = Hash::make($validated['password']);
+            $lockedUser->must_change_password = true;
+            $lockedUser->save();
+
+            $lockedUser->tokens()->delete();
+
+            $auditLogger->log(
+                module: AuditLog::MODULE_USERS,
+                action: AuditLog::ACTION_PASSWORD_RESET,
+                recordId: $lockedUser->id,
+                description: 'Temporary password issued; user must change password on next login.',
+                userId: $request->user()->id
+            );
+
+            $user->setRawAttributes($lockedUser->getAttributes(), true);
+        });
+
+        return response()->json([
+            'message' => 'Temporary password set successfully.',
+            'user' => $this->userShape($user->load([
+                'role',
+                'office',
+            ])),
+        ]);
+    }
+
     private function rejectUnknownMutationFields(Request $request): void
     {
         if (array_diff(array_keys($request->all()), self::MUTATION_FIELDS) !== []) {
@@ -324,6 +381,7 @@ class UserManagementController extends Controller
             'name' => (string) $user->name,
             'email' => (string) $user->email,
             'role_id' => $user->role_id === null ? null : (int) $user->role_id,
+            'must_change_password' => (bool) $user->must_change_password,
             'department_id' => $user->department_id === null
                 ? null
                 : (int) $user->department_id,

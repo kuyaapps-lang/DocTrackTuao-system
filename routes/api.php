@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\AccountPasswordController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\DashboardController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\DocumentQrCodeController;
 use App\Http\Controllers\DocumentRoutingController;
 use App\Http\Controllers\DocumentTrackingController;
 use App\Http\Controllers\DocumentTypeController;
+use App\Http\Middleware\EnsurePasswordChangeIsComplete;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\UserManagementController;
 
@@ -76,7 +78,10 @@ Route::get(
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware([
+    'auth:sanctum',
+    EnsurePasswordChangeIsComplete::class,
+])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -111,6 +116,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
         return response()->json($data);
     });
+
+    Route::post(
+        'me/password',
+        [AccountPasswordController::class, 'update']
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -153,6 +163,11 @@ Route::middleware('auth:sanctum')->group(function () {
         ['put', 'patch'],
         'users/{user}',
         [UserManagementController::class, 'update']
+    )->middleware('can:users.manage');
+
+    Route::post(
+        'users/{user}/reset-password',
+        [UserManagementController::class, 'resetPassword']
     )->middleware('can:users.manage');
 
     /*
