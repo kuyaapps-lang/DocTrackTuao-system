@@ -5,6 +5,9 @@ import { runInNewContext } from 'node:vm'
 import { computed, ref } from 'vue'
 
 import { loginErrorMessage } from '../../resources/js/lib/login.js'
+import {
+    submitPasswordResetRequest,
+} from '../../resources/js/lib/password-reset.js'
 
 test('login throttling always uses a generic retry-later message', () => {
     assert.equal(
@@ -18,10 +21,11 @@ test('other login failures retain the existing safe fallback behavior', () => {
     assert.equal(loginErrorMessage(500, ''), 'Login failed.')
 })
 
-test('login page shows administrator reset guidance instead of a dead forgot-password link', async () => {
+test('login page shows password reset request action instead of a dead forgot-password link', async () => {
     const source = await readFile(new URL('../../resources/js/pages/Login.vue', import.meta.url), 'utf8')
 
-    assert.match(source, /Please contact the administrator\s+to reset your password\./)
+    assert.match(source, /Request password reset/)
+    assert.match(source, /The response does not confirm whether an account exists\./)
     assert.doesNotMatch(source, /href="#"/)
     assert.doesNotMatch(source, /Forgot Password\?/)
 })
@@ -32,7 +36,7 @@ const loadSetup = async (path, bindings, exposed) => {
     const setup = source.match(/<script setup>([\s\S]*?)<\/script>/)[1]
         .replace(/^import\s[\s\S]*?from\s+['"][^'"]+['"];?\r?$/gm, '')
     return runInNewContext(`${setup}\n;({ ${exposed.join(', ')} })`, {
-        ref, computed, loginErrorMessage,
+        ref, computed, loginErrorMessage, submitPasswordResetRequest,
         onMounted: () => {}, onBeforeUnmount: () => {}, watch: () => {},
         ...bindings,
     })
@@ -54,6 +58,47 @@ const createStorage = () => {
         removeItem: key => values.delete(key),
     }
 }
+
+test('login reset request modal submits public request fields and shows generic success', async () => {
+    const submissions = []
+    const page = await loadSetup('../../resources/js/pages/Login.vue', {
+        useRoute: () => ({ query: {} }),
+        useRouter: () => ({ replace: () => {} }),
+        submitPasswordResetRequest: async payload => {
+            submissions.push(payload)
+            return {
+                message: 'If the account exists, an administrator will review the password reset request.',
+            }
+        },
+    }, [
+        'email',
+        'resetRequestOpen',
+        'resetRequestForm',
+        'resetRequestSuccess',
+        'resetRequestError',
+        'openResetRequest',
+        'submitResetRequest',
+    ])
+
+    page.email.value = 'person@example.test'
+    page.openResetRequest()
+    page.resetRequestForm.value.name = 'Requester Name'
+    page.resetRequestForm.value.message = 'I cannot sign in.'
+
+    await page.submitResetRequest()
+
+    assert.equal(page.resetRequestOpen.value, true)
+    assert.equal(page.resetRequestError.value, '')
+    assert.equal(
+        page.resetRequestSuccess.value,
+        'If the account exists, an administrator will review the password reset request.'
+    )
+    assert.deepEqual(JSON.parse(JSON.stringify(submissions)), [{
+        email: 'person@example.test',
+        name: 'Requester Name',
+        message: 'I cannot sign in.',
+    }])
+})
 
 for (const [redirect, destination] of [
     [undefined, '/dashboard'],

@@ -30,6 +30,9 @@ import {
 } from '@/lib/auth'
 import {
     canResetUserPassword,
+    listPasswordResetRequests,
+    rejectPasswordResetRequest,
+    resolvePasswordResetRequest,
     resetPasswordRequest,
 } from '@/lib/password-reset'
 
@@ -53,12 +56,20 @@ const saving = ref(false)
 const formError = ref('')
 
 const resetTargetUser = ref(null)
+const resetTargetRequest = ref(null)
 const resetPasswordSaving = ref(false)
 const resetPasswordError = ref('')
 const resetPasswordForm = ref({
     password: '',
     password_confirmation: '',
+    resolution_note: '',
 })
+
+const pendingResetRequests = ref([])
+const resetRequestsLoading = ref(false)
+const resetRequestsError = ref('')
+const rejectingRequestId = ref(null)
+const rejectNote = ref('')
 
 const showPassword = ref(false)
 const showPasswordConfirmation = ref(false)
@@ -83,6 +94,11 @@ const isEditingSelf = computed(() => {
 
     return Number(editingUser.value.id) ===
         Number(currentUser.value.id)
+})
+
+const canManageUsers = computed(() => {
+    return (currentUser.value?.permissions || [])
+        .includes('users.manage')
 })
 
 const canResetPassword = (user) => {
@@ -142,6 +158,31 @@ const fetchFormOptions = async () => {
     offices.value = data.offices || []
 }
 
+const fetchPendingResetRequests = async () => {
+    if (!canManageUsers.value) {
+        pendingResetRequests.value = []
+        resetRequestsError.value = ''
+        return
+    }
+
+    resetRequestsLoading.value = true
+    resetRequestsError.value = ''
+
+    try {
+        pendingResetRequests.value = await listPasswordResetRequests({
+            token: getToken(),
+            status: 'pending',
+        })
+    } catch (err) {
+        pendingResetRequests.value = []
+        resetRequestsError.value =
+            err.message ||
+            'Unable to load password reset requests.'
+    } finally {
+        resetRequestsLoading.value = false
+    }
+}
+
 const loadPage = async () => {
     loading.value = true
     error.value = ''
@@ -153,6 +194,8 @@ const loadPage = async () => {
             fetchUsers(),
             fetchFormOptions(),
         ])
+
+        await fetchPendingResetRequests()
     } catch (err) {
         error.value =
             err.message ||
@@ -214,9 +257,29 @@ const closeForm = () => {
 
 const openResetPasswordForm = (user) => {
     resetTargetUser.value = user
+    resetTargetRequest.value = null
     resetPasswordForm.value = {
         password: '',
         password_confirmation: '',
+        resolution_note: '',
+    }
+    resetPasswordError.value = ''
+    successMessage.value = ''
+    showPassword.value = false
+    showPasswordConfirmation.value = false
+}
+
+const openResetRequestResolveForm = (request) => {
+    resetTargetRequest.value = request
+    resetTargetUser.value = request.user || {
+        id: request.user?.id || null,
+        name: request.name || request.email,
+        email: request.email,
+    }
+    resetPasswordForm.value = {
+        password: '',
+        password_confirmation: '',
+        resolution_note: '',
     }
     resetPasswordError.value = ''
     successMessage.value = ''
@@ -230,9 +293,11 @@ const closeResetPasswordForm = (force = false) => {
     }
 
     resetTargetUser.value = null
+    resetTargetRequest.value = null
     resetPasswordForm.value = {
         password: '',
         password_confirmation: '',
+        resolution_note: '',
     }
     resetPasswordError.value = ''
     showPassword.value = false
@@ -382,13 +447,23 @@ const resetUserPassword = async () => {
     resetPasswordSaving.value = true
 
     try {
-        const data = await resetPasswordRequest({
-            token: getToken(),
-            userId: resetTargetUser.value.id,
-            password: resetPasswordForm.value.password,
-            passwordConfirmation:
-                resetPasswordForm.value.password_confirmation,
-        })
+        const data = resetTargetRequest.value
+            ? await resolvePasswordResetRequest({
+                token: getToken(),
+                requestId: resetTargetRequest.value.id,
+                password: resetPasswordForm.value.password,
+                passwordConfirmation:
+                    resetPasswordForm.value.password_confirmation,
+                resolutionNote:
+                    resetPasswordForm.value.resolution_note.trim(),
+            })
+            : await resetPasswordRequest({
+                token: getToken(),
+                userId: resetTargetUser.value.id,
+                password: resetPasswordForm.value.password,
+                passwordConfirmation:
+                    resetPasswordForm.value.password_confirmation,
+            })
 
         successMessage.value =
             data.message ||
@@ -396,10 +471,55 @@ const resetUserPassword = async () => {
 
         closeResetPasswordForm(true)
         await fetchUsers()
+        await fetchPendingResetRequests()
     } catch (err) {
         resetPasswordError.value =
             err.message ||
             'Unable to reset password.'
+    } finally {
+        resetPasswordSaving.value = false
+    }
+}
+
+const startRejectResetRequest = (request) => {
+    rejectingRequestId.value = request.id
+    rejectNote.value = ''
+    resetRequestsError.value = ''
+    successMessage.value = ''
+}
+
+const cancelRejectResetRequest = () => {
+    if (resetPasswordSaving.value) {
+        return
+    }
+
+    rejectingRequestId.value = null
+    rejectNote.value = ''
+}
+
+const rejectResetRequest = async (request) => {
+    resetRequestsError.value = ''
+    successMessage.value = ''
+    resetPasswordSaving.value = true
+
+    try {
+        const data = await rejectPasswordResetRequest({
+            token: getToken(),
+            requestId: request.id,
+            resolutionNote: rejectNote.value.trim(),
+        })
+
+        successMessage.value =
+            data.message ||
+            'Password reset request rejected.'
+
+        rejectingRequestId.value = null
+        rejectNote.value = ''
+        await fetchPendingResetRequests()
+    } catch (err) {
+        resetRequestsError.value =
+            err.message ||
+            'Unable to reject password reset request.'
     } finally {
         resetPasswordSaving.value = false
     }
@@ -459,6 +579,160 @@ onMounted(() => {
             >
                 {{ successMessage }}
             </div>
+
+            <Card
+                v-if="canManageUsers"
+                class="mb-6"
+            >
+                <CardHeader>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <CardTitle>
+                                Password Reset Requests
+
+                                <span class="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-sm font-semibold text-blue-700">
+                                    {{ pendingResetRequests.length }}
+                                </span>
+                            </CardTitle>
+
+                            <p class="mt-1 text-sm text-gray-500">
+                                Review pending requests, then set a temporary password or reject the request.
+                            </p>
+                        </div>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            :disabled="resetRequestsLoading"
+                            @click="fetchPendingResetRequests"
+                        >
+                            {{ resetRequestsLoading ? 'Refreshing...' : 'Refresh' }}
+                        </Button>
+                    </div>
+                </CardHeader>
+
+                <CardContent>
+                    <div
+                        v-if="resetRequestsError"
+                        class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                    >
+                        {{ resetRequestsError }}
+                    </div>
+
+                    <div
+                        v-if="resetRequestsLoading"
+                        class="py-6 text-center text-sm text-gray-500"
+                    >
+                        Loading password reset requests...
+                    </div>
+
+                    <div
+                        v-else-if="pendingResetRequests.length === 0"
+                        class="py-6 text-center text-sm text-gray-500"
+                    >
+                        No pending password reset requests.
+                    </div>
+
+                    <div
+                        v-else
+                        class="space-y-3"
+                    >
+                        <div
+                            v-for="request in pendingResetRequests"
+                            :key="request.id"
+                            class="rounded-md border border-gray-200 bg-white p-4"
+                        >
+                            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div>
+                                    <div class="font-semibold text-gray-900">
+                                        {{ request.user?.name || request.name || 'Unmatched request' }}
+                                    </div>
+
+                                    <div class="mt-1 text-sm text-gray-500">
+                                        {{ request.email }}
+                                    </div>
+
+                                    <p
+                                        v-if="request.message"
+                                        class="mt-2 text-sm text-gray-600"
+                                    >
+                                        {{ request.message }}
+                                    </p>
+
+                                    <p
+                                        v-if="!request.user"
+                                        class="mt-2 text-xs font-semibold text-amber-700"
+                                    >
+                                        No matching user account was found for this request.
+                                    </p>
+                                </div>
+
+                                <div class="flex shrink-0 flex-wrap justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        class="bg-blue-600 text-white hover:bg-blue-700"
+                                        :disabled="!request.user || resetPasswordSaving"
+                                        @click="openResetRequestResolveForm(request)"
+                                    >
+                                        Resolve
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        :disabled="resetPasswordSaving"
+                                        @click="startRejectResetRequest(request)"
+                                    >
+                                        Reject
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div
+                                v-if="rejectingRequestId === request.id"
+                                class="mt-4 border-t border-gray-100 pt-4"
+                            >
+                                <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                    Rejection Note
+                                </label>
+
+                                <textarea
+                                    v-model="rejectNote"
+                                    :disabled="resetPasswordSaving"
+                                    rows="2"
+                                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                                    placeholder="Optional internal note"
+                                ></textarea>
+
+                                <div class="mt-3 flex justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        :disabled="resetPasswordSaving"
+                                        @click="cancelRejectResetRequest"
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        class="bg-red-600 text-white hover:bg-red-700"
+                                        :disabled="resetPasswordSaving"
+                                        @click="rejectResetRequest(request)"
+                                    >
+                                        {{ resetPasswordSaving ? 'Rejecting...' : 'Reject Request' }}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             <Card>
                 <CardHeader>
@@ -794,7 +1068,7 @@ onMounted(() => {
             <Card class="w-full max-w-xl bg-white">
                 <CardHeader>
                     <CardTitle>
-                        Reset Password
+                        {{ resetTargetRequest ? 'Resolve Password Reset Request' : 'Reset Password' }}
                     </CardTitle>
 
                     <p class="mt-1 text-sm text-gray-500">
@@ -871,6 +1145,22 @@ onMounted(() => {
                                     />
                                 </button>
                             </div>
+                        </div>
+
+                        <div
+                            v-if="resetTargetRequest"
+                        >
+                            <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                Resolution Note
+                            </label>
+
+                            <textarea
+                                v-model="resetPasswordForm.resolution_note"
+                                :disabled="resetPasswordSaving"
+                                rows="2"
+                                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                                placeholder="Optional internal note"
+                            ></textarea>
                         </div>
 
                         <div

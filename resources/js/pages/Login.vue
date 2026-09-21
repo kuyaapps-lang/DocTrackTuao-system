@@ -20,6 +20,9 @@ import {
 
 import logo from '@/assets/tuao-logo.png'
 import { loginErrorMessage } from '@/lib/login'
+import {
+    submitPasswordResetRequest,
+} from '@/lib/password-reset'
 
 const email = ref('')
 const password = ref('')
@@ -35,6 +38,16 @@ const success = ref(
         ? 'Password changed successfully. Please log in again.'
         : ''
 )
+
+const resetRequestOpen = ref(false)
+const resetRequestSaving = ref(false)
+const resetRequestError = ref('')
+const resetRequestSuccess = ref('')
+const resetRequestForm = ref({
+    email: '',
+    name: '',
+    message: '',
+})
 
 /*
 |--------------------------------------------------------------------------
@@ -173,6 +186,64 @@ const login = async () => {
             'Unable to login.'
     } finally {
         loading.value = false
+    }
+}
+
+const openResetRequest = () => {
+    resetRequestOpen.value = true
+    resetRequestError.value = ''
+    resetRequestSuccess.value = ''
+    resetRequestForm.value = {
+        email: email.value || '',
+        name: '',
+        message: '',
+    }
+}
+
+const closeResetRequest = () => {
+    if (resetRequestSaving.value) {
+        return
+    }
+
+    resetRequestOpen.value = false
+    resetRequestError.value = ''
+}
+
+const submitResetRequest = async () => {
+    resetRequestError.value = ''
+    resetRequestSuccess.value = ''
+
+    if (!resetRequestForm.value.email.trim()) {
+        resetRequestError.value =
+            'Email address is required.'
+
+        return
+    }
+
+    resetRequestSaving.value = true
+
+    try {
+        const data = await submitPasswordResetRequest({
+            email: resetRequestForm.value.email.trim(),
+            name: resetRequestForm.value.name.trim(),
+            message: resetRequestForm.value.message.trim(),
+        })
+
+        resetRequestSuccess.value =
+            data.message ||
+            'If the account exists, an administrator will review the password reset request.'
+
+        resetRequestForm.value = {
+            email: resetRequestForm.value.email.trim(),
+            name: '',
+            message: '',
+        }
+    } catch (err) {
+        resetRequestError.value =
+            err.message ||
+            'Unable to submit password reset request.'
+    } finally {
+        resetRequestSaving.value = false
     }
 }
 </script>
@@ -403,16 +474,16 @@ const login = async () => {
                     }}
                 </Button>
 
-                <!-- Password reset guidance -->
+                <!-- Password reset request -->
                 <div class="flex justify-end">
 
-                    <p
-                        class="text-right text-sm
-                        text-gray-600"
+                    <button
+                        type="button"
+                        class="text-right text-sm font-semibold text-blue-700 hover:text-blue-900"
+                        @click="openResetRequest"
                     >
-                        Please contact the administrator
-                        to reset your password.
-                    </p>
+                        Request password reset
+                    </button>
 
                 </div>
 
@@ -421,6 +492,102 @@ const login = async () => {
         </CardContent>
 
     </Card>
+
+    <div
+        v-if="resetRequestOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
+    >
+        <Card class="w-full max-w-lg bg-white">
+            <CardContent class="p-6">
+                <div class="mb-5">
+                    <h2 class="text-2xl font-black text-gray-800">
+                        Request Password Reset
+                    </h2>
+
+                    <p class="mt-2 text-sm text-gray-600">
+                        Submit your request and wait for an administrator to review it. The response does not confirm whether an account exists.
+                    </p>
+                </div>
+
+                <form
+                    class="space-y-4"
+                    @submit.prevent="submitResetRequest"
+                >
+                    <div>
+                        <label class="mb-2 block text-sm font-semibold text-gray-700">
+                            Email Address *
+                        </label>
+
+                        <Input
+                            v-model="resetRequestForm.email"
+                            :disabled="resetRequestSaving"
+                            type="email"
+                            placeholder="Enter your email"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block text-sm font-semibold text-gray-700">
+                            Name
+                        </label>
+
+                        <Input
+                            v-model="resetRequestForm.name"
+                            :disabled="resetRequestSaving"
+                            placeholder="Optional"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block text-sm font-semibold text-gray-700">
+                            Message
+                        </label>
+
+                        <textarea
+                            v-model="resetRequestForm.message"
+                            :disabled="resetRequestSaving"
+                            rows="3"
+                            class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                            placeholder="Optional note for the administrator"
+                        ></textarea>
+                    </div>
+
+                    <div
+                        v-if="resetRequestError"
+                        class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600"
+                    >
+                        {{ resetRequestError }}
+                    </div>
+
+                    <div
+                        v-if="resetRequestSuccess"
+                        class="rounded-md border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700"
+                    >
+                        {{ resetRequestSuccess }}
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            :disabled="resetRequestSaving"
+                            @click="closeResetRequest"
+                        >
+                            Close
+                        </Button>
+
+                        <Button
+                            type="submit"
+                            class="bg-blue-600 text-white hover:bg-blue-700"
+                            :disabled="resetRequestSaving"
+                        >
+                            {{ resetRequestSaving ? 'Submitting...' : 'Submit Request' }}
+                        </Button>
+                    </div>
+                </form>
+            </CardContent>
+        </Card>
+    </div>
 
     <!-- Footer -->
     <div
