@@ -60,6 +60,9 @@ Write-Host "Database: $Database"
 Write-Host "Output:   $BackupFile"
 
 & $MySqlDump `
+    -h 127.0.0.1 `
+    -P 3306 `
+    --protocol=TCP `
     -u root `
     --routines `
     --triggers `
