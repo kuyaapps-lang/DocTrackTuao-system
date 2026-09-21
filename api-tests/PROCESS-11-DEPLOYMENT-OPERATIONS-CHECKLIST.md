@@ -89,7 +89,7 @@ Known deferred items:
 - Scheduler service account or service wrapper.
 - DocTrack app icon, favicon and optional PWA install polish.
 - Final UI polish.
-- Archive workflow.
+- Advanced reports and export polish.
 
 ## Office demo startup
 
@@ -194,11 +194,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
 - Backups are written to `storage/dev-db-backups/` and must remain Git-ignored.
 - Upload the newest trusted verified backup to Google Drive when closing a DB
   changing session.
-- The newest local backup as of Process 15J is
-  `storage/dev-db-backups/doctrack_tuao_20260919_173656.sql`. It is 87,512
+- The newest local backup as of Process 17A is
+  `storage/dev-db-backups/doctrack_tuao_20260921_175243.sql`. It is 88,117
   bytes, has SHA-256
-  `6223844A6A478FB7F358212FA3C8CBD9DBC7DAADAD2FE1F3997EC144B044250C`, and
-  ends with `Dump completed on 2026-09-19 17:36:59`.
+  `665A90A323800E631044FE07D721D44640CF737993F918E079AA2EE1FE1A473C`, and
+  ends with `Dump completed on 2026-09-21 17:52:43`. Upload to Google Drive is
+  still required before treating it as the shared source of truth.
 
 ## Daily operations routine
 
