@@ -10,6 +10,7 @@ unless a true blocker appears.
 
 - Archive live smoke passed using disposable document `DOC-20260921095049526`.
 - Protected reference document `DOC-20260823024024684` was not touched.
+- Final read-only station smoke passed on Device 1, Device 2, and Device 3.
 - No new features, UI redesign, full email password reset, HTTPS implementation,
   scheduler service-account implementation, app icon/PWA work, or advanced
   reports should enter v1.0 unless explicitly approved as a release blocker.
@@ -52,8 +53,20 @@ Verified station path:
 - Device 1 serves DocTrack through Apache public-root on port 80.
 - Device 2 can open the station URL.
 - Device 3 can open the station URL.
+- Process 17B final station smoke passed on all three devices: login page opened,
+  login succeeded, dashboard loaded, documents list loaded, target document
+  `DOC-20260823024024684` opened, public tracking loaded, and logout succeeded.
 - Laravel `php artisan serve` on port `8000` is not part of the handoff path and
   should remain stopped during station operation.
+
+Read-only smoke warning:
+
+- During read-only station checks, do not click workflow mutation controls such
+  as Complete Process, Archive, Forward, Receive, Save Current Processing, Edit,
+  or attachment upload/delete.
+- Complete Process changes the document to `Completed`, writes completion
+  history and audit rows, blocks normal workflow mutations, and requires a new
+  SQL backup if performed on live data.
 
 ## Backup status
 
@@ -118,8 +131,9 @@ Required handoff action:
 1. Upload the newest verified SQL backup to Google Drive and verify its metadata.
 2. Reconfirm Device 1, Device 2, and Device 3 can open
    `http://192.168.100.107/login`.
-3. Run one read-only station smoke: login, dashboard load, document list load,
-   public tracking for `DOC-20260823024024684`, and logout.
+3. If a final handoff rehearsal is requested, keep it read-only: login,
+   dashboard load, document list load, public tracking for
+   `DOC-20260823024024684`, and logout.
 4. Confirm `APP_DEBUG=false`, `APP_URL` matches the station URL, trusted hosts
    are limited to the deployment hosts/IPs, and the web root remains `public`.
 5. Confirm `public/hot` is absent and compiled assets exist under
