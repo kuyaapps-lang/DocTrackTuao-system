@@ -25,6 +25,9 @@ export const resolveAuthenticationNavigation = async (
     const authenticated =
         to.meta?.authenticated === true ||
         Boolean(permission)
+    const isPasswordChangeRoute =
+        to.meta?.passwordChange === true ||
+        to.path === '/change-password'
 
     if (!authenticated || to.meta?.public) {
         return true
@@ -35,12 +38,25 @@ export const resolveAuthenticationNavigation = async (
     }
 
     try {
-        await ensureCurrentUser()
+        const user = await ensureCurrentUser()
+
+        if (
+            user?.must_change_password &&
+            !isPasswordChangeRoute
+        ) {
+            return {
+                path: '/change-password',
+            }
+        }
     } catch {
         if (!getToken()) {
             return loginRouteFor(to)
         }
 
+        return true
+    }
+
+    if (isPasswordChangeRoute) {
         return true
     }
 

@@ -30,7 +30,11 @@ const router = useRouter()
 
 const loading = ref(false)
 const error = ref('')
-const success = ref('')
+const success = ref(
+    route.query.password_changed === '1'
+        ? 'Password changed successfully. Please log in again.'
+        : ''
+)
 
 /*
 |--------------------------------------------------------------------------
@@ -155,7 +159,9 @@ const login = async () => {
         */
 
         const destination =
-            getRedirectPath()
+            data.user?.must_change_password
+                ? '/change-password'
+                : getRedirectPath()
 
         router.replace(
             destination

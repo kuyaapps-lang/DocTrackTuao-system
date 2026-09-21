@@ -28,6 +28,10 @@ import { Input } from '@/components/ui/input'
 import {
     useAuth,
 } from '@/lib/auth'
+import {
+    canResetUserPassword,
+    resetPasswordRequest,
+} from '@/lib/password-reset'
 
 const {
     currentUser,
@@ -47,6 +51,14 @@ const showForm = ref(false)
 const editingUser = ref(null)
 const saving = ref(false)
 const formError = ref('')
+
+const resetTargetUser = ref(null)
+const resetPasswordSaving = ref(false)
+const resetPasswordError = ref('')
+const resetPasswordForm = ref({
+    password: '',
+    password_confirmation: '',
+})
 
 const showPassword = ref(false)
 const showPasswordConfirmation = ref(false)
@@ -72,6 +84,10 @@ const isEditingSelf = computed(() => {
     return Number(editingUser.value.id) ===
         Number(currentUser.value.id)
 })
+
+const canResetPassword = (user) => {
+    return canResetUserPassword(currentUser.value, user)
+}
 
 const requestHeaders = (json = false) => {
     const headers = {
@@ -196,6 +212,33 @@ const closeForm = () => {
     resetForm()
 }
 
+const openResetPasswordForm = (user) => {
+    resetTargetUser.value = user
+    resetPasswordForm.value = {
+        password: '',
+        password_confirmation: '',
+    }
+    resetPasswordError.value = ''
+    successMessage.value = ''
+    showPassword.value = false
+    showPasswordConfirmation.value = false
+}
+
+const closeResetPasswordForm = (force = false) => {
+    if (resetPasswordSaving.value && !force) {
+        return
+    }
+
+    resetTargetUser.value = null
+    resetPasswordForm.value = {
+        password: '',
+        password_confirmation: '',
+    }
+    resetPasswordError.value = ''
+    showPassword.value = false
+    showPasswordConfirmation.value = false
+}
+
 const firstValidationError = (data) => {
     if (!data?.errors) {
         return null
@@ -310,6 +353,55 @@ const saveUser = async () => {
             'Unable to save user.'
     } finally {
         saving.value = false
+    }
+}
+
+const resetUserPassword = async () => {
+    resetPasswordError.value = ''
+    successMessage.value = ''
+
+    if (!resetTargetUser.value) {
+        return
+    }
+
+    if (!resetPasswordForm.value.password) {
+        resetPasswordError.value =
+            'Temporary password is required.'
+        return
+    }
+
+    if (
+        resetPasswordForm.value.password !==
+        resetPasswordForm.value.password_confirmation
+    ) {
+        resetPasswordError.value =
+            'Password confirmation does not match.'
+        return
+    }
+
+    resetPasswordSaving.value = true
+
+    try {
+        const data = await resetPasswordRequest({
+            token: getToken(),
+            userId: resetTargetUser.value.id,
+            password: resetPasswordForm.value.password,
+            passwordConfirmation:
+                resetPasswordForm.value.password_confirmation,
+        })
+
+        successMessage.value =
+            data.message ||
+            'Temporary password set successfully.'
+
+        closeResetPasswordForm(true)
+        await fetchUsers()
+    } catch (err) {
+        resetPasswordError.value =
+            err.message ||
+            'Unable to reset password.'
+    } finally {
+        resetPasswordSaving.value = false
     }
 }
 
@@ -462,13 +554,24 @@ onMounted(() => {
                                     </TableCell>
 
                                     <TableCell class="text-right">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            @click="openEditForm(user)"
-                                        >
-                                            Edit
-                                        </Button>
+                                        <div class="flex justify-end gap-2">
+                                            <Button
+                                                v-if="canResetPassword(user)"
+                                                variant="outline"
+                                                size="sm"
+                                                @click="openResetPasswordForm(user)"
+                                            >
+                                                Reset Password
+                                            </Button>
+
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                @click="openEditForm(user)"
+                                            >
+                                                Edit
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
@@ -698,6 +801,122 @@ onMounted(() => {
                                 :disabled="saving"
                             >
                                 {{ saving ? 'Saving...' : 'Save User' }}
+                            </Button>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
+
+        <div
+            v-if="resetTargetUser"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
+        >
+            <Card class="w-full max-w-xl bg-white">
+                <CardHeader>
+                    <CardTitle>
+                        Reset Password
+                    </CardTitle>
+
+                    <p class="mt-1 text-sm text-gray-500">
+                        Set a temporary password for {{ resetTargetUser.name }}. Give it to the user through a secure channel and do not store it after saving.
+                    </p>
+                </CardHeader>
+
+                <CardContent>
+                    <form
+                        class="space-y-5"
+                        @submit.prevent="resetUserPassword"
+                    >
+                        <div>
+                            <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                Temporary Password *
+                            </label>
+
+                            <div class="relative">
+                                <Input
+                                    v-model="resetPasswordForm.password"
+                                    :disabled="resetPasswordSaving"
+                                    :type="showPassword ? 'text' : 'password'"
+                                    placeholder="Minimum 8 characters"
+                                    class="pr-11"
+                                />
+
+                                <button
+                                    type="button"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
+                                    :disabled="resetPasswordSaving"
+                                    @click="showPassword = !showPassword"
+                                >
+                                    <EyeOff
+                                        v-if="showPassword"
+                                        class="h-4 w-4"
+                                    />
+
+                                    <Eye
+                                        v-else
+                                        class="h-4 w-4"
+                                    />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                Confirm Temporary Password *
+                            </label>
+
+                            <div class="relative">
+                                <Input
+                                    v-model="resetPasswordForm.password_confirmation"
+                                    :disabled="resetPasswordSaving"
+                                    :type="showPasswordConfirmation ? 'text' : 'password'"
+                                    placeholder="Repeat temporary password"
+                                    class="pr-11"
+                                />
+
+                                <button
+                                    type="button"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
+                                    :disabled="resetPasswordSaving"
+                                    @click="showPasswordConfirmation = !showPasswordConfirmation"
+                                >
+                                    <EyeOff
+                                        v-if="showPasswordConfirmation"
+                                        class="h-4 w-4"
+                                    />
+
+                                    <Eye
+                                        v-else
+                                        class="h-4 w-4"
+                                    />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div
+                            v-if="resetPasswordError"
+                            class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600"
+                        >
+                            {{ resetPasswordError }}
+                        </div>
+
+                        <div class="flex justify-end gap-3 pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                :disabled="resetPasswordSaving"
+                                @click="closeResetPasswordForm"
+                            >
+                                Cancel
+                            </Button>
+
+                            <Button
+                                type="submit"
+                                class="bg-blue-600 text-white hover:bg-blue-700"
+                                :disabled="resetPasswordSaving"
+                            >
+                                {{ resetPasswordSaving ? 'Saving...' : 'Set Temporary Password' }}
                             </Button>
                         </div>
                     </form>
