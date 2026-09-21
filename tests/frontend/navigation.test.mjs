@@ -72,28 +72,22 @@ test('records officer sees every current link except users', () => {
     )
 })
 
-test('office user sees dashboard documents and master data links', () => {
+test('office user does not see master data links', () => {
     assert.deepEqual(
         flattenKeys(visibleNavigation(permissionSets.officeUser)),
         [
             'dashboard',
             'documents',
-            'master-data',
-            'offices',
-            'document-types',
         ]
     )
 })
 
-test('viewer sees dashboard documents and master data links', () => {
+test('viewer does not see master data links', () => {
     assert.deepEqual(
         flattenKeys(visibleNavigation(permissionSets.viewer)),
         [
             'dashboard',
             'documents',
-            'master-data',
-            'offices',
-            'document-types',
         ]
     )
 })
@@ -111,6 +105,7 @@ test('master data remains one group with stable child metadata', () => {
     ).find(item => item.key === 'master-data')
 
     assert.equal(masterData.path, null)
+    assert.deepEqual(masterData.visibilityPermissions, ['qr.manage'])
     assert.deepEqual(
         masterData.children.map(child => ({
             key: child.key,

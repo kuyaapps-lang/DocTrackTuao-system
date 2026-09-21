@@ -25,6 +25,7 @@ export const navigationItems = [
         label: 'Master Data',
         path: null,
         permission: null,
+        visibilityPermissions: ['qr.manage'],
         group: null,
         children: [
             {
@@ -63,10 +64,19 @@ const hasPermission = (permissionNames, permission) => {
     return !permission || permissionNames.has(permission)
 }
 
+const hasAnyPermission = (permissionNames, permissions = []) => {
+    return permissions.length === 0 ||
+        permissions.some(permission => permissionNames.has(permission))
+}
+
 export const visibleNavigation = (permissionNames = []) => {
     const permissions = new Set(permissionNames)
 
     return navigationItems.flatMap(item => {
+        if (!hasAnyPermission(permissions, item.visibilityPermissions)) {
+            return []
+        }
+
         if (item.children) {
             const children = item.children.filter(child => {
                 return hasPermission(permissions, child.permission)
