@@ -1149,7 +1149,7 @@ const historyRows = computed(() => {
                 action_taken:
                     routeItem?.received_at
                         ? `To ${toOffice}`
-                        : `To ${toOffice} â€” Awaiting Receipt`,
+                        : `To ${toOffice} - Awaiting Receipt`,
 
                 detail:
                     routeItem?.remarks ||
@@ -1512,7 +1512,7 @@ const completeDocument = async () => {
     }
 
     const confirmed = window.confirm(
-        'Complete this document? Completed documents cannot be forwarded or updated.'
+        'Complete this document now?\n\nAfter completion, it can no longer be forwarded or updated. Continue only if processing is finished.'
     )
 
     if (!confirmed) {
@@ -1556,7 +1556,7 @@ const archiveDocument = async () => {
     }
 
     const confirmed = window.confirm(
-        'Archive this document? Archived documents cannot be forwarded or updated.'
+        'Archive this completed document now?\n\nArchived documents stay in the record but can no longer be forwarded or updated.'
     )
 
     if (!confirmed) {
@@ -2260,7 +2260,7 @@ onMounted(() => {
                                     <div
                                         class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
                                     >
-                                        Registered QR â€¢ Linked to this document
+                                        Registered QR &middot; Linked to this document
                                     </div>
 
                                     <Button
@@ -2979,7 +2979,7 @@ onMounted(() => {
                                         :disabled="uploadingAttachment"
                                         @click="removeSelectedFile(index)"
                                     >
-                                        Ã—
+                                        &times;
                                     </button>
 
                                 </div>
@@ -3013,7 +3013,7 @@ onMounted(() => {
                             v-else-if="attachments.length === 0"
                             class="py-8 text-center text-gray-500"
                         >
-                            No attachments have been uploaded.
+                            No attachments are on file for this document.
                         </div>
 
                         <div

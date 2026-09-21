@@ -157,10 +157,10 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="grid gap-6 xl:grid-cols-3">
-                    <Card v-for="distribution in [['Status distribution', dashboard.status_distribution, 'status'], ['Current-office distribution', dashboard.current_office_distribution, 'office'], ['Origin-office distribution', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]">
+                    <Card v-for="distribution in [['Documents by status', dashboard.status_distribution, 'status'], ['Documents by current office', dashboard.current_office_distribution, 'office'], ['Documents by origin office', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]">
                         <CardHeader><CardTitle>{{ distribution[0] }}</CardTitle></CardHeader>
                         <CardContent>
-                            <p v-if="distribution[1].length === 0" class="py-6 text-center text-sm text-gray-500">No data for this period.</p>
+                            <p v-if="distribution[1].length === 0" class="py-6 text-center text-sm text-gray-500">No matching documents for this period.</p>
                             <ul v-else class="space-y-4">
                                 <li v-for="item in distribution[1]" :key="`${distribution[0]}-${item[distribution[2]].id ?? 'none'}`">
                                     <div class="mb-1 flex justify-between gap-3 text-sm"><span>{{ item[distribution[2]].name }}</span><span class="font-semibold">{{ item.count }}</span></div>
@@ -173,11 +173,11 @@ onBeforeUnmount(() => {
 
                 <div class="grid gap-6 xl:grid-cols-2">
                     <Card><CardHeader><CardTitle>Recent documents</CardTitle></CardHeader><CardContent>
-                        <p v-if="dashboard.recent_documents.length === 0" class="py-8 text-center text-sm text-gray-500">No recent documents for this period.</p>
+                        <p v-if="dashboard.recent_documents.length === 0" class="py-8 text-center text-sm text-gray-500">No documents were registered in this period.</p>
                         <div v-else class="max-w-full overflow-x-auto"><Table><caption class="sr-only">Recent documents in the selected reporting period</caption><TableHeader><TableRow><TableHead scope="col">Tracking no.</TableHead><TableHead scope="col">Status</TableHead><TableHead scope="col">Created</TableHead></TableRow></TableHeader><TableBody><TableRow v-for="document in dashboard.recent_documents" :key="document.id"><TableCell class="whitespace-nowrap font-medium">{{ document.tracking_no }}</TableCell><TableCell>{{ document.status.name }}</TableCell><TableCell class="whitespace-nowrap"><time :datetime="document.created_at">{{ document.created_at }}</time></TableCell></TableRow></TableBody></Table></div>
                     </CardContent></Card>
                     <Card><CardHeader><CardTitle>Recent routing activity</CardTitle></CardHeader><CardContent>
-                        <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-sm text-gray-500">No recent routing activity for this period.</p>
+                        <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-sm text-gray-500">No routing activity was recorded in this period.</p>
                         <div v-else class="max-w-full overflow-x-auto"><Table><caption class="sr-only">Recent routing activity in the selected reporting period</caption><TableHeader><TableRow><TableHead scope="col">Document</TableHead><TableHead scope="col">Event</TableHead><TableHead scope="col">Route</TableHead><TableHead scope="col">Time</TableHead></TableRow></TableHeader><TableBody><TableRow v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`"><TableCell class="whitespace-nowrap font-medium">{{ activity.document.tracking_no }}</TableCell><TableCell class="capitalize">{{ activity.event_type }}</TableCell><TableCell class="min-w-56">{{ activity.from_office.name }} → {{ activity.to_office.name }}</TableCell><TableCell class="whitespace-nowrap"><time :datetime="activity.occurred_at">{{ activity.occurred_at }}</time></TableCell></TableRow></TableBody></Table></div>
                     </CardContent></Card>
                 </div>

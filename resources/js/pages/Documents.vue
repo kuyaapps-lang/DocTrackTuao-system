@@ -924,18 +924,18 @@ const emptyMessage = () => {
             incomingState.value !== 'all'
         )
     ) {
-        return 'No documents match the current search or filter.'
+        return 'No documents match the current search or filter. Try a different keyword or clear the filter.'
     }
 
     if (activeTab.value === 'incoming') {
-        return 'No incoming documents found.'
+        return 'No incoming documents are waiting for this view.'
     }
 
     if (activeTab.value === 'outgoing') {
-        return 'No outgoing documents found.'
+        return 'No outgoing documents have been recorded for this view.'
     }
 
-    return 'No documents found.'
+    return 'No registered documents are available yet.'
 }
 
 watch(
@@ -1084,8 +1084,8 @@ onBeforeUnmount(() => {
                             <p
                                 class="text-sm text-gray-500 mt-1"
                             >
-                                View and manage registered,
-                                incoming, and outgoing documents.
+                                Review registered documents, incoming items,
+                                and outgoing routes in one place.
                             </p>
                         </div>
 
@@ -1197,7 +1197,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <p class="text-xs text-gray-500">
-                        Search and filters are applied securely across this document view.
+                        Search by tracking number, title, type, or office. Filters only change what is shown here.
                     </p>
                 </CardHeader>
 
@@ -1501,7 +1501,7 @@ onBeforeUnmount(() => {
                     >
                         <p class="text-sm text-gray-600">
                             {{ paginationMeta.total }} total results
-                            · Page {{ paginationMeta.current_page }}
+                            &middot; Page {{ paginationMeta.current_page }}
                             of {{ paginationMeta.last_page }}
                         </p>
 

@@ -238,7 +238,7 @@ const logout = async () => {
                             class="mt-1 text-sm text-gray-500"
                         >
                             <span v-if="userName">{{ userName }}</span>
-                            <span v-if="userName && roleLabel"> · </span>
+                            <span v-if="userName && roleLabel"> &middot; </span>
                             <span v-if="roleLabel">{{ roleLabel }}</span>
                         </p>
                     </div>

@@ -430,8 +430,8 @@ const login = async () => {
         text-sm
         text-blue-100/70"
     >
-        © 2026 Municipality of Tuao
-        • Document Tracking System
+        &copy; 2026 Municipality of Tuao
+        &middot; Document Tracking System
     </div>
 
 </div>

@@ -194,14 +194,14 @@ onMounted(() => {
                 <h1
                     class="text-2xl font-bold text-gray-900"
                 >
-                    Document Status / Inquiry
+                    Document Tracking
                 </h1>
 
                 <p
                     class="mt-1 text-sm text-gray-500"
                 >
-                    Track the current status and movement
-                    of an LGU Tuao document.
+                    Enter a tracking number to check the document's public
+                    status and routing movement.
                 </p>
 
             </div>
@@ -224,7 +224,7 @@ onMounted(() => {
                         <Input
                             v-model="trackingNumber"
                             type="text"
-                            placeholder="Enter tracking number"
+                            placeholder="Tracking number"
                             class="h-11 flex-1"
                             :disabled="loading"
                         />
@@ -291,7 +291,7 @@ onMounted(() => {
                                     v-if="document.is_protected"
                                     class="mt-2 text-sm text-orange-600"
                                 >
-                                    Some document information is protected.
+                                    Limited public details are shown for this protected document.
                                 </p>
 
                             </div>
@@ -498,7 +498,7 @@ onMounted(() => {
                             "
                             class="py-8 text-center text-gray-500"
                         >
-                            This document has not been routed yet.
+                            No routing movement has been recorded yet.
                         </div>
 
                         <div
@@ -636,8 +636,8 @@ onMounted(() => {
                 <div
                     class="mt-6 text-center text-xs text-gray-500"
                 >
-                    This page displays document tracking information only.
-                    Internal processing information is not publicly shown.
+                    This public page shows tracking status only.
+                    Internal notes and attachments are not displayed.
                 </div>
 
             </template>

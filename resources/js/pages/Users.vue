@@ -726,35 +726,14 @@ onMounted(() => {
                                 </label>
 
                                 <div class="relative">
-                                    <div class="relative">
-                                            <Input
-                                                v-model="form.password_confirmation"
-                                                :disabled="saving"
-                                                :type="showPasswordConfirmation ? 'text' : 'password'"
-                                                placeholder="Repeat password"
-                                                class="pr-11"
-                                            />
+                                    <Input
+                                        v-model="form.password_confirmation"
+                                        :disabled="saving"
+                                        :type="showPasswordConfirmation ? 'text' : 'password'"
+                                        placeholder="Repeat password"
+                                        class="pr-11"
+                                    />
 
-                                            <button
-                                                type="button"
-                                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
-                                                :disabled="saving"
-                                                @click="
-                                                    showPasswordConfirmation =
-                                                        !showPasswordConfirmation
-                                                "
-                                            >
-                                                <EyeOff
-                                                    v-if="showPasswordConfirmation"
-                                                    class="h-4 w-4"
-                                                />
-
-                                                <Eye
-                                                    v-else
-                                                    class="h-4 w-4"
-                                                />
-                                            </button>
-                                        </div>
                                     <button
                                         type="button"
                                         class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
