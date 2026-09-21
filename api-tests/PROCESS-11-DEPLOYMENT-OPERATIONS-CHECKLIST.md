@@ -180,6 +180,31 @@ C:/xampp/htdocs/DocTrackTuao-system/public
   needs them.
 - Do not print passwords, bearer tokens, QR token values or sensitive SQL rows in
   logs, screenshots or handoff notes.
+- For admin-assisted password reset, give temporary passwords only through a
+  secure private channel. Do not store or expose temporary passwords in docs,
+  screenshots, chats, tickets, audit notes, or shared logs.
+
+## Admin-assisted password reset
+
+Process 18E made the temporary password reset flow live.
+
+- Administrator action: in User Management, use the separate Reset Password
+  action for the target user. Do not use this on the current admin account or on
+  critical users unless explicitly approved.
+- Reset behavior: the API sets a temporary password, marks
+  `must_change_password` true, revokes the target user's tokens, and writes a
+  `password_reset` audit event without the password value.
+- User behavior: after login with the temporary password, the API returns
+  `must_change_password: true`; normal protected APIs are blocked until the user
+  changes password.
+- Forced change behavior: the user must open `/change-password`, enter the
+  temporary password, choose a different new password, and submit it.
+- Completion behavior: successful password change clears
+  `must_change_password`, revokes tokens/local session, writes a
+  `password_changed` audit event without the password value, and requires the
+  user to log in again with the new password.
+- Daily check: no user should remain stuck with `must_change_password = true`
+  unless a reset is intentionally awaiting that user's first login.
 
 ## Backup procedure
 
@@ -194,12 +219,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
 - Backups are written to `storage/dev-db-backups/` and must remain Git-ignored.
 - Upload the newest trusted verified backup to Google Drive when closing a DB
   changing session.
-- The newest local backup as of Process 17A is
+- The v1.0 handoff backup from Process 17C is
   `storage/dev-db-backups/doctrack_tuao_20260921_175243.sql`. It is 88,117
   bytes, has SHA-256
   `665A90A323800E631044FE07D721D44640CF737993F918E079AA2EE1FE1A473C`, and
-  ends with `Dump completed on 2026-09-21 17:52:43`. Upload to Google Drive is
-  still required before treating it as the shared source of truth.
+  ends with `Dump completed on 2026-09-21 17:52:43`. Its Google Drive upload was
+  user-confirmed in Process 17C.
+- The newest trusted local backup after the live Process 18E migration and smoke
+  is `storage/dev-db-backups/doctrack_tuao_20260921_184904.sql`. It is 92,459
+  bytes, has SHA-256
+  `D1E5BFE9ED09365CAC5FB75E1CB4B41A67DE4593DDD85448B040E2C0E12B818F`, and ends
+  with `Dump completed on 2026-09-21 18:49:05`. Google Drive upload is required
+  and not yet confirmed as of Process 18F.
 
 ## Daily operations routine
 

@@ -70,7 +70,7 @@ Read-only smoke warning:
 
 ## Backup status
 
-Newest verified local SQL backup:
+Newest verified local SQL backup for the v1.0 handoff:
 
 ```text
 storage/dev-db-backups/doctrack_tuao_20260921_175243.sql
@@ -95,6 +95,64 @@ Required handoff action:
   completion marker, and SHA-256 before treating it as the new shared source of
   truth.
 - Do not place SQL backups in Git or public web paths.
+
+## Process 18F v1.1 closeout: admin temporary password reset
+
+Admin-assisted temporary password reset is live after Process 18E migration and
+controlled smoke.
+
+Operational flow:
+
+- A user who cannot log in contacts an administrator through an approved channel.
+- An authorized administrator opens User Management and uses the separate Reset
+  Password action, not the normal Edit User form.
+- The administrator sets a temporary password and gives it to the user through a
+  secure private channel. Do not post, print, screenshot, email broadly, chat in
+  public rooms, or store the temporary password in handoff notes.
+- The reset marks the user as requiring a password change and revokes existing
+  tokens for that user.
+- When the user logs in with the temporary password, the API returns
+  `must_change_password: true`, normal protected APIs are blocked, and the
+  frontend forces the user to `/change-password`.
+- The user must enter the current temporary password, choose a different new
+  password, and submit the change.
+- After the password change succeeds, the user's tokens are revoked, local auth
+  is cleared, and the user must log in again with the new password.
+- After successful new-password login, `must_change_password` is false and normal
+  access resumes according to the user's role and office permissions.
+
+Audit and safety notes:
+
+- Admin reset writes a `password_reset` audit event.
+- User password change writes a `password_changed` audit event.
+- Audit descriptions must not contain temporary passwords, new passwords,
+  password confirmation values, bearer tokens, or password hashes.
+- Process 18E verified no users were left with `must_change_password = true`
+  after the controlled smoke.
+
+Newest trusted local SQL backup after Process 18E:
+
+```text
+storage/dev-db-backups/doctrack_tuao_20260921_184904.sql
+```
+
+Backup metadata:
+
+- Size: `92,459` bytes.
+- SHA-256:
+  `D1E5BFE9ED09365CAC5FB75E1CB4B41A67DE4593DDD85448B040E2C0E12B818F`.
+- Header confirms database `doctrack_tuao` through host `127.0.0.1`.
+- Completion marker: `Dump completed on 2026-09-21 18:49:05`.
+- Git ignored: yes.
+- Google Drive upload: required and not yet confirmed for this newer Process 18E
+  backup as of Process 18F.
+
+Required handoff action:
+
+- Upload `storage/dev-db-backups/doctrack_tuao_20260921_184904.sql` to Google
+  Drive.
+- Confirm the uploaded file name, size, SHA-256, and completion marker before
+  treating it as the shared v1.1 backup source of truth.
 
 ## v1.0 handoff summary
 
@@ -145,7 +203,8 @@ Next optional v1.1 items:
 
 - HTTPS/domain/certificate decision and HSTS only after stable host/domain.
 - Scheduler service account or Windows service-wrapper implementation.
-- Full forgot-password email workflow.
+- Full forgot-password email workflow. Admin-assisted temporary password reset is
+  already live as the v1.1 manual recovery flow.
 - App icon, favicon, and optional PWA polish.
 - Advanced reports/export polish.
 - Final UI polish.
@@ -206,6 +265,6 @@ Next optional v1.1 items:
 
 Estimated deployable v1.0 readiness: 93%.
 
-Remaining risk is mostly operational, not feature completeness: Google Drive
-backup upload must still be completed and the final station/device smoke should
-be repeated immediately before handoff.
+Remaining risk is mostly operational, not feature completeness: the newer
+Process 18E SQL backup must still be uploaded to Google Drive and the final
+station/device smoke should be repeated immediately before handoff.
