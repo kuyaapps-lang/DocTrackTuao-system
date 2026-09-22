@@ -67,6 +67,17 @@ test('dashboard clear keeps the all-time query instead of reapplying the default
     assert.deepEqual(JSON.parse(JSON.stringify(pushes)), [{ path: '/dashboard', query: {} }])
     assert.equal(requests.at(-1), '/api/dashboard/summary')
 })
+test('formats dashboard timestamps in the reporting timezone', async () => {
+    const page = await loadDashboardSetup({
+        route: { path: '/dashboard', query: { month: '2026-09' } },
+        router: { replace: () => {}, push: () => {} },
+        watch: () => {},
+    })
+
+    assert.equal(page.formatDashboardDateTime('2026-09-23T10:45:00+00:00'), 'September 23, 2026 06:45 PM')
+    assert.equal(page.formatDashboardDateTime(null), 'N/A')
+    assert.equal(page.formatDashboardDateTime('not-a-date'), 'N/A')
+})
 test('uses stable request keys', () => { assert.equal(dashboardRequestKey(null), 'all-time'); assert.equal(dashboardRequestKey('invalid'), 'all-time'); assert.equal(dashboardRequestKey('2026-08'), '2026-08') })
 test('accepts complete response without mutation', () => { const payload = structuredClone(validResponse); const before = structuredClone(payload); assert.equal(isValidDashboardResponse(payload), true); assert.deepEqual(payload, before) })
 test('accepts office scope and empty arrays', () => { const payload = structuredClone(validResponse); payload.scope = { type: 'office', office: { id: 4, name: 'Treasury' } }; for (const key of ['status_distribution', 'current_office_distribution', 'origin_office_distribution', 'recent_documents', 'recent_routing_activity']) payload[key] = []; assert.equal(isValidDashboardResponse(payload), true) })
@@ -305,7 +316,7 @@ const loadDashboardSetup = async ({
     const setup = source.match(/<script setup>([\s\S]*?)<\/script>/)[1]
         .replace(/^import\s[\s\S]*?from\s+['"][^'"]+['"];?\r?$/gm, '')
 
-    return runInNewContext(`${setup}\n;({ clearMonth, selectedMonth })`, {
+    return runInNewContext(`${setup}\n;({ clearMonth, formatDashboardDateTime, selectedMonth })`, {
         ref, computed,
         onBeforeUnmount: () => {},
         watch,

@@ -319,7 +319,7 @@ const submitResetRequest = async () => {
             class="mt-3 text-5xl md:text-5xl
             font-black text-white tracking-wide"
         >
-            Document Tracking System
+            Document Management System
         </h1>
 
         <!-- Subtitle -->
@@ -598,7 +598,7 @@ const submitResetRequest = async () => {
         text-blue-100/70"
     >
         &copy; 2026 Municipality of Tuao
-        &middot; Document Tracking System
+        &middot; Document Management System
     </div>
 
 </div>

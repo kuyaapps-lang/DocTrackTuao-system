@@ -16,6 +16,7 @@ import {
 import AppSidebar from '@/components/AppSidebar.vue'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth'
+import { Menu } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -212,42 +213,55 @@ const logout = async () => {
 
         <div class="min-w-0 flex-1">
             <header
-                class="flex min-h-20 items-center justify-between gap-4 border-b bg-white px-6 py-4"
+                class="flex min-h-20 items-center justify-between gap-4 border-b bg-white px-6 py-4 shadow-sm"
             >
                 <div class="flex min-w-0 items-center gap-3">
                     <Button
                         ref="menuTrigger"
                         type="button"
                         variant="outline"
+                        size="icon"
                         class="shrink-0 md:hidden"
                         aria-label="Open main navigation"
                         aria-controls="mobile-navigation-drawer"
                         :aria-expanded="mobileNavigationOpen"
                         @click="openMobileNavigation"
                     >
-                        Menu
+                        <Menu aria-hidden="true" />
                     </Button>
 
                     <div class="min-w-0">
                         <h1 class="text-xl font-bold text-gray-900">
                             {{ pageTitle }}
                         </h1>
-
-                        <p
-                            v-if="userName || roleLabel"
-                            class="mt-1 text-sm text-gray-500"
-                        >
-                            <span v-if="userName">{{ userName }}</span>
-                            <span v-if="userName && roleLabel"> &middot; </span>
-                            <span v-if="roleLabel">{{ roleLabel }}</span>
-                        </p>
                     </div>
                 </div>
 
-                <div class="flex flex-col items-end gap-1">
+                <div class="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 shadow-sm">
+                    <div
+                        v-if="userName || roleLabel"
+                        class="mb-2 text-right"
+                    >
+                        <p
+                            v-if="userName"
+                            class="max-w-48 truncate text-sm font-semibold text-blue-950"
+                        >
+                            {{ userName }}
+                        </p>
+                        <p
+                            v-if="roleLabel"
+                            class="text-xs font-medium uppercase tracking-wide text-blue-700"
+                        >
+                            {{ roleLabel }}
+                        </p>
+                    </div>
+
                     <Button
                         type="button"
                         :disabled="logoutPending"
+                        variant="outline"
+                        size="sm"
+                        class="w-full border-blue-200 bg-white text-blue-800 hover:bg-blue-100"
                         @click="logout"
                     >
                         {{ logoutPending ? 'Logging out...' : 'Logout' }}

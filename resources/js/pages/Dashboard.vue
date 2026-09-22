@@ -26,8 +26,41 @@ const metrics = computed(() => dashboard.value ? [
     ['In Transit', dashboard.value.summary.in_transit_documents],
     ['Received', dashboard.value.summary.received_documents],
 ] : [])
-const scopeLabel = computed(() => !dashboard.value ? '' : dashboard.value.scope.type === 'system' ? 'System-wide reporting' : `Office-scoped reporting: ${dashboard.value.scope.office.name}`)
-const monthLabel = computed(() => dashboard.value?.filters.month || 'All time')
+const scopeLabel = computed(() => !dashboard.value ? '' : dashboard.value.scope.type === 'system' ? 'All offices' : dashboard.value.scope.office.name)
+const formatDashboardMonth = month => {
+    if (!month) return 'All time'
+
+    const [year, rawMonth] = month.split('-').map(value => Number.parseInt(value, 10))
+    if (!year || !rawMonth) return month
+
+    return new Date(Date.UTC(year, rawMonth - 1, 1))
+        .toLocaleDateString('en-US', {
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC',
+        })
+}
+const formatDashboardDateTime = value => {
+    if (!value) return 'N/A'
+
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'N/A'
+
+    const parts = new Intl.DateTimeFormat('en-US', {
+        month: 'long',
+        day: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Manila',
+    }).formatToParts(date)
+
+    const part = type => parts.find(item => item.type === type)?.value || ''
+
+    return `${part('month')} ${part('day')}, ${part('year')} ${part('hour')}:${part('minute')} ${part('dayPeriod')}`
+}
+const monthLabel = computed(() => formatDashboardMonth(dashboard.value?.filters.month))
 const maxCount = items => Math.max(1, ...items.map(item => item.count))
 const barPercentage = (count, items) => calculateDashboardPercentage(count, maxCount(items))
 
@@ -125,20 +158,22 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section class="min-h-screen bg-gray-100 p-4 sm:p-6" :aria-busy="loading" aria-labelledby="dashboard-heading">
+    <section class="min-h-screen bg-slate-100 p-4 sm:p-6" :aria-busy="loading" aria-labelledby="dashboard-heading">
         <div class="mx-auto max-w-7xl space-y-6">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                    <h2 id="dashboard-heading" class="text-2xl font-bold text-gray-900">Dashboard Summary</h2>
-                    <p class="mt-1 text-sm text-gray-600">{{ scopeLabel || 'Loading reporting scope...' }}</p>
+            <div class="rounded-lg border border-blue-100 bg-white p-5 shadow-sm">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h2 id="dashboard-heading" class="text-2xl font-bold text-blue-950">Dashboard Summary</h2>
+                        <p class="mt-1 text-sm text-gray-600">{{ scopeLabel || 'Loading report scope...' }}</p>
+                    </div>
+                    <form class="flex flex-wrap items-end gap-2" @submit.prevent="updateMonth">
+                        <label class="text-sm font-semibold text-gray-700">Reporting month
+                            <input v-model="selectedMonth" type="month" class="mt-1 block h-10 rounded-md border border-gray-300 bg-white px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" :disabled="loading">
+                        </label>
+                        <Button type="submit" :disabled="loading">Apply</Button>
+                        <Button type="button" variant="outline" :disabled="loading || !selectedMonth" @click="clearMonth">Clear</Button>
+                    </form>
                 </div>
-                <form class="flex flex-wrap items-end gap-2" @submit.prevent="updateMonth">
-                    <label class="text-sm font-semibold text-gray-700">Reporting month
-                        <input v-model="selectedMonth" type="month" class="mt-1 block h-10 rounded-md border border-gray-300 bg-white px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" :disabled="loading">
-                    </label>
-                    <Button type="submit" :disabled="loading">Apply</Button>
-                    <Button type="button" variant="outline" :disabled="loading || !selectedMonth" @click="clearMonth">Clear</Button>
-                </form>
             </div>
 
             <p class="sr-only" aria-live="polite">{{ loading ? 'Loading dashboard summary.' : state === 'success' ? `Dashboard summary loaded for ${monthLabel}.` : 'Dashboard summary could not be loaded.' }}</p>
@@ -151,14 +186,17 @@ onBeforeUnmount(() => {
             </div>
 
             <template v-else>
-                <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600"><span>{{ scopeLabel }}</span><span>Period: {{ monthLabel }}</span></div>
+                <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                    <span class="font-semibold">Scope: {{ scopeLabel }}</span>
+                    <span>Reporting period: {{ monthLabel }}</span>
+                </div>
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                    <Card v-for="metric in metrics" :key="metric[0]"><CardHeader><CardTitle class="text-base">{{ metric[0] }}</CardTitle></CardHeader><CardContent><p class="text-3xl font-bold text-gray-900">{{ metric[1] }}</p></CardContent></Card>
+                    <Card v-for="metric in metrics" :key="metric[0]" class="overflow-hidden border-blue-100 bg-white py-0"><CardHeader class="bg-blue-900 px-4 py-3 text-white"><CardTitle class="text-sm">{{ metric[0] }}</CardTitle></CardHeader><CardContent class="px-4 py-5"><p class="text-3xl font-bold text-gray-900">{{ metric[1] }}</p></CardContent></Card>
                 </div>
 
                 <div class="grid gap-6 xl:grid-cols-3">
-                    <Card v-for="distribution in [['Documents by status', dashboard.status_distribution, 'status'], ['Documents by current office', dashboard.current_office_distribution, 'office'], ['Documents by origin office', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]">
-                        <CardHeader><CardTitle>{{ distribution[0] }}</CardTitle></CardHeader>
+                    <Card v-for="distribution in [['Documents by status', dashboard.status_distribution, 'status'], ['Documents by current office', dashboard.current_office_distribution, 'office'], ['Documents by origin office', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]" class="overflow-hidden border-blue-100 py-0">
+                        <CardHeader class="bg-emerald-700 px-5 py-4 text-white"><CardTitle>{{ distribution[0] }}</CardTitle></CardHeader>
                         <CardContent>
                             <p v-if="distribution[1].length === 0" class="py-6 text-center text-sm text-gray-500">No matching documents for this period.</p>
                             <ul v-else class="space-y-4">
@@ -171,14 +209,14 @@ onBeforeUnmount(() => {
                     </Card>
                 </div>
 
-                <div class="grid gap-6 xl:grid-cols-2">
-                    <Card><CardHeader><CardTitle>Recent documents</CardTitle></CardHeader><CardContent>
-                        <p v-if="dashboard.recent_documents.length === 0" class="py-8 text-center text-sm text-gray-500">No documents were registered in this period.</p>
-                        <div v-else class="max-w-full overflow-x-auto"><Table><caption class="sr-only">Recent documents in the selected reporting period</caption><TableHeader><TableRow><TableHead scope="col">Tracking no.</TableHead><TableHead scope="col">Status</TableHead><TableHead scope="col">Created</TableHead></TableRow></TableHeader><TableBody><TableRow v-for="document in dashboard.recent_documents" :key="document.id"><TableCell class="whitespace-nowrap font-medium">{{ document.tracking_no }}</TableCell><TableCell>{{ document.status.name }}</TableCell><TableCell class="whitespace-nowrap"><time :datetime="document.created_at">{{ document.created_at }}</time></TableCell></TableRow></TableBody></Table></div>
+                <div class="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
+                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-sky-700 px-5 py-4 text-white"><CardTitle>Recent Documents</CardTitle></CardHeader><CardContent class="px-4 py-4">
+                        <p v-if="dashboard.recent_documents.length === 0" class="py-6 text-center text-sm text-gray-500">No documents were registered in this period.</p>
+                        <div v-else class="max-h-72 max-w-full overflow-auto"><Table><caption class="sr-only">Recent documents in the selected reporting period</caption><TableHeader><TableRow><TableHead scope="col">Tracking no.</TableHead><TableHead scope="col">Status</TableHead><TableHead scope="col">Created</TableHead></TableRow></TableHeader><TableBody><TableRow v-for="document in dashboard.recent_documents" :key="document.id"><TableCell class="whitespace-nowrap font-medium">{{ document.tracking_no }}</TableCell><TableCell>{{ document.status.name }}</TableCell><TableCell class="whitespace-nowrap"><time :datetime="document.created_at">{{ formatDashboardDateTime(document.created_at) }}</time></TableCell></TableRow></TableBody></Table></div>
                     </CardContent></Card>
-                    <Card><CardHeader><CardTitle>Recent routing activity</CardTitle></CardHeader><CardContent>
+                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-indigo-800 px-5 py-4 text-white"><CardTitle>Recent Routing Activity</CardTitle></CardHeader><CardContent class="px-4 py-4">
                         <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-sm text-gray-500">No routing activity was recorded in this period.</p>
-                        <div v-else class="max-w-full overflow-x-auto"><Table><caption class="sr-only">Recent routing activity in the selected reporting period</caption><TableHeader><TableRow><TableHead scope="col">Document</TableHead><TableHead scope="col">Event</TableHead><TableHead scope="col">Route</TableHead><TableHead scope="col">Time</TableHead></TableRow></TableHeader><TableBody><TableRow v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`"><TableCell class="whitespace-nowrap font-medium">{{ activity.document.tracking_no }}</TableCell><TableCell class="capitalize">{{ activity.event_type }}</TableCell><TableCell class="min-w-56">{{ activity.from_office.name }} → {{ activity.to_office.name }}</TableCell><TableCell class="whitespace-nowrap"><time :datetime="activity.occurred_at">{{ activity.occurred_at }}</time></TableCell></TableRow></TableBody></Table></div>
+                        <div v-else class="max-w-full overflow-x-auto"><Table><caption class="sr-only">Recent routing activity in the selected reporting period</caption><TableHeader><TableRow><TableHead scope="col">Document</TableHead><TableHead scope="col">Event</TableHead><TableHead scope="col">Route</TableHead><TableHead scope="col">Time</TableHead></TableRow></TableHeader><TableBody><TableRow v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`"><TableCell class="whitespace-nowrap font-medium">{{ activity.document.tracking_no }}</TableCell><TableCell class="capitalize">{{ activity.event_type }}</TableCell><TableCell class="min-w-72">{{ activity.from_office.name }} to {{ activity.to_office.name }}</TableCell><TableCell class="whitespace-nowrap"><time :datetime="activity.occurred_at">{{ formatDashboardDateTime(activity.occurred_at) }}</time></TableCell></TableRow></TableBody></Table></div>
                     </CardContent></Card>
                 </div>
             </template>

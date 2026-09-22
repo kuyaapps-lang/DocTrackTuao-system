@@ -12,8 +12,7 @@ import {
     FileText,
     Files,
     LayoutDashboard,
-    PanelLeftClose,
-    PanelLeftOpen,
+    Menu,
     QrCode,
     ScrollText,
     Users,
@@ -21,6 +20,7 @@ import {
 } from 'lucide-vue-next'
 
 import { Button } from '@/components/ui/button'
+import logo from '@/assets/tuao-logo.png'
 import { useAuth } from '@/lib/auth'
 import {
     resolveActiveNavigationKey,
@@ -83,49 +83,54 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
         'items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
         collapsed ? 'justify-center' : '',
         activeKey.value === key
-            ? 'bg-blue-100 text-blue-800'
-            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+            ? 'bg-white text-blue-900 shadow-sm'
+            : 'text-blue-100 hover:bg-white/10 hover:text-white',
     ]
 }
 </script>
 
 <template>
     <aside
-        class="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r bg-white transition-[width] md:flex"
+        class="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-blue-950 bg-blue-950 text-white shadow-xl transition-[width] md:flex"
         :class="desktopCollapsed ? 'w-20' : 'w-64'"
     >
         <div
-            class="flex min-h-24 items-center border-b"
+            class="flex min-h-24 items-center border-b border-white/10"
             :class="desktopCollapsed ? 'justify-center px-3' : 'justify-between gap-3 px-5'"
         >
-            <div v-if="!desktopCollapsed">
-                <p class="text-lg font-bold text-gray-900">
-                    DocTrack Tuao
-                </p>
+            <div
+                v-if="!desktopCollapsed"
+                class="flex min-w-0 items-center gap-3"
+            >
+                <img
+                    :src="logo"
+                    alt="Tuao logo"
+                    class="h-11 w-11 shrink-0 rounded-md bg-white object-cover p-1"
+                >
 
-                <p class="mt-1 text-xs text-gray-500">
-                    Document Tracking System
-                </p>
+                <div class="min-w-0">
+                    <p class="text-sm font-bold uppercase tracking-wide text-white">
+                        Tuao
+                    </p>
+
+                    <p class="mt-1 text-xs text-blue-100">
+                        Document Management System
+                    </p>
+                </div>
             </div>
 
             <Button
                 type="button"
                 variant="ghost"
                 size="icon"
+                class="text-white hover:bg-white/10 hover:text-white"
                 aria-controls="desktop-navigation"
                 :aria-expanded="!desktopCollapsed"
                 :aria-label="desktopCollapsed ? 'Expand main navigation' : 'Collapse main navigation'"
                 :title="desktopCollapsed ? 'Expand main navigation' : 'Collapse main navigation'"
                 @click="$emit('toggle-desktop')"
             >
-                <PanelLeftOpen
-                    v-if="desktopCollapsed"
-                    aria-hidden="true"
-                />
-                <PanelLeftClose
-                    v-else
-                    aria-hidden="true"
-                />
+                <Menu aria-hidden="true" />
             </Button>
         </div>
 
@@ -208,13 +213,20 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
             aria-label="Main navigation menu"
         >
             <div class="flex min-h-20 items-center justify-between gap-3 border-b px-5">
-                <div>
-                    <p class="text-lg font-bold text-gray-900">
-                        DocTrack Tuao
-                    </p>
-                    <p class="mt-1 text-xs text-gray-500">
-                        Document Tracking System
-                    </p>
+                <div class="flex min-w-0 items-center gap-3">
+                    <img
+                        :src="logo"
+                        alt="Tuao logo"
+                        class="h-11 w-11 shrink-0 rounded-md border bg-white object-cover p-1"
+                    >
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold uppercase tracking-wide text-gray-900">
+                            Tuao
+                        </p>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Document Management System
+                        </p>
+                    </div>
                 </div>
 
                 <Button

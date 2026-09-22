@@ -51,3 +51,21 @@ test('dashboard documents and public tracking show clearer helper copy', async (
     assert.match(tracking, /Document Tracking/)
     assert.match(tracking, /Limited public details are shown for this protected document/)
 })
+
+test('dashboard and shell polish copy stays user friendly', async () => {
+    const dashboard = await readSource('resources/js/pages/Dashboard.vue')
+    const shell = await readSource('resources/js/layouts/AppShell.vue')
+    const sidebar = await readSource('resources/js/components/AppSidebar.vue')
+    const login = await readSource('resources/js/pages/Login.vue')
+    const resolver = await readSource('resources/js/pages/QrResolver.vue')
+
+    assert.match(dashboard, /Reporting period/)
+    assert.match(dashboard, /Recent Routing Activity/)
+    assert.match(dashboard, /formatDashboardDateTime/)
+    assert.doesNotMatch(dashboard, /System-wide reporting/)
+    assert.doesNotMatch(dashboard, /Period:/)
+    assert.match(shell, /rounded-lg border border-blue-100 bg-blue-50/)
+    assert.match(sidebar, /Document Management System/)
+    assert.match(sidebar, /<Menu aria-hidden="true" \/>/)
+    assert.doesNotMatch(`${sidebar}\n${login}\n${resolver}`, /Document Tracking System/)
+})
