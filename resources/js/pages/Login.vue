@@ -482,7 +482,7 @@ const submitResetRequest = async () => {
                         class="text-right text-sm font-semibold text-blue-700 hover:text-blue-900"
                         @click="openResetRequest"
                     >
-                        Request password reset
+                        Forgot Password?
                     </button>
 
                 </div>
@@ -501,7 +501,7 @@ const submitResetRequest = async () => {
             <CardContent class="p-6">
                 <div class="mb-5">
                     <h2 class="text-2xl font-black text-gray-800">
-                        Request Password Reset
+                        Forgot Password?
                     </h2>
 
                     <p class="mt-2 text-sm text-gray-600">

@@ -1,6 +1,6 @@
 export const loginErrorMessage = (status, backendMessage) => {
     if (status === 429) {
-        return 'Too many login attempts. Please try again later.'
+        return 'Maximum login attempts used. Click \'Forgot Password?\' or contact the System Administrator.'
     }
 
     return backendMessage || 'Login failed.'

@@ -9,10 +9,10 @@ import {
     submitPasswordResetRequest,
 } from '../../resources/js/lib/password-reset.js'
 
-test('login throttling always uses a generic retry-later message', () => {
+test('login throttling points users to forgot password without exposing backend detail', () => {
     assert.equal(
         loginErrorMessage(429, 'account-specific backend detail'),
-        'Too many login attempts. Please try again later.'
+        'Maximum login attempts used. Click \'Forgot Password?\' or contact the System Administrator.'
     )
 })
 
@@ -21,13 +21,22 @@ test('other login failures retain the existing safe fallback behavior', () => {
     assert.equal(loginErrorMessage(500, ''), 'Login failed.')
 })
 
-test('login page shows password reset request action instead of a dead forgot-password link', async () => {
+test('login page shows forgot password action instead of a dead link', async () => {
     const source = await readFile(new URL('../../resources/js/pages/Login.vue', import.meta.url), 'utf8')
 
-    assert.match(source, /Request password reset/)
+    assert.match(source, /Forgot Password\?/)
     assert.match(source, /The response does not confirm whether an account exists\./)
     assert.doesNotMatch(source, /href="#"/)
-    assert.doesNotMatch(source, /Forgot Password\?/)
+    assert.doesNotMatch(source, /Request Password Reset/)
+    assert.doesNotMatch(source, /Request password reset/)
+
+    const resetTextIndex = source.indexOf('Forgot Password?')
+    const resetButtonStart = source.lastIndexOf('<button', resetTextIndex)
+    const resetButtonEnd = source.indexOf('</button>', resetTextIndex)
+    assert.ok(resetTextIndex > -1)
+    assert.ok(resetButtonStart > -1)
+    assert.ok(resetButtonEnd > resetTextIndex)
+    assert.doesNotMatch(source.slice(resetButtonStart, resetButtonEnd), /disabled/)
 })
 
 // Execute the actual SFC setup handlers; only imports and UI lifecycle wiring are supplied.
