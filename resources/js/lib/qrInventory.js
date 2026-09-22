@@ -45,8 +45,8 @@ export const buildInventoryUrl = ({ page = 1, perPage = 10, status = '' } = {}) 
     return `/api/qr-codes/inventory?${parameters.toString()}`
 }
 
-export const canVoidInventoryItem = item => isInventoryItem(item) && item.status === 'unused' && item.linked === false
-export const canBeginVoid = (pendingId, item) => pendingId === null && canVoidInventoryItem(item)
+export const canVoidInventoryItem = (item, canVoid = true) => canVoid !== false && isInventoryItem(item) && item.status === 'unused' && item.linked === false
+export const canBeginVoid = (pendingId, item, canVoid = true) => pendingId === null && canVoidInventoryItem(item, canVoid)
 
 export const voidConfirmationText = item => canVoidInventoryItem(item)
     ? `Void QR record #${item.id} issued ${item.issued_at}? This cannot be undone.`

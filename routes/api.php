@@ -241,7 +241,7 @@ Route::middleware([
     Route::post(
         'qr-codes/{qrCode}/void',
         [DocumentQrCodeController::class, 'void']
-    )->middleware('can:qr.manage');
+    )->middleware('can:qr.void');
 
     /*
     |--------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import {
     buildInventoryUrl,
     canBeginVoid,
@@ -157,10 +158,20 @@ test('builds bounded inventory URLs without mutating input', () => {
 
 test('only unused unlinked records are voidable', () => {
     assert.equal(canVoidInventoryItem(item), true)
+    assert.equal(canVoidInventoryItem(item, true), true)
+    assert.equal(canVoidInventoryItem(item, false), false)
     for (const change of [
         { status: 'registered' }, { status: 'void' }, { status: 'quarantined' },
         { linked: true }, { id: 0 },
     ]) assert.equal(canVoidInventoryItem({ ...item, ...change }), false)
+})
+
+test('QR inventory page gates the void button behind the Admin-only permission', async () => {
+    const source = await readFile(new URL('../../resources/js/pages/QrCodes.vue', import.meta.url), 'utf8')
+
+    assert.match(source, /const canVoidQr = computed\(\(\) => permissions\.value\.includes\('qr\.void'\)\)/)
+    assert.match(source, /v-if="canVoidInventoryItem\(item, canVoidQr\)"/)
+    assert.doesNotMatch(source, /v-if="canVoidInventoryItem\(item\)"/)
 })
 
 test('confirmation identity contains only safe ID and issuance time', () => {
@@ -173,6 +184,7 @@ test('confirmation identity contains only safe ID and issuance time', () => {
 
 test('pending state prevents duplicate void submissions', () => {
     assert.equal(canBeginVoid(null, item), true)
+    assert.equal(canBeginVoid(null, item, false), false)
     assert.equal(canBeginVoid(205, item), false)
     assert.equal(canBeginVoid(999, item), false)
 })

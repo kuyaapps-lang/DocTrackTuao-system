@@ -1,7 +1,7 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import QRCode from 'qrcode'
-import { clearCurrentUser } from '@/lib/auth'
+import { clearCurrentUser, useAuth } from '@/lib/auth'
 import {
     printQrLabels,
     qrPrintFailureMessage,
@@ -82,6 +82,9 @@ const voidReturnFocus = ref(null)
 const getToken = () => {
     return localStorage.getItem('auth_token')
 }
+
+const { permissions } = useAuth()
+const canVoidQr = computed(() => permissions.value.includes('qr.void'))
 
 /*
 |--------------------------------------------------------------------------
@@ -430,7 +433,7 @@ const restoreVoidFocus = async () => {
 
 const openVoidConfirmation = async (item, event) => {
     if (inventoryManager.isDisposed()) return
-    if (!canBeginVoid(voidingId.value, item)) return
+    if (!canBeginVoid(voidingId.value, item, canVoidQr.value)) return
     voidReturnFocus.value = event?.currentTarget || null
     selectedQr.value = item
     await nextTick()
@@ -446,7 +449,7 @@ const closeVoidConfirmation = async () => {
 
 const confirmVoid = async () => {
     const item = selectedQr.value
-    if (!canBeginVoid(voidingId.value, item)) return
+    if (!canBeginVoid(voidingId.value, item, canVoidQr.value)) return
     const result = await inventoryManager.voidItem(item, {
         page: inventoryMeta.value?.current_page || 1,
         perPage: 10,
@@ -1169,7 +1172,7 @@ onBeforeUnmount(() => {
                                     <td class="whitespace-nowrap px-3 py-2">{{ item.linked ? 'Linked' : 'Unlinked' }}</td>
                                     <td class="whitespace-nowrap px-3 py-2">
                                         <Button
-                                            v-if="canVoidInventoryItem(item)"
+                                            v-if="canVoidInventoryItem(item, canVoidQr)"
                                             variant="destructive"
                                             :disabled="voidingId !== null"
                                             :aria-label="`Void QR record ${item.id}`"

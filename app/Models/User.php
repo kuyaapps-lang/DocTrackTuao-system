@@ -29,6 +29,7 @@ class User extends Authenticatable
         'attachments.manage',
         'qr.view',
         'qr.manage',
+        'qr.void',
         'master_data.view',
         'master_data.manage',
         'users.manage',

@@ -476,7 +476,7 @@ class Process5DQrAuditTest extends TestCase
 
     public function test_void_creates_one_audit_and_conflicts_create_none(): void
     {
-        $user = $this->user('Records Officer');
+        $user = $this->user('Administrator');
         Sanctum::actingAs($user);
         $unused = $this->qr($user, 'UNUSED-TOKEN', 'unused');
 
@@ -511,14 +511,17 @@ class Process5DQrAuditTest extends TestCase
 
     public function test_forbidden_void_does_not_mutate_or_audit(): void
     {
-        $owner = $this->user('Records Officer');
+        $owner = $this->user('Administrator');
         $qr = $this->qr($owner, 'FORBIDDEN-TOKEN', 'unused');
-        Sanctum::actingAs($this->user('Viewer', 'viewer@example.test'));
-        $before = $this->completeSnapshot();
 
-        $this->postJson("/api/qr-codes/{$qr->id}/void")->assertForbidden();
+        foreach (['Records Officer', 'Office User', 'Viewer'] as $roleName) {
+            Sanctum::actingAs($this->user($roleName, str_replace(' ', '-', strtolower($roleName)).'@example.test'));
+            $before = $this->completeSnapshot();
 
-        $this->assertSame($before, $this->completeSnapshot());
+            $this->postJson("/api/qr-codes/{$qr->id}/void")->assertForbidden();
+
+            $this->assertSame($before, $this->completeSnapshot());
+        }
     }
 
     public function test_unauthenticated_void_does_not_mutate_or_audit(): void
@@ -535,7 +538,7 @@ class Process5DQrAuditTest extends TestCase
 
     public function test_void_reloads_stale_qr_state_before_transition(): void
     {
-        $user = $this->user('Records Officer');
+        $user = $this->user('Administrator');
         $qr = $this->qr($user, 'STALE-VOID-TOKEN', 'unused');
         $staleQr = $qr->fresh();
         DocumentQrCode::whereKey($qr->id)->update(['status' => 'registered']);
@@ -553,7 +556,7 @@ class Process5DQrAuditTest extends TestCase
 
     public function test_linked_unused_qr_is_not_voidable(): void
     {
-        $user = $this->user('Records Officer');
+        $user = $this->user('Administrator');
         $qr = $this->qr($user, 'LINKED-UNUSED-TOKEN', 'unused');
         $qr->update(['document_id' => 1]);
         Sanctum::actingAs($user);
@@ -566,7 +569,7 @@ class Process5DQrAuditTest extends TestCase
 
     public function test_unexpected_qr_state_is_rejected_without_any_side_effect(): void
     {
-        $user = $this->user('Records Officer');
+        $user = $this->user('Administrator');
         $qr = $this->qr($user, 'UNEXPECTED-STATE-TOKEN', 'quarantined');
         Sanctum::actingAs($user);
         $before = $this->completeSnapshot();
@@ -586,7 +589,7 @@ class Process5DQrAuditTest extends TestCase
 
     public function test_audit_failure_does_not_break_generation_or_voiding(): void
     {
-        $user = $this->user('Records Officer');
+        $user = $this->user('Administrator');
         Sanctum::actingAs($user);
         Log::spy();
         Schema::drop('audit_logs');
