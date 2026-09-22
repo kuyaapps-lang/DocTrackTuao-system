@@ -10,14 +10,18 @@ import {
 const permissionSets = {
     administrator: [
         'documents.view',
+        'qr.request',
         'qr.view',
         'qr.manage',
+        'qr.approve',
+        'qr.void',
         'master_data.view',
         'users.manage',
         'audit.view',
     ],
     recordsOfficer: [
         'documents.view',
+        'qr.request',
         'qr.view',
         'qr.manage',
         'master_data.view',
@@ -25,6 +29,7 @@ const permissionSets = {
     ],
     officeUser: [
         'documents.view',
+        'qr.request',
         'master_data.view',
     ],
     viewer: [
@@ -72,12 +77,13 @@ test('records officer sees every current link except users', () => {
     )
 })
 
-test('office user does not see master data links', () => {
+test('office user sees QR requests but not master data links', () => {
     assert.deepEqual(
         flattenKeys(visibleNavigation(permissionSets.officeUser)),
         [
             'dashboard',
             'documents',
+            'qr-codes',
         ]
     )
 })

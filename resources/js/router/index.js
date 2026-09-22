@@ -127,7 +127,7 @@ const routes = [
                 path: 'qr-codes',
                 component: QrCodes,
                 meta: {
-                    permission: 'qr.manage',
+                    permission: 'qr.request',
                     title: 'QR Codes',
                     navKey: 'qr-codes',
                 },

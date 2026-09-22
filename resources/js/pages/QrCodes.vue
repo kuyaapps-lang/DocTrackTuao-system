@@ -16,6 +16,11 @@ import {
     createQrSummaryManager,
     emptyQrSummary,
 } from '@/lib/qrSummary'
+import {
+    fetchQrCodeRequests,
+    reviewQrCodeRequest,
+    submitQrCodeRequest,
+} from '@/lib/qrRequests'
 
 import {
     Card,
@@ -53,6 +58,16 @@ const summary = ref(emptyQrSummary())
 const summaryLoading = ref(true)
 const summaryError = ref('')
 const generating = ref(false)
+const requests = ref([])
+const requestsLoading = ref(true)
+const requestsError = ref('')
+const requestSaving = ref(false)
+const reviewPendingId = ref(null)
+const requestNotice = ref('')
+const requestForm = ref({
+    quantity: 10,
+    purpose: '',
+})
 
 const quantity = ref(10)
 const lastGeneratedBatch = ref([])
@@ -84,6 +99,9 @@ const getToken = () => {
 }
 
 const { permissions } = useAuth()
+const canRequestQr = computed(() => permissions.value.includes('qr.request'))
+const canManageQr = computed(() => permissions.value.includes('qr.manage'))
+const canApproveQr = computed(() => permissions.value.includes('qr.approve'))
 const canVoidQr = computed(() => permissions.value.includes('qr.void'))
 
 /*
@@ -420,6 +438,116 @@ const fetchInventory = (page = 1) => inventoryManager.load({
     status: inventoryStatus.value,
 })
 
+const fetchRequests = async () => {
+    if (!canRequestQr.value) {
+        requests.value = []
+        requestsLoading.value = false
+        return
+    }
+
+    requestsLoading.value = true
+    requestsError.value = ''
+
+    try {
+        requests.value = await fetchQrCodeRequests({
+            fetchImpl: (...arguments_) => fetch(...arguments_),
+            getToken,
+        })
+    } catch (err) {
+        requestsError.value =
+            err.message ||
+            'Unable to load QR requests. Please try again.'
+    } finally {
+        requestsLoading.value = false
+    }
+}
+
+const normalizeRequestQuantity = () => {
+    let value = Number.parseInt(requestForm.value.quantity, 10)
+
+    if (Number.isNaN(value)) {
+        value = 1
+    }
+
+    requestForm.value.quantity = Math.min(maxBatchSize, Math.max(1, value))
+}
+
+const submitRequest = async () => {
+    normalizeRequestQuantity()
+    requestSaving.value = true
+    requestsError.value = ''
+    requestNotice.value = ''
+
+    try {
+        const data = await submitQrCodeRequest({
+            fetchImpl: (...arguments_) => fetch(...arguments_),
+            getToken,
+            form: requestForm.value,
+        })
+
+        requestNotice.value =
+            data.message ||
+            'QR code request submitted.'
+        requestForm.value = {
+            quantity: 10,
+            purpose: '',
+        }
+        await fetchRequests()
+    } catch (err) {
+        requestsError.value =
+            err.message ||
+            'Unable to submit QR request.'
+    } finally {
+        requestSaving.value = false
+    }
+}
+
+const reviewRequest = async (request, action) => {
+    if (!canApproveQr.value || request.status !== 'pending') {
+        return
+    }
+
+    reviewPendingId.value = request.id
+    requestsError.value = ''
+    requestNotice.value = ''
+
+    try {
+        const data = await reviewQrCodeRequest({
+            fetchImpl: (...arguments_) => fetch(...arguments_),
+            getToken,
+            requestId: request.id,
+            action,
+            reviewNote: '',
+        })
+
+        requestNotice.value =
+            data.message ||
+            `QR code request ${action === 'approve' ? 'approved' : 'rejected'}.`
+        await fetchRequests()
+        await fetchSummary()
+        if (canManageQr.value) {
+            await fetchInventory(inventoryMeta.value?.current_page || 1)
+        }
+    } catch (err) {
+        requestsError.value =
+            err.message ||
+            'Unable to review QR request.'
+    } finally {
+        reviewPendingId.value = null
+    }
+}
+
+const statusClass = (status) => {
+    switch (status) {
+        case 'approved':
+            return 'border-green-200 bg-green-50 text-green-700'
+        case 'rejected':
+            return 'border-red-200 bg-red-50 text-red-700'
+        default:
+            return 'border-yellow-200 bg-yellow-50 text-yellow-700'
+    }
+}
+
 const restoreVoidFocus = async () => {
     if (inventoryManager.isDisposed()) return
     await nextTick()
@@ -607,7 +735,12 @@ const formatDateTime = (date) => {
 
 onMounted(() => {
     fetchSummary()
-    fetchInventory()
+    fetchRequests()
+    if (canManageQr.value) {
+        fetchInventory()
+    } else {
+        inventoryLoading.value = false
+    }
 })
 
 onBeforeUnmount(() => {
@@ -669,20 +802,190 @@ onBeforeUnmount(() => {
                 {{ error }}
             </div>
 
-            <!-- Request -->
-            <Card>
+            <div
+                v-if="requestNotice"
+                class="mb-5 rounded-md border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700"
+            >
+                {{ requestNotice }}
+            </div>
+
+            <!-- Request Workflow -->
+            <Card v-if="canRequestQr">
+                <CardHeader>
+                    <CardTitle>
+                        Request QR Codes
+                    </CardTitle>
+
+                    <p class="text-sm text-gray-500">
+                        Submit a batch request for administrator review.
+                    </p>
+                </CardHeader>
+
+                <CardContent>
+                    <form
+                        class="grid gap-5 md:grid-cols-[220px_1fr_auto] md:items-end"
+                        @submit.prevent="submitRequest"
+                    >
+                        <label class="block text-sm font-semibold text-gray-700">
+                            Number of QR Codes
+                            <input
+                                v-model.number="requestForm.quantity"
+                                type="number"
+                                min="1"
+                                :max="maxBatchSize"
+                                class="mt-2 h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-lg font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                :disabled="requestSaving"
+                                @blur="normalizeRequestQuantity"
+                                @change="normalizeRequestQuantity"
+                            >
+                        </label>
+
+                        <label class="block text-sm font-semibold text-gray-700">
+                            Purpose
+                            <textarea
+                                v-model="requestForm.purpose"
+                                :disabled="requestSaving"
+                                rows="2"
+                                class="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                                placeholder="Optional note"
+                            ></textarea>
+                        </label>
+
+                        <Button
+                            type="submit"
+                            class="bg-blue-600 px-6 text-white hover:bg-blue-700"
+                            :disabled="requestSaving"
+                        >
+                            {{ requestSaving ? 'Submitting...' : 'Submit Request' }}
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
+
+            <Card v-if="canRequestQr" class="mt-6">
+                <CardHeader>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <CardTitle>
+                                QR Requests
+                            </CardTitle>
+                            <p class="text-sm text-gray-500">
+                                {{ canApproveQr ? 'All office QR requests.' : 'QR requests from your office.' }}
+                            </p>
+                        </div>
+
+                        <Button
+                            variant="outline"
+                            :disabled="requestsLoading || reviewPendingId !== null"
+                            @click="fetchRequests"
+                        >
+                            Refresh
+                        </Button>
+                    </div>
+                </CardHeader>
+
+                <CardContent>
+                    <p v-if="requestsError" role="alert" class="mb-3 text-sm text-red-700">
+                        {{ requestsError }}
+                    </p>
+
+                    <div v-if="requestsLoading" class="py-6 text-center text-gray-500" role="status">
+                        Loading QR requests...
+                    </div>
+
+                    <div v-else-if="requests.length === 0" class="py-6 text-center text-gray-500">
+                        No QR requests found.
+                    </div>
+
+                    <div v-else class="space-y-3">
+                        <div
+                            v-for="request in requests"
+                            :key="request.id"
+                            class="rounded-lg border bg-white p-4"
+                        >
+                            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-mono text-sm font-semibold text-gray-700">#{{ request.id }}</span>
+                                        <span
+                                            class="rounded-md border px-2 py-1 text-xs font-semibold capitalize"
+                                            :class="statusClass(request.status)"
+                                        >
+                                            {{ request.status }}
+                                        </span>
+                                        <span class="text-sm text-gray-600">{{ request.quantity }} QR code{{ request.quantity === 1 ? '' : 's' }}</span>
+                                    </div>
+
+                                    <p class="mt-2 text-sm text-gray-700">
+                                        {{ request.requested_office?.office_name || 'Unassigned office' }}
+                                    </p>
+
+                                    <p v-if="request.purpose" class="mt-1 text-sm text-gray-500">
+                                        {{ request.purpose }}
+                                    </p>
+
+                                    <p v-if="request.review_note" class="mt-1 text-sm text-gray-500">
+                                        {{ request.review_note }}
+                                    </p>
+                                </div>
+
+                                <div
+                                    v-if="canApproveQr && request.status === 'pending'"
+                                    class="flex gap-2"
+                                >
+                                    <Button
+                                        class="bg-green-600 text-white hover:bg-green-700"
+                                        :disabled="reviewPendingId !== null"
+                                        @click="reviewRequest(request, 'approve')"
+                                    >
+                                        {{ reviewPendingId === request.id ? 'Reviewing...' : 'Approve' }}
+                                    </Button>
+
+                                    <Button
+                                        variant="destructive"
+                                        :disabled="reviewPendingId !== null"
+                                        @click="reviewRequest(request, 'reject')"
+                                    >
+                                        Reject
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div
+                                v-if="request.qr_codes.length > 0"
+                                class="mt-4"
+                            >
+                                <p class="text-xs font-semibold uppercase text-gray-500">
+                                    Assigned QR Codes
+                                </p>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <span
+                                        v-for="qr in request.qr_codes"
+                                        :key="qr.id"
+                                        class="rounded-md border bg-gray-50 px-3 py-1.5 font-mono text-xs font-semibold text-gray-700"
+                                    >
+                                        {{ qr.qr_token }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <!-- Direct issuance -->
+            <Card v-if="canManageQr" class="mt-6">
 
                 <CardHeader>
 
                     <CardTitle>
-                        Request QR Codes
+                        Direct QR Issuance
                     </CardTitle>
 
                     <p
                         class="text-sm text-gray-500"
                     >
-                        Specify how many QR labels
-                        are required for this batch.
+                        Generate immediate QR labels when approval is not required.
                     </p>
 
                 </CardHeader>
@@ -791,6 +1094,7 @@ onBeforeUnmount(() => {
             <!-- Last Batch -->
             <Card
                 v-if="
+                    canManageQr &&
                     lastGeneratedBatch.length >
                     0
                 "
@@ -990,7 +1294,7 @@ onBeforeUnmount(() => {
             </Card>
 
             <!-- Record Summary -->
-            <Card class="mt-6">
+            <Card v-if="canManageQr" class="mt-6">
 
                 <CardHeader>
                     <CardTitle>
@@ -1093,7 +1397,7 @@ onBeforeUnmount(() => {
 
             </Card>
 
-            <Card class="mt-6">
+            <Card v-if="canManageQr" class="mt-6">
                 <CardHeader>
                     <CardTitle>
                         <span ref="inventoryHeading" tabindex="-1">Persisted QR Inventory</span>
