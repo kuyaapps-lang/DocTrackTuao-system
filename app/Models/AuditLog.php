@@ -13,6 +13,7 @@ class AuditLog extends Model
     public const MODULE_DOCUMENT_ROUTING = 'document_routing';
     public const MODULE_DOCUMENT_PROCESSING = 'document_processing';
     public const MODULE_QR_CODES = 'qr_codes';
+    public const MODULE_QR_CODE_REQUESTS = 'qr_code_requests';
     public const MODULE_ATTACHMENTS = 'attachments';
     public const MODULE_PASSWORD_RESET_REQUESTS = 'password_reset_requests';
 
@@ -32,6 +33,9 @@ class AuditLog extends Model
     public const ACTION_COMPLETED = 'completed';
     public const ACTION_ARCHIVED = 'archived';
     public const ACTION_GENERATED = 'generated';
+    public const ACTION_REQUESTED = 'requested';
+    public const ACTION_APPROVED = 'approved';
+    public const ACTION_REJECTED = 'rejected';
     public const ACTION_REGISTERED = 'registered';
     public const ACTION_VOIDED = 'voided';
     public const ACTION_UPLOADED = 'uploaded';

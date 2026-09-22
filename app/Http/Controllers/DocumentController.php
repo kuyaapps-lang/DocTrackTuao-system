@@ -15,6 +15,7 @@ use App\Models\ProcessingAction;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Services\AuditLogger;
@@ -566,6 +567,18 @@ class DocumentController extends Controller
                         throw ValidationException::withMessages([
                             'qr_token' =>
                                 'This QR code has already been registered to a document.',
+                        ]);
+                    }
+
+                    if (
+                        Schema::hasColumn('document_qr_codes', 'assigned_office_id') &&
+                        $qrCode->assigned_office_id !== null &&
+                        !$request->user()->hasRole('Administrator') &&
+                        (int) $qrCode->assigned_office_id !== (int) $request->user()->office_id
+                    ) {
+                        throw ValidationException::withMessages([
+                            'qr_token' =>
+                                'This QR code is assigned to another office.',
                         ]);
                     }
                 }

@@ -10,6 +10,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -28,18 +29,20 @@ class DocumentQrCodeController extends Controller
      */
     public function summary()
     {
-        $counts = DocumentQrCode::query()
+        $query = $this->visibleQrQuery(request());
+
+        $counts = (clone $query)
             ->selectRaw('status, COUNT(*) as aggregate')
             ->whereIn('status', ['unused', 'registered', 'void'])
             ->groupBy('status')
             ->pluck('aggregate', 'status');
 
-        $latest = DocumentQrCode::query()
+        $latest = (clone $query)
             ->selectRaw('MAX(COALESCE(generated_at, created_at)) as latest_issued_at')
             ->value('latest_issued_at');
 
         return response()->json([
-            'total_issued' => DocumentQrCode::query()->count(),
+            'total_issued' => (clone $query)->count(),
             'counts' => [
                 'unused' => (int) ($counts['unused'] ?? 0),
                 'registered' => (int) ($counts['registered'] ?? 0),
@@ -76,7 +79,7 @@ class DocumentQrCodeController extends Controller
             'status' => ['sometimes', 'string', Rule::in(['unused', 'registered', 'void'])],
         ]);
 
-        $query = DocumentQrCode::query()
+        $query = $this->visibleQrQuery($request)
             ->select(['id', 'status', 'document_id', 'generated_at', 'created_at'])
             ->when(
                 isset($validated['status']),
@@ -135,12 +138,18 @@ class DocumentQrCodeController extends Controller
                 $created = collect();
 
                 for ($i = 0; $i < $quantity; $i++) {
-                    $qrCode = DocumentQrCode::create([
+                    $attributes = [
                         'qr_token' => $this->generateQrToken(),
                         'status' => 'unused',
                         'generated_by' => $user->id,
                         'generated_at' => now(),
-                    ]);
+                    ];
+
+                    if (Schema::hasColumn('document_qr_codes', 'assigned_office_id')) {
+                        $attributes['assigned_office_id'] = $user->office_id;
+                    }
+
+                    $qrCode = DocumentQrCode::create($attributes);
 
                     $qrCode->load([
                         'generatedBy',
@@ -192,7 +201,7 @@ class DocumentQrCodeController extends Controller
             abort(404);
         }
 
-        $qrCode = DocumentQrCode::query()
+        $qrCode = $this->visibleQrQuery(request())
             ->select(['id', 'status', 'document_id', 'generated_at', 'created_at'])
             ->findOrFail($id);
 
@@ -336,6 +345,29 @@ class DocumentQrCodeController extends Controller
                 ->toIso8601String(),
             'linked' => $qrCode->document_id !== null,
         ];
+    }
+
+    private function visibleQrQuery(Request $request)
+    {
+        $query = DocumentQrCode::query();
+        $user = $request->user();
+
+        if (
+            !$user ||
+            $user->hasPermission('qr.approve') ||
+            !Schema::hasColumn('document_qr_codes', 'assigned_office_id')
+        ) {
+            return $query;
+        }
+
+        if (!$user->office_id) {
+            abort(403);
+        }
+
+        return $query->where(function ($builder) use ($user): void {
+            $builder->where('assigned_office_id', $user->office_id)
+                ->orWhere('generated_by', $user->id);
+        });
     }
 
     /**

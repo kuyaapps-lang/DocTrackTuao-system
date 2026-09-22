@@ -11,6 +11,8 @@ class DocumentQrCode extends Model
         'qr_token',
         'status',
         'document_id',
+        'qr_code_request_id',
+        'assigned_office_id',
         'generated_by',
         'generated_at',
         'registered_at',
@@ -35,6 +37,22 @@ class DocumentQrCode extends Model
         return $this->belongsTo(
             Document::class,
             'document_id'
+        );
+    }
+
+    public function qrCodeRequest(): BelongsTo
+    {
+        return $this->belongsTo(
+            QrCodeRequest::class,
+            'qr_code_request_id'
+        );
+    }
+
+    public function assignedOffice(): BelongsTo
+    {
+        return $this->belongsTo(
+            Office::class,
+            'assigned_office_id'
         );
     }
 

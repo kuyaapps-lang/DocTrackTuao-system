@@ -18,6 +18,7 @@ use App\Http\Controllers\DocumentTypeController;
 use App\Http\Middleware\EnsurePasswordChangeIsComplete;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\PasswordResetRequestController;
+use App\Http\Controllers\QrCodeRequestController;
 use App\Http\Controllers\UserManagementController;
 
 /*
@@ -212,6 +213,26 @@ Route::middleware([
     | QR CODE REQUEST / ISSUANCE
     |--------------------------------------------------------------------------
     */
+
+    Route::get(
+        'qr-code-requests',
+        [QrCodeRequestController::class, 'index']
+    )->middleware('can:qr.request');
+
+    Route::post(
+        'qr-code-requests',
+        [QrCodeRequestController::class, 'store']
+    )->middleware('can:qr.request');
+
+    Route::post(
+        'qr-code-requests/{qrCodeRequest}/approve',
+        [QrCodeRequestController::class, 'approve']
+    )->middleware('can:qr.approve');
+
+    Route::post(
+        'qr-code-requests/{qrCodeRequest}/reject',
+        [QrCodeRequestController::class, 'reject']
+    )->middleware('can:qr.approve');
 
     Route::get(
         'qr-codes',
