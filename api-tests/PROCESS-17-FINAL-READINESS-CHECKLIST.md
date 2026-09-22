@@ -210,6 +210,56 @@ Next optional v1.1 items:
 - Final UI polish.
 - Database service consolidation or production topology cleanup.
 
+## Process 22E closeout: QR request workflow
+
+QR request and approval is live after Process 22D migration and controlled
+smoke.
+
+Operational flow:
+
+- Records Officer/requestor users submit QR requests from the QR Codes page.
+- Administrators approve or reject pending requests.
+- Approved requests generate QR rows assigned to the requestor's office.
+- Requestors see their own office's approved/requested QR rows.
+- Other offices cannot see another office's request or use another office's
+  assigned QR for registration.
+- Direct QR issuance is Admin-only.
+- QR void is Admin-only.
+- Do not delete unused QR rows directly. Retire QR only through Admin void after
+  a verified backup and approval.
+
+Process 22D smoke evidence:
+
+- Request `1` was submitted by `recordsofficer@test.com` and approved by
+  `admin@test.com`.
+- QR `225` was created as `unused`, assigned to office `2`, and linked to
+  request `1`.
+- Other-office visibility/use checks were blocked.
+- Records Officer direct issue and void checks returned `403`.
+
+Newest trusted local SQL backup after Process 22D:
+
+```text
+storage/dev-db-backups/doctrack_tuao_20260923_060523.sql
+```
+
+Backup metadata:
+
+- Size: `111,718` bytes.
+- SHA-256:
+  `B4A9174D98AAE13DAEFF46A6B268A59746E59006F256893D5159782594208EEC`.
+- Header confirms database `doctrack_tuao` through host `127.0.0.1`.
+- Completion marker: `Dump completed on 2026-09-23 06:05:24`.
+- Git ignored: yes.
+- Google Drive upload: required and not yet confirmed as of Process 22E.
+
+Required handoff action:
+
+- Upload `storage/dev-db-backups/doctrack_tuao_20260923_060523.sql` to Google
+  Drive.
+- Confirm the uploaded file name, size, SHA-256, and completion marker before
+  treating it as the shared backup source of truth.
+
 ## Known limitations and deferred items
 
 - HTTPS, certificate/domain selection, and HSTS remain deferred.

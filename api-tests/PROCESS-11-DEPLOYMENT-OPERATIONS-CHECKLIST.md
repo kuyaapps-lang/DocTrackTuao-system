@@ -206,6 +206,38 @@ Process 18E made the temporary password reset flow live.
 - Daily check: no user should remain stuck with `must_change_password = true`
   unless a reset is intentionally awaiting that user's first login.
 
+## QR request workflow
+
+Process 22D made the QR request and approval workflow live after a verified SQL
+backup, migration, controlled smoke, and post-smoke backup.
+
+Operational flow:
+
+- Records Officer/requestor users open QR Codes and submit a QR request for the
+  needed quantity.
+- Administrators review pending requests and approve or reject them.
+- Approval creates the requested QR rows, assigns them to the requestor's office,
+  and exposes the assigned QR tokens to that office for printing and
+  registration.
+- Rejection creates no QR rows.
+- Requestor visibility is office-scoped: requestors see their office's requests
+  and assigned QR; another office cannot see or use those assigned QR rows.
+- Direct QR issuance through `POST /api/qr-codes` is Admin-only. Records Officer
+  and requestor users must use the request workflow.
+- QR void is Admin-only. Records Officer and requestor users must not void QR.
+- Do not delete unused QR rows directly from SQL. If a QR must be retired, take
+  and verify a current SQL backup, obtain approval, and use the Admin void action
+  only.
+
+Process 22D controlled smoke:
+
+- Records Officer `recordsofficer@test.com` submitted request `1`.
+- Admin `admin@test.com` approved it.
+- QR `225` was generated as `unused`, linked to request `1`, and assigned to
+  office `2`.
+- Other office access/use was blocked, Records direct issuance returned `403`,
+  and Records void returned `403`.
+
 ## Backup procedure
 
 - Run a backup after meaningful database-changing testing:
@@ -231,6 +263,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup-dev-db.ps1
   `D1E5BFE9ED09365CAC5FB75E1CB4B41A67DE4593DDD85448B040E2C0E12B818F`, and ends
   with `Dump completed on 2026-09-21 18:49:05`. Google Drive upload is required
   and not yet confirmed as of Process 18F.
+- The newest trusted local backup after the live Process 22D QR request
+  migration and smoke is
+  `storage/dev-db-backups/doctrack_tuao_20260923_060523.sql`. It is 111,718
+  bytes, has SHA-256
+  `B4A9174D98AAE13DAEFF46A6B268A59746E59006F256893D5159782594208EEC`, and ends
+  with `Dump completed on 2026-09-23 06:05:24`. Google Drive upload is required
+  and not yet confirmed as of Process 22E.
 
 ## Daily operations routine
 

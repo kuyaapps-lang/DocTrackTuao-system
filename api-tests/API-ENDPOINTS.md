@@ -531,6 +531,90 @@ Permission: `documents.view`
 
 ## 06 - QR Code Management
 
+Operational rule: Records Officer and other requestor roles use the QR request
+workflow. Direct QR issuance and QR voiding are Administrator-only. Do not delete
+unused QR rows from the database; when a QR must be retired, take/verify a SQL
+backup, get approval, and use the Admin void action.
+
+### List QR Code Requests
+
+```http
+GET {{base_url}}/api/qr-code-requests?status=pending
+```
+
+Permission: `qr.request`
+
+Supported optional `status` values are `pending`, `approved`, and `rejected`.
+Administrators can see all requests because they also have `qr.approve`.
+Requestors without `qr.approve` see only requests for their assigned office;
+users without an office receive `403`.
+
+Approved requests include the assigned QR token rows needed by the requestor for
+printing and registration. Other offices cannot see another office's request or
+use its assigned QR code for document registration.
+
+### Submit QR Code Request
+
+```http
+POST {{base_url}}/api/qr-code-requests
+```
+
+Permission: `qr.request`
+
+JSON body:
+
+```json
+{
+  "quantity": 1,
+  "purpose": "Front desk intake labels"
+}
+```
+
+Quantity must be from 1 to 50. `purpose` is optional and may be null. The API
+sets the requestor and requested office from the authenticated user. Successful
+submission creates a pending request and a safe audit event; it does not create
+QR rows until approval.
+
+### Approve QR Code Request
+
+```http
+POST {{base_url}}/api/qr-code-requests/{qrCodeRequest}/approve
+```
+
+Permission: `qr.approve`
+
+JSON body:
+
+```json
+{
+  "review_note": "Approved for office use."
+}
+```
+
+`review_note` is optional and may be null. Approval is single-use: approving an
+already reviewed request returns `409`. A successful approval creates the
+requested QR rows, assigns them to the requestor office, marks the request
+approved, records the reviewing administrator, and writes safe audit events.
+
+### Reject QR Code Request
+
+```http
+POST {{base_url}}/api/qr-code-requests/{qrCodeRequest}/reject
+```
+
+Permission: `qr.approve`
+
+JSON body:
+
+```json
+{
+  "review_note": "Use existing labels first."
+}
+```
+
+`review_note` is optional and may be null. Rejection is single-use and creates no
+QR rows. Already reviewed requests return `409`.
+
 ### List QR Codes
 
 ```http
@@ -618,6 +702,9 @@ POST {{base_url}}/api/qr-codes
 
 Permission: `qr.issue`
 
+Administrator-only direct issuance. Records Officer/requestor users must submit
+QR requests instead; they receive `403` if they call this endpoint directly.
+
 JSON body:
 
 ```json
@@ -655,11 +742,13 @@ POST {{base_url}}/api/qr-codes/{qrCode}/void
 
 Permission: `qr.void`
 
-Only unused, unlinked QR codes may be voided. The QR row is re-read and locked
-inside the void transaction. Registered, linked, already-void, stale, and other
-invalid lifecycle states return `409`; replaying a successful void creates no
-additional audit. A successful void changes one lifecycle value and creates one
-safe audit event.
+Administrator-only. Records Officer/requestor users receive `403`. Only unused,
+unlinked QR codes may be voided. The QR row is re-read and locked inside the
+void transaction. Registered, linked, already-void, stale, and other invalid
+lifecycle states return `409`; replaying a successful void creates no additional
+audit. A successful void changes one lifecycle value and creates one safe audit
+event. Do not hard-delete unused QR rows from SQL; use Admin void only after a
+verified backup and approval.
 
 Clients should treat `409` as a lifecycle conflict, refresh the affected
 inventory page, and show a generic fixed message. They should clear established
@@ -1080,6 +1169,7 @@ documents.process
 documents.route
 attachments.view
 attachments.manage
+qr.request
 qr.view
 qr.manage
 master_data.view
@@ -1095,6 +1185,7 @@ documents.process
 documents.route
 attachments.view
 attachments.manage
+qr.request
 master_data.view
 reports.view
 ```
@@ -1138,6 +1229,10 @@ DocTrack Tuao API
 |   +-- Register Document
 |
 +-- 03 QR Codes
+|   +-- List QR Requests
+|   +-- Submit QR Request
+|   +-- Approve QR Request
+|   +-- Reject QR Request
 |   +-- List QR Codes
 |   +-- Generate QR Codes
 |   +-- Show QR
