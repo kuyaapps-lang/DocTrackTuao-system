@@ -30,6 +30,7 @@ class User extends Authenticatable
         'qr.request',
         'qr.view',
         'qr.manage',
+        'qr.issue',
         'qr.approve',
         'qr.void',
         'master_data.view',

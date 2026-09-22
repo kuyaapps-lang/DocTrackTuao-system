@@ -114,9 +114,10 @@ class Process10ASequentialAcceptanceTest extends TestCase
 
         $this->reject(null, 'POST', '/api/qr-codes', ['quantity' => 1], 401);
         $this->reject('viewer', 'POST', '/api/qr-codes', ['quantity' => 1], 403);
+        $this->reject('records', 'POST', '/api/qr-codes', ['quantity' => 1], 403);
         $this->reject('b', 'POST', '/api/documents', $payload, 403);
         $this->reject('records', 'POST', '/api/documents', $payload + ['qr_token' => 'invalid-synthetic-qr'], 422);
-        $issued = $this->requestAs('records', 'POST', '/api/qr-codes', ['quantity' => 1], 201);
+        $issued = $this->requestAs('admin', 'POST', '/api/qr-codes', ['quantity' => 1], 201);
         $qrId = $issued->json('qr_codes.0.id');
         $qrToken = $issued->json('qr_codes.0.qr_token');
         $this->assertTrue(is_int($qrId) && is_string($qrToken) && $qrToken !== '');
@@ -222,7 +223,7 @@ class Process10ASequentialAcceptanceTest extends TestCase
         $this->assertSame($document->tracking_no, $resolved->json('tracking_no'));
         $qr = DB::table('document_qr_codes')->where('id', $qrId)->first();
         $this->assertSame($id, $qr->document_id);
-        $this->assertSame($this->users['records']->id, $qr->generated_by);
+        $this->assertSame($this->users['admin']->id, $qr->generated_by);
         $this->assertNotNull($qr->generated_at);
         $this->assertNotNull($qr->registered_at);
         $routeRows = DB::table('document_routes')->orderBy('id')->get();
@@ -256,7 +257,7 @@ class Process10ASequentialAcceptanceTest extends TestCase
             'document_processing', 'document_routing', 'document_routing', 'documents'], $audits->pluck('module')->all());
         $this->assertSame([$qrId, $qrId, $id, $id, $id, $id, $id, $id, $id], $audits->pluck('record_id')->all());
         $this->assertSame(array_map(fn ($actor) => $this->users[$actor]->id,
-            ['records', 'records', 'records', 'records', 'b', 'b', 'b', 'c', 'c']), $audits->pluck('user_id')->all());
+            ['admin', 'records', 'records', 'records', 'b', 'b', 'b', 'c', 'c']), $audits->pluck('user_id')->all());
         $this->assertSame(array_fill(0, 9, '192.0.2.10'), $audits->pluck('ip_address')->all());
         $this->assertSame(array_fill(0, 9, 'Process10A-Synthetic/1.0'), $audits->pluck('user_agent')->all());
         foreach ($audits as $audit) {

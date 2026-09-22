@@ -242,7 +242,7 @@ Route::middleware([
     Route::post(
         'qr-codes',
         [DocumentQrCodeController::class, 'store']
-    )->middleware('can:qr.manage');
+    )->middleware('can:qr.issue');
 
     Route::get(
         'qr-codes/summary',

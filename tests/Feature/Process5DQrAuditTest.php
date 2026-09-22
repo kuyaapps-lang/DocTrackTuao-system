@@ -153,7 +153,7 @@ class Process5DQrAuditTest extends TestCase
 
     public function test_quantity_creates_matching_safe_audits(): void
     {
-        $user = $this->user('Records Officer');
+        $user = $this->user('Administrator');
         Sanctum::actingAs($user);
 
         $response = $this->postJson('/api/qr-codes', ['quantity' => 3])
@@ -190,6 +190,9 @@ class Process5DQrAuditTest extends TestCase
         $this->postJson('/api/qr-codes', ['quantity' => 1])->assertForbidden();
 
         Sanctum::actingAs($this->user('Records Officer', 'records@example.test'));
+        $this->postJson('/api/qr-codes', ['quantity' => 1])->assertForbidden();
+
+        Sanctum::actingAs($this->user('Administrator', 'admin-invalid@example.test'));
         $this->postJson('/api/qr-codes', ['quantity' => 0])->assertUnprocessable();
 
         $this->assertSame(0, DocumentQrCode::count());

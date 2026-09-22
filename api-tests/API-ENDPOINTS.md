@@ -616,7 +616,7 @@ error bodies.
 POST {{base_url}}/api/qr-codes
 ```
 
-Permission: `qr.manage`
+Permission: `qr.issue`
 
 JSON body:
 
@@ -653,7 +653,7 @@ registration and public resolution are unchanged.
 POST {{base_url}}/api/qr-codes/{qrCode}/void
 ```
 
-Permission: `qr.manage`
+Permission: `qr.void`
 
 Only unused, unlinked QR codes may be voided. The QR row is re-read and locked
 inside the void transaction. Registered, linked, already-void, stale, and other

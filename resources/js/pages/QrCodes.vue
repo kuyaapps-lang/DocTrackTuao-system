@@ -101,6 +101,7 @@ const getToken = () => {
 const { permissions } = useAuth()
 const canRequestQr = computed(() => permissions.value.includes('qr.request'))
 const canManageQr = computed(() => permissions.value.includes('qr.manage'))
+const canIssueQr = computed(() => permissions.value.includes('qr.issue'))
 const canApproveQr = computed(() => permissions.value.includes('qr.approve'))
 const canVoidQr = computed(() => permissions.value.includes('qr.void'))
 
@@ -974,7 +975,7 @@ onBeforeUnmount(() => {
             </Card>
 
             <!-- Direct issuance -->
-            <Card v-if="canManageQr" class="mt-6">
+            <Card v-if="canIssueQr" class="mt-6">
 
                 <CardHeader>
 
@@ -1095,6 +1096,7 @@ onBeforeUnmount(() => {
             <Card
                 v-if="
                     canManageQr &&
+                    canIssueQr &&
                     lastGeneratedBatch.length >
                     0
                 "

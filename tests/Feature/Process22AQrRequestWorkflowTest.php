@@ -238,6 +238,46 @@ class Process22AQrRequestWorkflowTest extends TestCase
             ->assertConflict();
     }
 
+    public function test_direct_qr_issuance_is_admin_only_while_records_can_request(): void
+    {
+        Sanctum::actingAs($this->admin);
+        $issued = $this->postJson('/api/qr-codes', ['quantity' => 1])
+            ->assertCreated()
+            ->assertJsonPath('quantity', 1);
+        $issuedQrId = $issued->json('qr_codes.0.id');
+        $this->assertIsInt($issuedQrId);
+        $this->assertDatabaseHas('document_qr_codes', [
+            'id' => $issuedQrId,
+            'generated_by' => $this->admin->id,
+            'status' => 'unused',
+        ]);
+
+        Sanctum::actingAs($this->recordsA);
+        $this->postJson('/api/qr-codes', ['quantity' => 1])
+            ->assertForbidden();
+
+        $requestId = $this->postJson('/api/qr-code-requests', [
+            'quantity' => 1,
+            'purpose' => 'Request workflow remains available.',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('request.status', 'pending')
+            ->json('request.id');
+
+        $this->assertDatabaseHas('qr_code_requests', [
+            'id' => $requestId,
+            'requested_by_user_id' => $this->recordsA->id,
+            'status' => 'pending',
+        ]);
+
+        $this->postJson('/api/qr-codes/'.$issuedQrId.'/void')
+            ->assertForbidden();
+
+        Sanctum::actingAs($this->admin);
+        $this->postJson('/api/qr-codes/'.$issuedQrId.'/void')
+            ->assertOk();
+    }
+
     private function user(string $roleName, string $email, int $officeId): User
     {
         return User::create([
