@@ -778,15 +778,15 @@ onMounted(() => {
                                         User
                                     </TableHead>
 
-                                    <TableHead>
+                                    <TableHead class="text-center">
                                         Role
                                     </TableHead>
 
-                                    <TableHead>
+                                    <TableHead class="text-center">
                                         Office
                                     </TableHead>
 
-                                    <TableHead class="text-right">
+                                    <TableHead class="text-center">
                                         Action
                                     </TableHead>
                                 </TableRow>
@@ -814,7 +814,7 @@ onMounted(() => {
                                         </div>
                                     </TableCell>
 
-                                    <TableCell>
+                                    <TableCell class="text-center">
                                         <span
                                             class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                                             :class="roleClass(user.role?.name)"
@@ -823,12 +823,12 @@ onMounted(() => {
                                         </span>
                                     </TableCell>
 
-                                    <TableCell>
+                                    <TableCell class="text-center">
                                         {{ user.office?.office_name || 'N/A' }}
                                     </TableCell>
 
-                                    <TableCell class="text-right">
-                                        <div class="flex justify-end gap-2">
+                                    <TableCell class="text-center">
+                                        <div class="flex justify-center gap-2">
                                             <Button
                                                 v-if="canResetPassword(user)"
                                                 variant="outline"

@@ -69,3 +69,23 @@ test('dashboard and shell polish copy stays user friendly', async () => {
     assert.match(sidebar, /<Menu aria-hidden="true" \/>/)
     assert.doesNotMatch(`${sidebar}\n${login}\n${resolver}`, /Document Tracking System/)
 })
+
+test('process 23c dashboard and users polish keeps alignment scoped to frontend', async () => {
+    const dashboard = await readSource('resources/js/pages/Dashboard.vue')
+    const users = await readSource('resources/js/pages/Users.vue')
+    const dashboardHelper = await readSource('resources/js/lib/dashboard.js')
+
+    assert.match(dashboard, /id="dashboard-heading" class="text-\[27px\] font-bold/)
+    assert.match(dashboard, /text-base font-bold text-blue-900/)
+    assert.match(dashboard, /<CardHeader class="bg-blue-900 px-3 py-2 text-left text-white">/)
+    assert.match(dashboard, /<CardContent class="px-3 py-4 text-center">/)
+    assert.match(dashboard, /<TableHead scope="col" class="text-center">Tracking no\.<\/TableHead>/)
+    assert.match(dashboard, /<Table class="text-xs">/)
+
+    assert.match(users, /<TableHead class="text-center">\s+Role\s+<\/TableHead>/)
+    assert.match(users, /<TableHead class="text-center">\s+Office\s+<\/TableHead>/)
+    assert.match(users, /<TableHead class="text-center">\s+Action\s+<\/TableHead>/)
+    assert.match(users, /<div class="flex justify-center gap-2">/)
+
+    assert.doesNotMatch(dashboardHelper, /office_id|requesting_office|processing_office/)
+})
