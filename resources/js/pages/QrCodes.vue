@@ -811,13 +811,13 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Request Workflow -->
-            <Card v-if="canRequestQr">
-                <CardHeader>
-                    <CardTitle>
+            <Card v-if="canRequestQr" class="overflow-hidden">
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
+                    <CardTitle class="text-sm font-semibold">
                         Request QR Codes
                     </CardTitle>
 
-                    <p class="text-sm text-gray-500">
+                    <p class="text-xs text-blue-100">
                         Submit a batch request for administrator review.
                     </p>
                 </CardHeader>
@@ -863,20 +863,21 @@ onBeforeUnmount(() => {
                 </CardContent>
             </Card>
 
-            <Card v-if="canRequestQr" class="mt-6">
-                <CardHeader>
+            <Card v-if="canRequestQr" class="mt-6 overflow-hidden">
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <CardTitle>
+                            <CardTitle class="text-sm font-semibold">
                                 QR Requests
                             </CardTitle>
-                            <p class="text-sm text-gray-500">
+                            <p class="text-xs text-blue-100">
                                 {{ canApproveQr ? 'All office QR requests.' : 'QR requests from your office.' }}
                             </p>
                         </div>
 
                         <Button
                             variant="outline"
+                            class="bg-white text-blue-900 hover:bg-blue-50"
                             :disabled="requestsLoading || reviewPendingId !== null"
                             @click="fetchRequests"
                         >
@@ -975,16 +976,16 @@ onBeforeUnmount(() => {
             </Card>
 
             <!-- Direct issuance -->
-            <Card v-if="canIssueQr" class="mt-6">
+            <Card v-if="canIssueQr" class="mt-6 overflow-hidden">
 
-                <CardHeader>
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
 
-                    <CardTitle>
+                    <CardTitle class="text-sm font-semibold">
                         Direct QR Issuance
                     </CardTitle>
 
                     <p
-                        class="text-sm text-gray-500"
+                        class="text-xs text-blue-100"
                     >
                         Generate immediate QR labels when approval is not required.
                     </p>
@@ -1100,10 +1101,10 @@ onBeforeUnmount(() => {
                     lastGeneratedBatch.length >
                     0
                 "
-                class="mt-6 border-blue-200"
+                class="mt-6 overflow-hidden border-blue-200"
             >
 
-                <CardHeader>
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
 
                     <div
                         class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
@@ -1111,12 +1112,12 @@ onBeforeUnmount(() => {
 
                         <div>
 
-                            <CardTitle>
+                            <CardTitle class="text-sm font-semibold">
                                 Last Generated Batch
                             </CardTitle>
 
                             <p
-                                class="mt-1 text-sm text-gray-500"
+                                class="mt-1 text-xs text-blue-100"
                             >
                                 {{
                                     lastGeneratedBatch.length
@@ -1134,7 +1135,7 @@ onBeforeUnmount(() => {
                         </div>
 
                         <Button
-                            class="bg-gray-900 text-white hover:bg-black"
+                            class="bg-white text-blue-900 hover:bg-blue-50"
                             @click="
                                 printLastBatch
                             "
@@ -1201,10 +1202,10 @@ onBeforeUnmount(() => {
             </Card>
 
             <!-- Workflow -->
-            <Card class="mt-6">
+            <Card class="mt-6 overflow-hidden">
 
-                <CardHeader>
-                    <CardTitle>
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
+                    <CardTitle class="text-sm font-semibold">
                         QR Workflow
                     </CardTitle>
                 </CardHeader>
@@ -1296,10 +1297,10 @@ onBeforeUnmount(() => {
             </Card>
 
             <!-- Record Summary -->
-            <Card v-if="canManageQr" class="mt-6">
+            <Card v-if="canManageQr" class="mt-6 overflow-hidden">
 
-                <CardHeader>
-                    <CardTitle>
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
+                    <CardTitle class="text-sm font-semibold">
                         QR Record Summary
                     </CardTitle>
                 </CardHeader>
@@ -1399,12 +1400,12 @@ onBeforeUnmount(() => {
 
             </Card>
 
-            <Card v-if="canManageQr" class="mt-6">
-                <CardHeader>
-                    <CardTitle>
+            <Card v-if="canManageQr" class="mt-6 overflow-hidden">
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
+                    <CardTitle class="text-sm font-semibold">
                         <span ref="inventoryHeading" tabindex="-1">Persisted QR Inventory</span>
                     </CardTitle>
-                    <p class="text-sm text-gray-500">
+                    <p class="text-xs text-blue-100">
                         Token-free issuance records for lifecycle administration.
                     </p>
                 </CardHeader>
@@ -1461,13 +1462,13 @@ onBeforeUnmount(() => {
                             <caption class="sr-only">
                                 Persisted QR records with lifecycle status and void eligibility
                             </caption>
-                            <thead class="bg-gray-50 text-gray-700">
+                            <thead class="bg-blue-900 text-white">
                                 <tr>
-                                    <th scope="col" class="px-3 py-2">Record ID</th>
-                                    <th scope="col" class="px-3 py-2">Issued</th>
-                                    <th scope="col" class="px-3 py-2">Status</th>
-                                    <th scope="col" class="px-3 py-2">Link state</th>
-                                    <th scope="col" class="px-3 py-2">Action</th>
+                                    <th scope="col" class="px-3 py-2 font-semibold">Record ID</th>
+                                    <th scope="col" class="px-3 py-2 font-semibold">Issued</th>
+                                    <th scope="col" class="px-3 py-2 font-semibold">Status</th>
+                                    <th scope="col" class="px-3 py-2 font-semibold">Link state</th>
+                                    <th scope="col" class="px-3 py-2 font-semibold">Action</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y">

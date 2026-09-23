@@ -220,19 +220,19 @@ onMounted(() => {
                px-4 py-10"
     >
         <Card
-            class="w-full max-w-lg bg-white"
+            class="w-full max-w-lg overflow-hidden bg-white"
         >
             <CardHeader
-                class="text-center"
+                class="bg-blue-900 px-4 py-2 text-center text-white"
             >
                 <CardTitle
-                    class="text-2xl"
+                    class="text-sm font-semibold"
                 >
                     Document QR Code
                 </CardTitle>
 
                 <p
-                    class="mt-2 text-sm text-gray-500"
+                    class="mt-1 text-xs text-blue-100"
                 >
                     LGU Tuao Document Management System
                 </p>
