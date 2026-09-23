@@ -75,11 +75,13 @@ test('process 23c dashboard and users polish keeps alignment scoped to frontend'
     const users = await readSource('resources/js/pages/Users.vue')
     const dashboardHelper = await readSource('resources/js/lib/dashboard.js')
 
-    assert.match(dashboard, /id="dashboard-heading" class="text-\[27px\] font-bold/)
+    assert.match(dashboard, /id="dashboard-heading" class="text-\[28px\] font-bold/)
     assert.match(dashboard, /text-base font-bold text-blue-900/)
-    assert.match(dashboard, /<CardHeader class="bg-blue-900 px-3 py-2 text-left text-white">/)
-    assert.match(dashboard, /<CardContent class="px-3 py-4 text-center">/)
-    assert.match(dashboard, /<TableHead scope="col" class="text-center">Tracking no\.<\/TableHead>/)
+    assert.match(dashboard, /<CardHeader class="bg-blue-900 px-3 py-1\.5 text-left text-white">/)
+    assert.match(dashboard, /<CardContent class="px-3 py-3 text-center">/)
+    assert.match(dashboard, /<TableHeader class="bg-sky-50 text-sky-900">/)
+    assert.match(dashboard, /<TableHeader class="bg-indigo-50 text-indigo-950">/)
+    assert.match(dashboard, /<TableHead scope="col" class="text-center font-semibold">Tracking no\.<\/TableHead>/)
     assert.match(dashboard, /<Table class="text-xs">/)
 
     assert.match(users, /<TableHead class="text-center">\s+Role\s+<\/TableHead>/)
