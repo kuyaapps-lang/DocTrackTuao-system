@@ -52,6 +52,22 @@ test('dashboard documents and public tracking show clearer helper copy', async (
     assert.match(tracking, /Limited public details are shown for this protected document/)
 })
 
+test('documents UI keeps process 23e color and date polish', async () => {
+    const documents = await readSource('resources/js/pages/Documents.vue')
+    const details = await readSource('resources/js/pages/DocumentDetails.vue')
+
+    assert.match(documents, /rounded-lg border border-blue-100 bg-blue-50 px-3 pt-3/)
+    assert.match(documents, /border-blue-700 bg-white text-blue-900 shadow-sm/)
+    assert.match(documents, /<TableHeader class="bg-blue-900 text-white">/)
+    assert.match(documents, /<TableHead class="text-white font-semibold">\s+Tracking No\./)
+    assert.match(documents, /formatDocumentDateTime/)
+
+    assert.match(details, /formatDocumentDateField/)
+    assert.match(details, /formatDocumentDateTime/)
+    assert.match(details, /{{ formatDate\(row\.date\) }}/)
+    assert.doesNotMatch(details, /formatHistoryDateOnly|formatHistoryTimeOnly/)
+})
+
 test('dashboard and shell polish copy stays user friendly', async () => {
     const dashboard = await readSource('resources/js/pages/Dashboard.vue')
     const shell = await readSource('resources/js/layouts/AppShell.vue')

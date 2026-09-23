@@ -27,6 +27,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { can } from '@/lib/auth'
+import { formatDocumentDateTime } from '@/lib/document-dates'
 import {
     buildDocumentListQuery,
     buildDocumentListRequestQuery,
@@ -903,11 +904,7 @@ const priorityClass = (priority) => {
 */
 
 const formatDate = (date) => {
-    if (!date) {
-        return 'N/A'
-    }
-
-    return new Date(date).toLocaleString()
+    return formatDocumentDateTime(date)
 }
 
 /*
@@ -1100,8 +1097,7 @@ onBeforeUnmount(() => {
 
                     <!-- Tabs -->
                     <div
-                        class="flex flex-wrap gap-2
-                               border-b border-gray-200"
+                        class="flex flex-wrap gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 pt-3"
                         role="tablist"
                         aria-label="Document views"
                     >
@@ -1113,13 +1109,11 @@ onBeforeUnmount(() => {
                             role="tab"
                             :aria-selected="activeTab === tab.key"
                             aria-controls="document-list-panel"
-                            class="px-4 py-3 text-sm
-                                   font-semibold border-b-2
-                                   transition-colors"
+                            class="rounded-t-md border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
                             :class="
                                 activeTab === tab.key
-                                    ? 'border-blue-600 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                                    ? 'border-blue-700 bg-white text-blue-900 shadow-sm'
+                                    : 'border-transparent text-blue-700 hover:border-blue-300 hover:bg-white/70 hover:text-blue-950'
                             "
                         >
                             {{ tab.label }}
@@ -1255,24 +1249,25 @@ onBeforeUnmount(() => {
                     >
                         <Table>
 
-                            <TableHeader>
+                            <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
 
-                                    <TableHead>
+                                    <TableHead class="text-white font-semibold">
                                         Tracking No.
                                     </TableHead>
 
-                                    <TableHead>
+                                    <TableHead class="text-white font-semibold">
                                         Type
                                     </TableHead>
 
-                                    <TableHead>
+                                    <TableHead class="text-white font-semibold">
                                         Title / Subject
                                     </TableHead>
 
                                     <!-- Incoming -->
                                     <TableHead
                                         v-if="activeTab === 'incoming'"
+                                        class="text-white font-semibold"
                                     >
                                         From Office
                                     </TableHead>
@@ -1280,6 +1275,7 @@ onBeforeUnmount(() => {
                                     <!-- Outgoing -->
                                     <TableHead
                                         v-if="activeTab === 'outgoing'"
+                                        class="text-white font-semibold"
                                     >
                                         To Office
                                     </TableHead>
@@ -1287,22 +1283,24 @@ onBeforeUnmount(() => {
                                     <!-- All -->
                                     <TableHead
                                         v-if="activeTab === 'all'"
+                                        class="text-white font-semibold"
                                     >
                                         Priority
                                     </TableHead>
 
-                                    <TableHead>
+                                    <TableHead class="text-white font-semibold">
                                         Status
                                     </TableHead>
 
                                     <!-- All -->
                                     <TableHead
                                         v-if="activeTab === 'all'"
+                                        class="text-white font-semibold"
                                     >
                                         Current Office
                                     </TableHead>
 
-                                    <TableHead>
+                                    <TableHead class="text-white font-semibold">
                                         {{
                                             activeTab === 'incoming'
                                                 ? 'Received'

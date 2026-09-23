@@ -16,6 +16,10 @@ import {
     parseDocumentListQuery,
     resetDocumentListPage,
 } from '../../resources/js/lib/document-list.js'
+import {
+    formatDocumentDateField,
+    formatDocumentDateTime,
+} from '../../resources/js/lib/document-dates.js'
 
 const validResponse = {
     data: [{ id: 1, tracking_no: 'DOC-1' }],
@@ -198,4 +202,18 @@ test('calculates previous and next boundaries', () => {
         previousPage: 2,
         nextPage: 3,
     })
+})
+
+test('formats document display dates in Manila numeric date time format', () => {
+    assert.equal(
+        formatDocumentDateTime('2026-09-23T10:45:00+00:00'),
+        '09/23/2026 06:45 PM'
+    )
+    assert.equal(
+        formatDocumentDateField('2026-09-23'),
+        '09/23/2026 12:00 AM'
+    )
+    assert.equal(formatDocumentDateTime(null), 'N/A')
+    assert.equal(formatDocumentDateTime('not-a-date'), 'N/A')
+    assert.equal(formatDocumentDateField(''), 'N/A')
 })

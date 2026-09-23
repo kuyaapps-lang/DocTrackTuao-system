@@ -24,6 +24,10 @@ import {
 
 import { can } from '@/lib/auth'
 import {
+    formatDocumentDateField,
+    formatDocumentDateTime,
+} from '@/lib/document-dates'
+import {
     archiveDocumentRequest,
     canArchiveDocument,
     canCompleteDocument,
@@ -1792,52 +1796,11 @@ const goBack = () => {
 */
 
 const formatDate = (date) => {
-    if (!date) {
-        return 'N/A'
-    }
-
-    return new Date(
-        date
-    ).toLocaleString()
-}
-
-const formatHistoryDateOnly = (date) => {
-    if (!date) {
-        return 'N/A'
-    }
-
-    return new Date(date).toLocaleDateString(
-        'en-US',
-        {
-            month: '2-digit',
-            day: '2-digit',
-            year: '2-digit',
-        }
-    )
-}
-
-const formatHistoryTimeOnly = (date) => {
-    if (!date) {
-        return ''
-    }
-
-    return new Date(date).toLocaleTimeString(
-        'en-US',
-        {
-            hour: 'numeric',
-            minute: '2-digit',
-        }
-    )
+    return formatDocumentDateTime(date)
 }
 
 const formatSimpleDate = (date) => {
-    if (!date) {
-        return 'N/A'
-    }
-
-    return new Date(
-        `${date}T00:00:00`
-    ).toLocaleDateString()
+    return formatDocumentDateField(date)
 }
 
 /*
@@ -2757,23 +2720,13 @@ onMounted(() => {
                                         </td>
 
                                         <td
-                                            class="w-[100px] px-2 py-4 text-center text-gray-600"
+                                            class="w-[150px] px-2 py-4 text-center text-gray-600"
                                         >
-                                            <div
-                                                class="mx-auto flex w-fit flex-col items-center leading-tight"
+                                            <span
+                                                class="whitespace-nowrap text-xs font-medium"
                                             >
-                                                <span
-                                                    class="whitespace-nowrap text-xs font-medium"
-                                                >
-                                                    {{ formatHistoryDateOnly(row.date) }}
-                                                </span>
-
-                                                <span
-                                                    class="mt-1 whitespace-nowrap text-xs text-gray-500"
-                                                >
-                                                    {{ formatHistoryTimeOnly(row.date) }}
-                                                </span>
-                                            </div>
+                                                {{ formatDate(row.date) }}
+                                            </span>
                                         </td>
 
                                         <td
