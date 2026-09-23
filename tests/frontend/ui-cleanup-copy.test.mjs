@@ -82,7 +82,7 @@ test('process 23c dashboard and users polish keeps alignment scoped to frontend'
     assert.match(dashboard, /<TableHeader class="bg-sky-50 text-sky-900">/)
     assert.match(dashboard, /<TableHeader class="bg-indigo-50 text-indigo-950">/)
     assert.match(dashboard, /<TableHead scope="col" class="text-center font-semibold">Tracking no\.<\/TableHead>/)
-    assert.match(dashboard, /<Table class="text-xs">/)
+    assert.match(dashboard, /<Table class="text-\[11pt\]">/)
 
     assert.match(users, /<TableHead class="text-center">\s+Role\s+<\/TableHead>/)
     assert.match(users, /<TableHead class="text-center">\s+Office\s+<\/TableHead>/)

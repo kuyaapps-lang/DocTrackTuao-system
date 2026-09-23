@@ -74,7 +74,7 @@ test('formats dashboard timestamps in the reporting timezone', async () => {
         watch: () => {},
     })
 
-    assert.equal(page.formatDashboardDateTime('2026-09-23T10:45:00+00:00'), 'September 23, 2026 06:45 PM')
+    assert.equal(page.formatDashboardDateTime('2026-09-23T10:45:00+00:00'), '09/23/2026 06:45 PM')
     assert.equal(page.formatDashboardDateTime(null), 'N/A')
     assert.equal(page.formatDashboardDateTime('not-a-date'), 'N/A')
 })
