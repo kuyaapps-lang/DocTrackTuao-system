@@ -89,11 +89,15 @@ test('dashboard and shell polish copy stays user friendly', async () => {
 test('QR UI keeps compact blue header palette', async () => {
     const qrCodes = await readSource('resources/js/pages/QrCodes.vue')
     const resolver = await readSource('resources/js/pages/QrResolver.vue')
+    const styles = await readSource('resources/css/app.css')
 
     assert.match(qrCodes, /<CardHeader class="bg-blue-900 px-4 py-2 text-white">/)
-    assert.match(qrCodes, /<CardTitle class="text-sm font-semibold">/)
+    assert.match(qrCodes, /<CardTitle class="text-base font-semibold">/)
+    assert.match(qrCodes, /QR Code Administration/)
+    assert.match(qrCodes, /Review and manage office QR requests/)
     assert.match(qrCodes, /<thead class="bg-blue-900 text-white">/)
     assert.match(qrCodes, /class="text-xs text-blue-100"/)
+    assert.match(styles, /--font-sans: 'Century Gothic', 'Segoe UI', Arial, sans-serif;/)
     assert.match(resolver, /class="bg-blue-900 px-4 py-2 text-center text-white"/)
     assert.match(resolver, /class="text-sm font-semibold"/)
 })

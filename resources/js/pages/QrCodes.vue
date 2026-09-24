@@ -757,7 +757,7 @@ onBeforeUnmount(() => {
 
         <!-- Header -->
         <div
-            class="border-b bg-white px-6 py-4"
+            class="bg-blue-900 px-6 py-4 text-white shadow-sm"
         >
 
             <div
@@ -765,17 +765,19 @@ onBeforeUnmount(() => {
             >
 
                 <h1
-                    class="text-2xl font-bold text-gray-900"
+                    class="text-2xl font-bold"
                 >
-                    QR Code Request / Issuance
+                    {{ canApproveQr ? 'QR Code Administration' : 'QR Code Requests' }}
                 </h1>
 
                 <p
-                    class="mt-1 text-sm text-gray-500"
+                    class="mt-1 text-sm text-blue-100"
                 >
-                    Request QR codes in bulk,
-                    print the labels, and attach
-                    them to physical documents.
+                    {{
+                        canApproveQr
+                            ? 'Review office requests, issue approved QR labels, and manage QR records.'
+                            : 'Request QR codes in bulk, print approved labels, and attach them to physical documents.'
+                    }}
                 </p>
 
             </div>
@@ -811,9 +813,9 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Request Workflow -->
-            <Card v-if="canRequestQr" class="overflow-hidden">
+            <Card v-if="canRequestQr && !canApproveQr" class="overflow-hidden border-blue-200">
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-                    <CardTitle class="text-sm font-semibold">
+                    <CardTitle class="text-base font-semibold">
                         Request QR Codes
                     </CardTitle>
 
@@ -863,15 +865,15 @@ onBeforeUnmount(() => {
                 </CardContent>
             </Card>
 
-            <Card v-if="canRequestQr" class="mt-6 overflow-hidden">
+            <Card v-if="canRequestQr" class="mt-6 overflow-hidden border-blue-200">
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <CardTitle class="text-sm font-semibold">
-                                QR Requests
+                            <CardTitle class="text-base font-semibold">
+                                {{ canApproveQr ? 'Office QR Requests' : 'My QR Requests' }}
                             </CardTitle>
                             <p class="text-xs text-blue-100">
-                                {{ canApproveQr ? 'All office QR requests.' : 'QR requests from your office.' }}
+                                {{ canApproveQr ? 'Review and manage office QR requests.' : 'Track QR requests from your office.' }}
                             </p>
                         </div>
 
@@ -903,12 +905,12 @@ onBeforeUnmount(() => {
                         <div
                             v-for="request in requests"
                             :key="request.id"
-                            class="rounded-lg border bg-white p-4"
+                            class="rounded-lg border border-blue-100 bg-white p-4 shadow-sm"
                         >
                             <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div>
+                                <div class="min-w-0 flex-1">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <span class="font-mono text-sm font-semibold text-gray-700">#{{ request.id }}</span>
+                                        <span class="font-mono text-sm font-semibold text-blue-900">Request #{{ request.id }}</span>
                                         <span
                                             class="rounded-md border px-2 py-1 text-xs font-semibold capitalize"
                                             :class="statusClass(request.status)"
@@ -918,9 +920,28 @@ onBeforeUnmount(() => {
                                         <span class="text-sm text-gray-600">{{ request.quantity }} QR code{{ request.quantity === 1 ? '' : 's' }}</span>
                                     </div>
 
-                                    <p class="mt-2 text-sm text-gray-700">
-                                        {{ request.requested_office?.office_name || 'Unassigned office' }}
-                                    </p>
+                                    <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                                        <div class="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                                            <p class="text-xs font-semibold uppercase text-sky-700">Requesting Office</p>
+                                            <p class="mt-1 text-sm font-semibold text-gray-900">
+                                                {{ request.requested_office?.office_name || 'Unassigned office' }}
+                                            </p>
+                                        </div>
+
+                                        <div class="rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2">
+                                            <p class="text-xs font-semibold uppercase text-indigo-700">Date Requested</p>
+                                            <p class="mt-1 text-sm font-semibold text-gray-900">
+                                                {{ formatDateTime(request.created_at) }}
+                                            </p>
+                                        </div>
+
+                                        <div class="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
+                                            <p class="text-xs font-semibold uppercase text-emerald-700">Assigned QR Code</p>
+                                            <p class="mt-1 text-sm font-semibold text-gray-900">
+                                                {{ request.qr_codes.length > 0 ? `${request.qr_codes.length} assigned` : 'Not assigned yet' }}
+                                            </p>
+                                        </div>
+                                    </div>
 
                                     <p v-if="request.purpose" class="mt-1 text-sm text-gray-500">
                                         {{ request.purpose }}
@@ -980,7 +1001,7 @@ onBeforeUnmount(() => {
 
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
 
-                    <CardTitle class="text-sm font-semibold">
+                    <CardTitle class="text-base font-semibold">
                         Direct QR Issuance
                     </CardTitle>
 
@@ -1112,7 +1133,7 @@ onBeforeUnmount(() => {
 
                         <div>
 
-                            <CardTitle class="text-sm font-semibold">
+                            <CardTitle class="text-base font-semibold">
                                 Last Generated Batch
                             </CardTitle>
 
@@ -1205,7 +1226,7 @@ onBeforeUnmount(() => {
             <Card class="mt-6 overflow-hidden">
 
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-                    <CardTitle class="text-sm font-semibold">
+                    <CardTitle class="text-base font-semibold">
                         QR Workflow
                     </CardTitle>
                 </CardHeader>
@@ -1300,7 +1321,7 @@ onBeforeUnmount(() => {
             <Card v-if="canManageQr" class="mt-6 overflow-hidden">
 
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-                    <CardTitle class="text-sm font-semibold">
+                    <CardTitle class="text-base font-semibold">
                         QR Record Summary
                     </CardTitle>
                 </CardHeader>
@@ -1402,7 +1423,7 @@ onBeforeUnmount(() => {
 
             <Card v-if="canManageQr" class="mt-6 overflow-hidden">
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-                    <CardTitle class="text-sm font-semibold">
+                    <CardTitle class="text-base font-semibold">
                         <span ref="inventoryHeading" tabindex="-1">Persisted QR Inventory</span>
                     </CardTitle>
                     <p class="text-xs text-blue-100">
