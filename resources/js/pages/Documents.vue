@@ -1177,7 +1177,7 @@ onBeforeUnmount(() => {
                             <select
                                 id="documents-per-page"
                                 v-model.number="perPage"
-                                class="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                class="h-10 w-20 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             >
                                 <option
                                     v-for="option in DOCUMENT_LIST_PER_PAGE_OPTIONS"

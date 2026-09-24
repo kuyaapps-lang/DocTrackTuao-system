@@ -60,6 +60,7 @@ test('documents UI keeps process 23e color and date polish', async () => {
     assert.match(documents, /border-blue-700 bg-white text-blue-900 shadow-sm/)
     assert.match(documents, /<TableHeader class="bg-blue-900 text-white">/)
     assert.match(documents, /<TableHead class="text-white font-semibold">\s+Tracking No\./)
+    assert.match(documents, /id="documents-per-page"\s+v-model\.number="perPage"\s+class="h-10 w-20 rounded-md/)
     assert.match(documents, /formatDocumentDateTime/)
 
     assert.match(details, /formatDocumentDateField/)
@@ -108,7 +109,9 @@ test('process 23c dashboard and users polish keeps alignment scoped to frontend'
     const dashboardHelper = await readSource('resources/js/lib/dashboard.js')
 
     assert.match(dashboard, /id="dashboard-heading" class="text-\[28px\] font-bold/)
-    assert.match(dashboard, /text-base font-bold text-blue-900/)
+    assert.match(dashboard, /text-\[13pt\] font-bold text-blue-900/)
+    assert.match(dashboard, /<CardTitle class="text-\[15pt\] font-semibold">Recent Documents<\/CardTitle>/)
+    assert.match(dashboard, /class="text-\[13pt\] font-semibold text-gray-900"/)
     assert.match(dashboard, /<CardHeader class="bg-blue-900 px-3 py-1\.5 text-left text-white">/)
     assert.match(dashboard, /<CardContent class="px-3 py-3 text-center">/)
     assert.match(dashboard, /aria-label="Recent documents in the selected reporting period"/)

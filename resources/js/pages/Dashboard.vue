@@ -188,10 +188,10 @@ onBeforeUnmount(() => {
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <h2 id="dashboard-heading" class="text-[28px] font-bold text-blue-950">Dashboard Summary</h2>
-                        <p class="mt-1 text-base font-semibold text-gray-600">{{ scopeLabel || 'Loading report scope...' }}</p>
+                        <p class="mt-1 text-[13pt] font-semibold text-gray-600">{{ scopeLabel || 'Loading report scope...' }}</p>
                     </div>
                     <form class="flex flex-wrap items-end gap-2" @submit.prevent="updateMonth">
-                        <label class="text-sm font-semibold text-gray-700">Reporting month
+                        <label class="text-[13pt] font-semibold text-gray-700">Reporting month
                             <input v-model="selectedMonth" type="month" class="mt-1 block h-10 rounded-md border border-gray-300 bg-white px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" :disabled="loading">
                         </label>
                         <Button type="submit" :disabled="loading">Apply</Button>
@@ -201,8 +201,8 @@ onBeforeUnmount(() => {
             </div>
 
             <p class="sr-only" aria-live="polite">{{ loading ? 'Loading dashboard summary.' : state === 'success' ? `Dashboard summary loaded for ${monthLabel}.` : 'Dashboard summary could not be loaded.' }}</p>
-            <div v-if="loading && !dashboard" class="rounded-lg border bg-white p-10 text-center text-gray-600">Loading dashboard summary...</div>
-            <div v-else-if="state !== 'success'" class="rounded-lg border border-red-200 bg-red-50 p-6 text-center text-red-800" role="alert">
+            <div v-if="loading && !dashboard" class="rounded-lg border bg-white p-10 text-center text-[13pt] text-gray-600">Loading dashboard summary...</div>
+            <div v-else-if="state !== 'success'" class="rounded-lg border border-red-200 bg-red-50 p-6 text-center text-[13pt] text-red-800" role="alert">
                 <p v-if="state === 'permission-denied'">You do not have permission to view dashboard reports.</p>
                 <p v-else-if="state === 'office-denied'">Dashboard reporting is unavailable because your account has no valid office assignment.</p>
                 <p v-else>Dashboard summary is temporarily unavailable.</p>
@@ -210,26 +210,26 @@ onBeforeUnmount(() => {
             </div>
 
             <template v-else>
-                <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-base font-bold text-blue-900">
+                <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-[13pt] font-bold text-blue-900">
                     <span>Scope: {{ scopeLabel }}</span>
                     <span>Reporting period: {{ monthLabel }}</span>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    <Card v-for="metric in metrics" :key="metric[0]" class="overflow-hidden border-blue-100 bg-white py-0"><CardHeader class="bg-blue-900 px-3 py-1.5 text-left text-white"><CardTitle class="text-base font-semibold">{{ metric[0] }}</CardTitle></CardHeader><CardContent class="px-3 py-3 text-center"><p class="text-2xl font-bold text-gray-900">{{ metric[1] }}</p></CardContent></Card>
+                    <Card v-for="metric in metrics" :key="metric[0]" class="overflow-hidden border-blue-100 bg-white py-0"><CardHeader class="bg-blue-900 px-3 py-1.5 text-left text-white"><CardTitle class="text-[15pt] font-semibold">{{ metric[0] }}</CardTitle></CardHeader><CardContent class="px-3 py-3 text-center"><p class="text-2xl font-bold text-gray-900">{{ metric[1] }}</p></CardContent></Card>
                 </div>
 
                 <div class="grid gap-4 xl:grid-cols-3">
                     <Card v-for="distribution in [['Documents by status', dashboard.status_distribution, 'status'], ['Documents by current office', dashboard.current_office_distribution, 'office'], ['Documents by origin office', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]" class="overflow-hidden border-blue-100 py-0">
-                        <CardHeader class="bg-emerald-700 px-4 py-1.5 text-white"><CardTitle class="text-base font-semibold">{{ distribution[0] }}</CardTitle></CardHeader>
+                        <CardHeader class="bg-emerald-700 px-4 py-1.5 text-white"><CardTitle class="text-[15pt] font-semibold">{{ distribution[0] }}</CardTitle></CardHeader>
                         <CardContent class="px-4 py-3">
-                            <p v-if="distribution[1].length === 0" class="py-6 text-center text-sm text-gray-500">No matching documents for this period.</p>
+                            <p v-if="distribution[1].length === 0" class="py-6 text-center text-[13pt] text-gray-500">No matching documents for this period.</p>
                             <ul v-else class="space-y-2.5">
                                 <li v-for="item in distribution[1]" :key="`${distribution[0]}-${item[distribution[2]].id ?? 'none'}`" class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                                     <div class="min-w-0">
-                                        <div class="mb-1 truncate text-sm">{{ item[distribution[2]].name }}</div>
+                                        <div class="mb-1 truncate text-[13pt]">{{ item[distribution[2]].name }}</div>
                                         <div class="h-2 overflow-hidden rounded bg-gray-200" role="progressbar" :aria-label="`${item[distribution[2]].name}: ${item.count}`" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="barPercentage(item.count, distribution[1])"><div class="h-full rounded bg-blue-600" :style="{ width: `${barPercentage(item.count, distribution[1])}%` }" /></div>
                                     </div>
-                                    <span class="text-sm font-semibold leading-none">{{ item.count }}</span>
+                                    <span class="text-[13pt] font-semibold leading-none">{{ item.count }}</span>
                                 </li>
                             </ul>
                         </CardContent>
@@ -237,30 +237,30 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
-                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-sky-700 px-4 py-2 text-white"><CardTitle class="text-base font-semibold">Recent Documents</CardTitle></CardHeader><CardContent class="px-4 py-4">
-                        <p v-if="dashboard.recent_documents.length === 0" class="py-6 text-center text-sm text-gray-500">No documents were registered in this period.</p>
+                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-sky-700 px-4 py-2 text-white"><CardTitle class="text-[15pt] font-semibold">Recent Documents</CardTitle></CardHeader><CardContent class="px-4 py-4">
+                        <p v-if="dashboard.recent_documents.length === 0" class="py-6 text-center text-[13pt] text-gray-500">No documents were registered in this period.</p>
                         <ul v-else class="max-h-72 space-y-2 overflow-auto pr-1" aria-label="Recent documents in the selected reporting period">
                             <li v-for="document in dashboard.recent_documents" :key="document.id" class="rounded-md border border-sky-100 bg-white px-3 py-2 shadow-sm">
                                 <div class="flex flex-wrap items-center justify-between gap-2">
-                                    <span class="text-sm font-semibold text-gray-900">{{ document.tracking_no }}</span>
-                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="documentStatusClass(document.status.name)">{{ document.status.name }}</span>
+                                    <span class="text-[13pt] font-semibold text-gray-900">{{ document.tracking_no }}</span>
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-[13pt] font-semibold" :class="documentStatusClass(document.status.name)">{{ document.status.name }}</span>
                                 </div>
-                                <time :datetime="document.created_at" class="mt-1 block text-xs font-medium text-gray-500">{{ formatDashboardDateTime(document.created_at) }}</time>
+                                <time :datetime="document.created_at" class="mt-1 block text-[13pt] font-medium text-gray-500">{{ formatDashboardDateTime(document.created_at) }}</time>
                             </li>
                         </ul>
                     </CardContent></Card>
-                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-indigo-800 px-4 py-2 text-white"><CardTitle class="text-sm font-semibold">Recent Routing Activity</CardTitle></CardHeader><CardContent class="px-4 py-4">
-                        <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-sm text-gray-500">No routing activity was recorded in this period.</p>
+                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-indigo-800 px-4 py-2 text-white"><CardTitle class="text-[15pt] font-semibold">Recent Routing Activity</CardTitle></CardHeader><CardContent class="px-4 py-4">
+                        <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-[13pt] text-gray-500">No routing activity was recorded in this period.</p>
                         <ul v-else class="space-y-2" aria-label="Recent routing activity in the selected reporting period">
                             <li v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`" class="rounded-md border border-indigo-100 bg-white px-3 py-2.5 shadow-sm">
-                                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13pt]">
                                     <span class="font-semibold text-gray-900">{{ activity.document.tracking_no }}</span>
                                     <span class="text-gray-400">/</span>
                                     <span class="font-medium text-gray-700">{{ activity.from_office.name }} to {{ activity.to_office.name }}</span>
                                 </div>
                                 <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
-                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="routingEventClass(activity.event_type)">{{ routingEventLabel(activity.event_type) }}</span>
-                                    <time :datetime="activity.occurred_at" class="text-xs font-medium text-gray-500">{{ formatDashboardDateTime(activity.occurred_at) }}</time>
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-[13pt] font-semibold" :class="routingEventClass(activity.event_type)">{{ routingEventLabel(activity.event_type) }}</span>
+                                    <time :datetime="activity.occurred_at" class="text-[13pt] font-medium text-gray-500">{{ formatDashboardDateTime(activity.occurred_at) }}</time>
                                 </div>
                             </li>
                         </ul>
