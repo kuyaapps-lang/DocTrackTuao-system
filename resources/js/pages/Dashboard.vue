@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useAuth } from '@/lib/auth'
 import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, normalizeDashboardMonth } from '@/lib/dashboard'
 
@@ -63,6 +62,31 @@ const formatDashboardDateTime = value => {
 const monthLabel = computed(() => formatDashboardMonth(dashboard.value?.filters.month))
 const maxCount = items => Math.max(1, ...items.map(item => item.count))
 const barPercentage = (count, items) => calculateDashboardPercentage(count, maxCount(items))
+const documentStatusClass = status => {
+    switch (String(status).toLowerCase()) {
+        case 'received':
+            return 'bg-blue-100 text-blue-700'
+        case 'forwarded':
+        case 'awaiting receipt':
+            return 'bg-indigo-100 text-indigo-700'
+        case 'pending':
+            return 'bg-yellow-100 text-yellow-700'
+        case 'approved':
+            return 'bg-green-100 text-green-700'
+        case 'completed':
+            return 'bg-emerald-100 text-emerald-700'
+        case 'returned':
+            return 'bg-orange-100 text-orange-700'
+        case 'cancelled':
+            return 'bg-red-100 text-red-700'
+        case 'archived':
+            return 'bg-slate-100 text-slate-700'
+        default:
+            return 'bg-gray-100 text-gray-700'
+    }
+}
+const routingEventLabel = eventType => eventType === 'received' ? 'Received' : 'Forwarded'
+const routingEventClass = eventType => eventType === 'received' ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700'
 
 const clearLocalAuthentication = async () => {
     localStorage.removeItem('auth_token')
@@ -215,11 +239,31 @@ onBeforeUnmount(() => {
                 <div class="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
                     <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-sky-700 px-4 py-2 text-white"><CardTitle class="text-base font-semibold">Recent Documents</CardTitle></CardHeader><CardContent class="px-4 py-4">
                         <p v-if="dashboard.recent_documents.length === 0" class="py-6 text-center text-sm text-gray-500">No documents were registered in this period.</p>
-                        <div v-else class="max-h-72 max-w-full overflow-auto"><Table class="text-[11pt]"><caption class="sr-only">Recent documents in the selected reporting period</caption><TableHeader class="bg-sky-50 text-sky-900"><TableRow><TableHead scope="col" class="text-center font-semibold">Tracking no.</TableHead><TableHead scope="col" class="text-center font-semibold">Status</TableHead><TableHead scope="col" class="text-center font-semibold">Created</TableHead></TableRow></TableHeader><TableBody><TableRow v-for="document in dashboard.recent_documents" :key="document.id"><TableCell class="whitespace-nowrap text-center font-medium">{{ document.tracking_no }}</TableCell><TableCell class="text-center">{{ document.status.name }}</TableCell><TableCell class="whitespace-nowrap text-center"><time :datetime="document.created_at">{{ formatDashboardDateTime(document.created_at) }}</time></TableCell></TableRow></TableBody></Table></div>
+                        <ul v-else class="max-h-72 space-y-2 overflow-auto pr-1" aria-label="Recent documents in the selected reporting period">
+                            <li v-for="document in dashboard.recent_documents" :key="document.id" class="rounded-md border border-sky-100 bg-white px-3 py-2 shadow-sm">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="text-sm font-semibold text-gray-900">{{ document.tracking_no }}</span>
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="documentStatusClass(document.status.name)">{{ document.status.name }}</span>
+                                </div>
+                                <time :datetime="document.created_at" class="mt-1 block text-xs font-medium text-gray-500">{{ formatDashboardDateTime(document.created_at) }}</time>
+                            </li>
+                        </ul>
                     </CardContent></Card>
                     <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-indigo-800 px-4 py-2 text-white"><CardTitle class="text-sm font-semibold">Recent Routing Activity</CardTitle></CardHeader><CardContent class="px-4 py-4">
                         <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-sm text-gray-500">No routing activity was recorded in this period.</p>
-                        <div v-else class="max-w-full overflow-x-auto"><Table class="text-[11pt]"><caption class="sr-only">Recent routing activity in the selected reporting period</caption><TableHeader class="bg-indigo-50 text-indigo-950"><TableRow><TableHead scope="col" class="text-center font-semibold">Document</TableHead><TableHead scope="col" class="text-center font-semibold">Event</TableHead><TableHead scope="col" class="text-center font-semibold">Route</TableHead><TableHead scope="col" class="text-center font-semibold">Time</TableHead></TableRow></TableHeader><TableBody><TableRow v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`"><TableCell class="whitespace-nowrap text-center font-medium">{{ activity.document.tracking_no }}</TableCell><TableCell class="text-center capitalize">{{ activity.event_type }}</TableCell><TableCell class="min-w-72 text-center">{{ activity.from_office.name }} to {{ activity.to_office.name }}</TableCell><TableCell class="whitespace-nowrap text-center"><time :datetime="activity.occurred_at">{{ formatDashboardDateTime(activity.occurred_at) }}</time></TableCell></TableRow></TableBody></Table></div>
+                        <ul v-else class="space-y-2" aria-label="Recent routing activity in the selected reporting period">
+                            <li v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`" class="rounded-md border border-indigo-100 bg-white px-3 py-2.5 shadow-sm">
+                                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                    <span class="font-semibold text-gray-900">{{ activity.document.tracking_no }}</span>
+                                    <span class="text-gray-400">/</span>
+                                    <span class="font-medium text-gray-700">{{ activity.from_office.name }} to {{ activity.to_office.name }}</span>
+                                </div>
+                                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="routingEventClass(activity.event_type)">{{ routingEventLabel(activity.event_type) }}</span>
+                                    <time :datetime="activity.occurred_at" class="text-xs font-medium text-gray-500">{{ formatDashboardDateTime(activity.occurred_at) }}</time>
+                                </div>
+                            </li>
+                        </ul>
                     </CardContent></Card>
                 </div>
             </template>
