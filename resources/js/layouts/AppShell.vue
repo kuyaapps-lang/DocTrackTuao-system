@@ -16,7 +16,7 @@ import {
 import AppSidebar from '@/components/AppSidebar.vue'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth'
-import { Menu } from 'lucide-vue-next'
+import { CircleUserRound, Menu } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,7 +31,9 @@ const logoutPending = ref(false)
 const logoutError = ref('')
 const desktopSidebarCollapsed = ref(false)
 const mobileNavigationOpen = ref(false)
+const accountMenuOpen = ref(false)
 const menuTrigger = ref(null)
+const accountMenu = ref(null)
 const sidebar = ref(null)
 
 let desktopMediaQuery = null
@@ -47,6 +49,12 @@ const userName = computed(() => {
 
 const roleLabel = computed(() => {
     return currentUser.value?.role?.name || ''
+})
+
+const officeLabel = computed(() => {
+    return currentUser.value?.office?.office_name ||
+        currentUser.value?.office?.name ||
+        ''
 })
 
 const openMobileNavigation = async () => {
@@ -70,6 +78,10 @@ const closeMobileNavigation = async (restoreFocus = true) => {
 }
 
 const handleDocumentKeydown = (event) => {
+    if (event.key === 'Escape' && accountMenuOpen.value) {
+        accountMenuOpen.value = false
+    }
+
     if (!mobileNavigationOpen.value) {
         return
     }
@@ -109,6 +121,18 @@ const handleDocumentKeydown = (event) => {
     }
 }
 
+const handleAccountOutsideClick = (event) => {
+    if (!accountMenuOpen.value) {
+        return
+    }
+
+    if (accountMenu.value?.contains(event.target)) {
+        return
+    }
+
+    accountMenuOpen.value = false
+}
+
 const handleDesktopBreakpoint = (event) => {
     if (event.matches) {
         closeMobileNavigation(false)
@@ -131,6 +155,7 @@ watch(() => route.fullPath, () => {
 
 onMounted(() => {
     document.addEventListener('keydown', handleDocumentKeydown)
+    document.addEventListener('pointerdown', handleAccountOutsideClick)
 
     desktopMediaQuery = window.matchMedia('(min-width: 768px)')
     desktopMediaQuery.addEventListener(
@@ -141,6 +166,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     document.removeEventListener('keydown', handleDocumentKeydown)
+    document.removeEventListener('pointerdown', handleAccountOutsideClick)
     desktopMediaQuery?.removeEventListener(
         'change',
         handleDesktopBreakpoint
@@ -152,6 +178,7 @@ onBeforeUnmount(() => {
 })
 
 const clearLocalAuthentication = async () => {
+    accountMenuOpen.value = false
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
     clearCurrentUser()
@@ -198,6 +225,10 @@ const logout = async () => {
         logoutPending.value = false
     }
 }
+
+const toggleAccountMenu = () => {
+    accountMenuOpen.value = !accountMenuOpen.value
+}
 </script>
 
 <template>
@@ -237,43 +268,64 @@ const logout = async () => {
                     </div>
                 </div>
 
-                <div class="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 shadow-sm">
-                    <div
-                        v-if="userName || roleLabel"
-                        class="mb-2 text-right"
-                    >
-                        <p
-                            v-if="userName"
-                            class="max-w-48 truncate text-sm font-semibold text-blue-950"
-                        >
-                            {{ userName }}
-                        </p>
-                        <p
-                            v-if="roleLabel"
-                            class="text-xs font-medium uppercase tracking-wide text-blue-700"
-                        >
-                            {{ roleLabel }}
-                        </p>
-                    </div>
-
+                <div ref="accountMenu" class="relative shrink-0">
                     <Button
                         type="button"
-                        :disabled="logoutPending"
                         variant="outline"
-                        size="sm"
-                        class="w-full border-blue-200 bg-white text-blue-800 hover:bg-blue-100"
-                        @click="logout"
+                        size="icon"
+                        class="h-11 w-11 rounded-full border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+                        aria-label="Open account menu"
+                        aria-haspopup="menu"
+                        :aria-expanded="accountMenuOpen"
+                        @click="toggleAccountMenu"
                     >
-                        {{ logoutPending ? 'Logging out...' : 'Logout' }}
+                        <CircleUserRound aria-hidden="true" class="h-6 w-6" />
                     </Button>
 
-                    <p
-                        v-if="logoutError"
-                        class="text-sm text-red-600"
-                        role="alert"
+                    <div
+                        v-if="accountMenuOpen"
+                        class="absolute right-0 z-40 mt-2 w-64 rounded-lg border border-blue-100 bg-white p-4 text-sm shadow-lg"
+                        role="menu"
+                        aria-label="Account menu"
                     >
-                        {{ logoutError }}
-                    </p>
+                        <div class="space-y-1 border-b border-blue-100 pb-3">
+                            <p class="truncate text-sm font-semibold text-blue-950">
+                                {{ userName || 'Signed-in user' }}
+                            </p>
+                            <p
+                                v-if="roleLabel"
+                                class="text-xs font-medium uppercase tracking-wide text-blue-700"
+                            >
+                                {{ roleLabel }}
+                            </p>
+                            <p
+                                v-if="officeLabel"
+                                class="truncate text-xs text-gray-600"
+                            >
+                                {{ officeLabel }}
+                            </p>
+                        </div>
+
+                        <Button
+                            type="button"
+                            :disabled="logoutPending"
+                            variant="outline"
+                            size="sm"
+                            class="mt-3 w-full border-blue-200 bg-white text-blue-800 hover:bg-blue-100"
+                            role="menuitem"
+                            @click="logout"
+                        >
+                            {{ logoutPending ? 'Logging out...' : 'Logout' }}
+                        </Button>
+
+                        <p
+                            v-if="logoutError"
+                            class="mt-2 text-sm text-red-600"
+                            role="alert"
+                        >
+                            {{ logoutError }}
+                        </p>
+                    </div>
                 </div>
             </header>
 
