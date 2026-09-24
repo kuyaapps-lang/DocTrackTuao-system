@@ -792,7 +792,7 @@ onBeforeUnmount(() => {
             <!-- Success -->
             <div
                 v-if="successMessage"
-                class="mb-5 rounded-md border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700"
+                class="mb-5 rounded-md border border-green-200 bg-green-50 p-4 text-[13pt] font-semibold text-green-700"
             >
                 {{ successMessage }}
             </div>
@@ -800,14 +800,14 @@ onBeforeUnmount(() => {
             <!-- Error -->
             <div
                 v-if="error"
-                class="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-600"
+                class="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-[13pt] text-red-600"
             >
                 {{ error }}
             </div>
 
             <div
                 v-if="requestNotice"
-                class="mb-5 rounded-md border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700"
+                class="mb-5 rounded-md border border-green-200 bg-green-50 p-4 text-[13pt] font-semibold text-green-700"
             >
                 {{ requestNotice }}
             </div>
@@ -824,7 +824,7 @@ onBeforeUnmount(() => {
                     </p>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="[&_*]:!text-[13pt]">
                     <form
                         class="grid gap-5 md:grid-cols-[220px_1fr_auto] md:items-end"
                         @submit.prevent="submitRequest"
@@ -888,7 +888,7 @@ onBeforeUnmount(() => {
                     </div>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="[&_*]:!text-[13pt]">
                     <p v-if="requestsError" role="alert" class="mb-3 text-sm text-red-700">
                         {{ requestsError }}
                     </p>
@@ -1013,7 +1013,7 @@ onBeforeUnmount(() => {
 
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="[&_*]:!text-[13pt]">
 
                     <div
                         class="flex flex-col gap-5 md:flex-row md:items-end md:justify-between"
@@ -1168,7 +1168,7 @@ onBeforeUnmount(() => {
 
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="[&_*]:!text-[13pt]">
 
                     <div
                         class="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800"
@@ -1231,7 +1231,7 @@ onBeforeUnmount(() => {
                     </CardTitle>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="[&_*]:!text-[13pt]">
 
                     <div
                         class="grid gap-5 md:grid-cols-3"
@@ -1326,7 +1326,7 @@ onBeforeUnmount(() => {
                     </CardTitle>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="[&_*]:!text-[13pt]">
 
                     <div
                         v-if="summaryLoading"
@@ -1431,7 +1431,7 @@ onBeforeUnmount(() => {
                     </p>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="[&_*]:!text-[13pt]">
                     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                         <label class="text-sm font-medium text-gray-700">
                             Lifecycle status

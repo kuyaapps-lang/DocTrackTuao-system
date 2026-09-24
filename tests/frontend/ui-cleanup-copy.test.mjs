@@ -61,6 +61,7 @@ test('documents UI keeps process 23e color and date polish', async () => {
     assert.match(documents, /<TableHeader class="bg-blue-900 text-white">/)
     assert.match(documents, /<TableHead class="text-white font-semibold">\s+Tracking No\./)
     assert.match(documents, /id="documents-per-page"\s+v-model\.number="perPage"\s+class="h-10 w-20 rounded-md/)
+    assert.match(documents, /<CardContent\s+id="document-list-panel"\s+role="tabpanel"\s+:aria-busy="loading"\s+class="\[&_\*\]:!text-\[13pt\]"/)
     assert.match(documents, /formatDocumentDateTime/)
 
     assert.match(details, /formatDocumentDateField/)
@@ -94,6 +95,7 @@ test('QR UI keeps compact blue header palette', async () => {
 
     assert.match(qrCodes, /<CardHeader class="bg-blue-900 px-4 py-2 text-white">/)
     assert.match(qrCodes, /<CardTitle class="text-base font-semibold">/)
+    assert.match(qrCodes, /<CardContent class="\[&_\*\]:!text-\[13pt\]">/)
     assert.match(qrCodes, /QR Code Administration/)
     assert.match(qrCodes, /Review and manage office QR requests/)
     assert.match(qrCodes, /<thead class="bg-blue-900 text-white">/)

@@ -1052,14 +1052,14 @@ onBeforeUnmount(() => {
             <!-- QR Verification -->
             <div
                 v-if="qrResolving"
-                class="mb-5 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-700"
+                class="mb-5 rounded-md border border-blue-200 bg-blue-50 p-4 text-[13pt] font-semibold text-blue-700"
             >
                 Verifying scanned QR code...
             </div>
 
             <div
                 v-if="qrStateError"
-                class="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+                class="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-[13pt] text-red-700"
             >
                 {{ qrStateError }}
             </div>
@@ -1079,7 +1079,7 @@ onBeforeUnmount(() => {
                             </CardTitle>
 
                             <p
-                                class="text-sm text-gray-500 mt-1"
+                                class="text-[13pt] text-gray-500 mt-1"
                             >
                                 Review registered documents, incoming items,
                                 and outgoing routes in one place.
@@ -1097,7 +1097,7 @@ onBeforeUnmount(() => {
 
                     <!-- Tabs -->
                     <div
-                        class="flex flex-wrap gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 pt-3"
+                        class="flex flex-wrap gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 pt-3 [&_*]:!text-[13pt]"
                         role="tablist"
                         aria-label="Document views"
                     >
@@ -1121,7 +1121,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div
-                        class="grid gap-4 md:grid-cols-3"
+                        class="grid gap-4 md:grid-cols-3 [&_*]:!text-[13pt]"
                     >
                         <div>
                             <label
@@ -1190,7 +1190,7 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <p class="text-xs text-gray-500">
+                    <p class="text-[13pt] text-gray-500">
                         Search by tracking number, title, type, or office. Filters only change what is shown here.
                     </p>
                 </CardHeader>
@@ -1199,6 +1199,7 @@ onBeforeUnmount(() => {
                     id="document-list-panel"
                     role="tabpanel"
                     :aria-busy="loading"
+                    class="[&_*]:!text-[13pt]"
                 >
 
                     <!-- Loading -->
