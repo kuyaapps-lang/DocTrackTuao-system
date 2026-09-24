@@ -123,6 +123,7 @@ test('process 23c dashboard and users polish keeps alignment scoped to frontend'
     assert.match(dashboard, /aria-label="Recent documents in the selected reporting period"/)
     assert.match(dashboard, /documentStatusClass\(document\.status\.name\)/)
     assert.match(dashboard, /aria-label="Recent routing activity in the selected reporting period"/)
+    assert.match(dashboard, /max-h-72 space-y-2 overflow-auto pr-1" aria-label="Recent routing activity/)
     assert.match(dashboard, /routingEventLabel\(activity\.event_type\)/)
     assert.doesNotMatch(dashboard, /<TableHead scope="col" class="text-center font-semibold">Tracking no\.<\/TableHead>/)
 

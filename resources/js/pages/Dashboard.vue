@@ -251,7 +251,7 @@ onBeforeUnmount(() => {
                     </CardContent></Card>
                     <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-indigo-800 px-4 py-2 text-white"><CardTitle class="text-[15pt] font-semibold">Recent Routing Activity</CardTitle></CardHeader><CardContent class="px-4 py-4">
                         <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-[13pt] text-gray-500">No routing activity was recorded in this period.</p>
-                        <ul v-else class="space-y-2" aria-label="Recent routing activity in the selected reporting period">
+                        <ul v-else class="max-h-72 space-y-2 overflow-auto pr-1" aria-label="Recent routing activity in the selected reporting period">
                             <li v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`" class="rounded-md border border-indigo-100 bg-white px-3 py-2.5 shadow-sm">
                                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13pt]">
                                     <span class="font-semibold text-gray-900">{{ activity.document.tracking_no }}</span>
