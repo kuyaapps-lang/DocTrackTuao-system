@@ -232,7 +232,7 @@ const toggleAccountMenu = () => {
 </script>
 
 <template>
-    <div class="flex min-h-screen bg-gray-100">
+    <div class="flex min-h-screen bg-slate-100 text-slate-800">
         <AppSidebar
             ref="sidebar"
             :desktop-collapsed="desktopSidebarCollapsed"
@@ -242,9 +242,9 @@ const toggleAccountMenu = () => {
             @navigate="closeMobileNavigation()"
         />
 
-        <div class="min-w-0 flex-1">
+        <div class="min-w-0 flex-1 bg-slate-100">
             <header
-                class="flex min-h-20 items-center justify-between gap-4 border-b bg-white px-6 py-4 shadow-sm"
+                class="flex min-h-20 items-center justify-between gap-4 border-b border-slate-200/90 bg-white/95 px-6 py-4 shadow-[0_2px_14px_rgb(15_41_70/0.05)] backdrop-blur"
             >
                 <div class="flex min-w-0 items-center gap-3">
                     <Button
@@ -262,7 +262,7 @@ const toggleAccountMenu = () => {
                     </Button>
 
                     <div class="min-w-0">
-                        <h1 class="text-xl font-bold text-gray-900">
+                        <h1 class="text-xl font-bold tracking-[-0.01em] text-slate-900">
                             {{ pageTitle }}
                         </h1>
                     </div>
@@ -273,7 +273,7 @@ const toggleAccountMenu = () => {
                         type="button"
                         variant="outline"
                         size="icon"
-                        class="h-11 w-11 rounded-full border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+                        class="h-11 w-11 rounded-full border-blue-200 bg-blue-50 text-blue-800 shadow-sm transition-colors hover:bg-blue-100 hover:shadow focus-visible:ring-blue-600"
                         aria-label="Open account menu"
                         aria-haspopup="menu"
                         :aria-expanded="accountMenuOpen"
@@ -284,11 +284,11 @@ const toggleAccountMenu = () => {
 
                     <div
                         v-if="accountMenuOpen"
-                        class="absolute right-0 z-40 mt-2 w-64 rounded-lg border border-blue-100 bg-white p-4 text-sm shadow-lg"
+                        class="absolute right-0 z-40 mt-3 w-64 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-[0_14px_32px_rgb(15_41_70/0.14)]"
                         role="menu"
                         aria-label="Account menu"
                     >
-                        <div class="space-y-1 border-b border-blue-100 pb-3">
+                        <div class="space-y-1 border-b border-slate-200 pb-3">
                             <p class="truncate text-sm font-semibold text-blue-950">
                                 {{ userName || 'Signed-in user' }}
                             </p>
@@ -311,7 +311,7 @@ const toggleAccountMenu = () => {
                             :disabled="logoutPending"
                             variant="outline"
                             size="sm"
-                            class="mt-3 w-full border-blue-200 bg-white text-blue-800 hover:bg-blue-100"
+                            class="mt-3 w-full rounded-xl border-blue-200 bg-white text-blue-800 hover:bg-blue-100"
                             role="menuitem"
                             @click="logout"
                         >

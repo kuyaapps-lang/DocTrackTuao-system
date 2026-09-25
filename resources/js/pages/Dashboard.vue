@@ -184,15 +184,15 @@ onBeforeUnmount(() => {
 <template>
     <section class="min-h-screen bg-slate-100 p-4 sm:p-6" :aria-busy="loading" aria-labelledby="dashboard-heading">
         <div class="mx-auto max-w-7xl space-y-6">
-            <div class="rounded-lg border border-blue-100 bg-white p-5 shadow-sm">
+            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_22px_rgb(15_41_70/0.06)] sm:p-6">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h2 id="dashboard-heading" class="text-[28px] font-bold text-blue-950">Dashboard Summary</h2>
-                        <p class="mt-1 text-[13pt] font-semibold text-gray-600">{{ scopeLabel || 'Loading report scope...' }}</p>
+                        <h2 id="dashboard-heading" class="text-[28px] font-bold tracking-[-0.02em] text-blue-950">Dashboard Summary</h2>
+                        <p class="mt-1 text-[13pt] font-semibold text-slate-600">{{ scopeLabel || 'Loading report scope...' }}</p>
                     </div>
                     <form class="flex flex-wrap items-end gap-2" @submit.prevent="updateMonth">
                         <label class="text-[13pt] font-semibold text-gray-700">Reporting month
-                            <input v-model="selectedMonth" type="month" class="mt-1 block h-10 rounded-md border border-gray-300 bg-white px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" :disabled="loading">
+                            <input v-model="selectedMonth" type="month" class="mt-1 block h-10 rounded-xl border border-slate-300 bg-white px-3 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" :disabled="loading">
                         </label>
                         <Button type="submit" :disabled="loading">Apply</Button>
                         <Button type="button" variant="outline" :disabled="loading || !selectedMonth" @click="clearMonth">Clear</Button>
@@ -201,8 +201,8 @@ onBeforeUnmount(() => {
             </div>
 
             <p class="sr-only" aria-live="polite">{{ loading ? 'Loading dashboard summary.' : state === 'success' ? `Dashboard summary loaded for ${monthLabel}.` : 'Dashboard summary could not be loaded.' }}</p>
-            <div v-if="loading && !dashboard" class="rounded-lg border bg-white p-10 text-center text-[13pt] text-gray-600">Loading dashboard summary...</div>
-            <div v-else-if="state !== 'success'" class="rounded-lg border border-red-200 bg-red-50 p-6 text-center text-[13pt] text-red-800" role="alert">
+            <div v-if="loading && !dashboard" class="rounded-2xl border border-slate-200 bg-white p-10 text-center text-[13pt] text-slate-600 shadow-[0_8px_22px_rgb(15_41_70/0.06)]">Loading dashboard summary...</div>
+            <div v-else-if="state !== 'success'" class="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-[13pt] text-red-800 shadow-sm" role="alert">
                 <p v-if="state === 'permission-denied'">You do not have permission to view dashboard reports.</p>
                 <p v-else-if="state === 'office-denied'">Dashboard reporting is unavailable because your account has no valid office assignment.</p>
                 <p v-else>Dashboard summary is temporarily unavailable.</p>
@@ -210,12 +210,12 @@ onBeforeUnmount(() => {
             </div>
 
             <template v-else>
-                <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-[13pt] font-bold text-blue-900">
+                <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-[13pt] font-bold text-blue-900 shadow-sm">
                     <span>Scope: {{ scopeLabel }}</span>
                     <span>Reporting period: {{ monthLabel }}</span>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    <Card v-for="metric in metrics" :key="metric[0]" class="overflow-hidden border-blue-100 bg-white py-0"><CardHeader class="bg-blue-900 px-3 py-1.5 text-left text-white"><CardTitle class="text-[15pt] font-semibold">{{ metric[0] }}</CardTitle></CardHeader><CardContent class="px-3 py-3 text-center"><p class="text-2xl font-bold text-gray-900">{{ metric[1] }}</p></CardContent></Card>
+                    <Card v-for="metric in metrics" :key="metric[0]" class="overflow-hidden border-blue-100 bg-white py-0"><CardHeader class="bg-blue-900 px-3 py-1.5 text-left text-white"><CardTitle class="text-[15pt] font-semibold">{{ metric[0] }}</CardTitle></CardHeader><CardContent class="px-3 py-3 text-center"><p class="text-2xl font-bold tabular-nums text-slate-900">{{ metric[1] }}</p></CardContent></Card>
                 </div>
 
                 <div class="grid gap-4 xl:grid-cols-3">
@@ -240,7 +240,7 @@ onBeforeUnmount(() => {
                     <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-sky-700 px-4 py-2 text-white"><CardTitle class="text-[15pt] font-semibold">Recent Documents</CardTitle></CardHeader><CardContent class="px-4 py-4">
                         <p v-if="dashboard.recent_documents.length === 0" class="py-6 text-center text-[13pt] text-gray-500">No documents were registered in this period.</p>
                         <ul v-else class="max-h-72 space-y-2 overflow-auto pr-1" aria-label="Recent documents in the selected reporting period">
-                            <li v-for="document in dashboard.recent_documents" :key="document.id" class="rounded-md border border-sky-100 bg-white px-3 py-2 shadow-sm">
+                            <li v-for="document in dashboard.recent_documents" :key="document.id" class="rounded-xl border border-sky-100 bg-white px-3 py-2 shadow-sm">
                                 <div class="flex flex-wrap items-center justify-between gap-2">
                                     <span class="text-[13pt] font-semibold text-gray-900">{{ document.tracking_no }}</span>
                                     <span class="inline-flex rounded-full px-2.5 py-1 text-[13pt] font-semibold" :class="documentStatusClass(document.status.name)">{{ document.status.name }}</span>
@@ -252,7 +252,7 @@ onBeforeUnmount(() => {
                     <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-indigo-800 px-4 py-2 text-white"><CardTitle class="text-[15pt] font-semibold">Recent Routing Activity</CardTitle></CardHeader><CardContent class="px-4 py-4">
                         <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-[13pt] text-gray-500">No routing activity was recorded in this period.</p>
                         <ul v-else class="max-h-72 space-y-2 overflow-auto pr-1" aria-label="Recent routing activity in the selected reporting period">
-                            <li v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`" class="rounded-md border border-indigo-100 bg-white px-3 py-2.5 shadow-sm">
+                            <li v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`" class="rounded-xl border border-indigo-100 bg-white px-3 py-2.5 shadow-sm">
                                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13pt]">
                                     <span class="font-semibold text-gray-900">{{ activity.document.tracking_no }}</span>
                                     <span class="text-gray-400">/</span>

@@ -75,15 +75,15 @@ const iconFor = (key) => navigationIcons[key]
 
 const linkClasses = (key, grouped = false, collapsed = false) => {
     const base = grouped
-        ? 'flex rounded-md px-3 py-2 text-sm font-medium'
-        : 'flex rounded-md px-3 py-2 text-sm font-semibold'
+        ? 'flex rounded-xl px-3 py-2 text-sm font-medium'
+        : 'flex rounded-xl px-3 py-2 text-sm font-semibold'
 
     return [
         base,
         'items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
         collapsed ? 'justify-center' : '',
         activeKey.value === key
-            ? 'bg-white text-blue-900 shadow-sm'
+            ? 'bg-white text-blue-900 shadow-sm shadow-blue-950/20'
             : 'text-blue-100 hover:bg-white/10 hover:text-white',
     ]
 }
@@ -91,7 +91,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
 <template>
     <aside
-        class="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-blue-950 bg-blue-950 text-white shadow-xl transition-[width] md:flex"
+        class="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-blue-950 bg-gradient-to-b from-blue-950 via-blue-900 to-blue-950 text-white shadow-xl transition-[width] md:flex"
         :class="desktopCollapsed ? 'w-20' : 'w-64'"
     >
         <div
@@ -105,7 +105,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 <img
                     :src="logo"
                     alt="Tuao logo"
-                    class="h-11 w-11 shrink-0 rounded-md bg-white object-cover p-1"
+                    class="h-11 w-11 shrink-0 rounded-xl bg-white object-cover p-1 shadow-sm"
                 >
 
                 <div class="min-w-0">
@@ -207,7 +207,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
         <aside
             id="mobile-navigation-drawer"
-            class="relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-white shadow-xl"
+            class="relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-slate-50 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation menu"
@@ -217,7 +217,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     <img
                         :src="logo"
                         alt="Tuao logo"
-                        class="h-11 w-11 shrink-0 rounded-md border bg-white object-cover p-1"
+                    class="h-11 w-11 shrink-0 rounded-xl border bg-white object-cover p-1 shadow-sm"
                     >
                     <div class="min-w-0">
                         <p class="text-sm font-bold uppercase tracking-wide text-gray-900">

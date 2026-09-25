@@ -134,3 +134,21 @@ test('process 23c dashboard and users polish keeps alignment scoped to frontend'
 
     assert.doesNotMatch(dashboardHelper, /office_id|requesting_office|processing_office/)
 })
+
+test('process 24a keeps the soft dashboard foundation scoped to the Vue shell', async () => {
+    const styles = await readSource('resources/css/app.css')
+    const shell = await readSource('resources/js/layouts/AppShell.vue')
+    const sidebar = await readSource('resources/js/components/AppSidebar.vue')
+    const dashboard = await readSource('resources/js/pages/Dashboard.vue')
+
+    assert.match(styles, /--font-sans: 'Century Gothic', 'Segoe UI', Arial, sans-serif;/)
+    assert.match(styles, /--background: oklch\(0\.975 0\.004 247\);/)
+    assert.match(styles, /\[data-slot="card"\]/)
+    assert.match(styles, /\[data-slot="table"\]/)
+    assert.match(shell, /bg-slate-100 text-slate-800/)
+    assert.match(shell, /rounded-2xl border border-slate-200 bg-white p-4 text-sm/)
+    assert.match(sidebar, /bg-gradient-to-b from-blue-950 via-blue-900 to-blue-950/)
+    assert.match(sidebar, /rounded-xl px-3 py-2 text-sm/)
+    assert.match(dashboard, /rounded-2xl border border-slate-200 bg-white p-5/)
+    assert.match(dashboard, /rounded-2xl border border-blue-100 bg-blue-50/)
+})

@@ -54,38 +54,38 @@
 }
 
 :root {
-    --radius: 0.625rem;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --radius: 0.875rem;
+    --background: oklch(0.975 0.004 247);
+    --foreground: oklch(0.22 0.02 252);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
+    --primary: oklch(0.38 0.11 248);
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.955 0.012 239);
+    --secondary-foreground: oklch(0.28 0.05 246);
+    --muted: oklch(0.955 0.008 247);
+    --muted-foreground: oklch(0.49 0.02 252);
+    --accent: oklch(0.945 0.02 236);
+    --accent-foreground: oklch(0.28 0.05 246);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --border: oklch(0.89 0.012 247);
+    --input: oklch(0.89 0.012 247);
+    --ring: oklch(0.55 0.12 248);
     --chart-1: oklch(0.646 0.222 41.116);
     --chart-2: oklch(0.6 0.118 184.704);
     --chart-3: oklch(0.398 0.07 227.392);
     --chart-4: oklch(0.828 0.189 84.429);
     --chart-5: oklch(0.769 0.188 70.08);
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar: oklch(0.29 0.09 251);
+    --sidebar-foreground: oklch(0.97 0.01 247);
+    --sidebar-primary: oklch(0.97 0.01 247);
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar-accent: oklch(0.38 0.1 250);
+    --sidebar-accent-foreground: oklch(0.98 0.005 247);
+    --sidebar-border: oklch(0.42 0.08 250);
+    --sidebar-ring: oklch(0.7 0.11 246);
 }
 
 .dark {
@@ -129,5 +129,23 @@
   body {
     @apply bg-background font-sans text-foreground;
     font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif;
+    min-width: 320px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     }
+}
+
+@layer components {
+  [data-slot="card"] {
+    @apply border-slate-200/90 shadow-sm;
+    box-shadow: 0 8px 22px rgb(15 41 70 / 0.06);
+  }
+
+  [data-slot="table"] {
+    @apply overflow-hidden rounded-xl border border-slate-200 bg-white;
+  }
+
+  [data-slot="table-head"] {
+    @apply text-slate-700;
+  }
 }
