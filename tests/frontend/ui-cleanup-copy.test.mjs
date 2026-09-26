@@ -168,6 +168,8 @@ test('shared interface styling covers administrator-only routes and form control
 
     assert.match(styles, /button,\s+input,\s+select,\s+textarea/)
     assert.match(styles, /font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif;/)
+    assert.match(styles, /#app,\s+#app button,\s+#app input,\s+#app select,\s+#app textarea/)
+    assert.match(styles, /font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif;/)
     assert.match(details, /min-h-screen bg-slate-100/)
     assert.match(changePassword, /min-h-screen bg-slate-100 p-6/)
     assert.match(users, /<TableHeader class="bg-blue-900 text-white">/)

@@ -127,6 +127,14 @@
     font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif;
   }
 
+  #app,
+  #app button,
+  #app input,
+  #app select,
+  #app textarea {
+    font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif !important;
+  }
+
   * {
     @apply border-border outline-ring/50;
     }
