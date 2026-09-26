@@ -51,10 +51,6 @@ const roleLabel = computed(() => {
     return currentUser.value?.role?.name || ''
 })
 
-const isAdministrator = computed(() => {
-    return roleLabel.value.trim().toLowerCase() === 'administrator'
-})
-
 const officeLabel = computed(() => {
     return currentUser.value?.office?.office_name ||
         currentUser.value?.office?.name ||
@@ -236,10 +232,7 @@ const toggleAccountMenu = () => {
 </script>
 
 <template>
-    <div
-        class="flex min-h-screen bg-slate-100 text-slate-800"
-        :class="{ 'administrator-font': isAdministrator }"
-    >
+    <div class="flex min-h-screen bg-slate-100 text-slate-800">
         <AppSidebar
             ref="sidebar"
             :desktop-collapsed="desktopSidebarCollapsed"

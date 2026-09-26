@@ -1248,7 +1248,7 @@ onBeforeUnmount(() => {
                         v-else
                         class="overflow-x-auto"
                     >
-                        <Table>
+                        <Table class="table-fixed">
 
                             <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
@@ -1261,7 +1261,7 @@ onBeforeUnmount(() => {
                                         Type
                                     </TableHead>
 
-                                    <TableHead class="text-white font-semibold">
+                                    <TableHead class="w-[28%] whitespace-normal text-white font-semibold">
                                         Title / Subject
                                     </TableHead>
 
@@ -1324,7 +1324,7 @@ onBeforeUnmount(() => {
 
                                     <!-- Tracking -->
                                     <TableCell
-                                        class="font-medium"
+                                        class="min-w-0 break-all whitespace-normal font-medium"
                                     >
                                         <RouterLink
                                             :to="`/documents/${document.id}`"
@@ -1336,7 +1336,7 @@ onBeforeUnmount(() => {
                                     </TableCell>
 
                                     <!-- Type -->
-                                    <TableCell>
+                                    <TableCell class="min-w-0 break-words whitespace-normal">
                                         {{
                                             document.type?.type_name
                                             || 'N/A'
