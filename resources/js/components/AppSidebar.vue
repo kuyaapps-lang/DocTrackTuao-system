@@ -75,23 +75,23 @@ const iconFor = (key) => navigationIcons[key]
 
 const linkClasses = (key, grouped = false, collapsed = false) => {
     const base = grouped
-        ? 'flex rounded-xl px-3 py-2 text-sm font-medium'
-        : 'flex rounded-xl px-3 py-2 text-sm font-semibold'
+        ? 'flex rounded-xl px-3 py-2 text-[12pt] font-medium'
+        : 'flex rounded-xl px-3 py-2 text-[12pt] font-semibold'
 
     return [
         base,
-        'items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+        'items-center gap-3 outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
         collapsed ? 'justify-center' : '',
         activeKey.value === key
-            ? 'bg-white text-blue-900 shadow-[5px_5px_12px_rgb(92_113_138/0.14),-3px_-3px_8px_rgb(255_255_255/0.9)]'
-            : 'text-slate-600 hover:bg-white hover:text-blue-900',
+            ? 'bg-blue-900 text-white'
+            : 'text-slate-600 hover:bg-blue-50 hover:text-blue-900',
     ]
 }
 </script>
 
 <template>
     <aside
-        class="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-white/80 bg-slate-100 text-slate-800 shadow-[8px_0_22px_rgb(92_113_138/0.1)] transition-[width] md:flex"
+        class="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-white/80 bg-slate-100 bg-white/70 text-slate-800 shadow-[10px_0_30px_rgb(67_86_119/0.12),inset_-1px_0_0_rgb(255_255_255/0.8)] backdrop-blur-xl transition-[width,background-color,border-color,color] duration-200 md:flex"
         :class="desktopCollapsed ? 'w-20' : 'w-64'"
     >
         <div
@@ -109,8 +109,8 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 >
 
                 <div class="min-w-0">
-                    <p class="text-sm font-bold uppercase tracking-wide text-blue-950">
-                        Tuao
+                    <p class="text-[12pt] font-bold uppercase tracking-wide text-blue-950">
+                        LGU-Tuao
                     </p>
 
                     <p class="mt-1 text-xs text-slate-500">
@@ -123,7 +123,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 type="button"
                 variant="ghost"
                 size="icon"
-                class="text-blue-900 hover:bg-white hover:text-blue-950"
+                class="bg-white text-blue-900 hover:bg-white hover:text-blue-950"
                 aria-controls="desktop-navigation"
                 :aria-expanded="!desktopCollapsed"
                 :aria-label="desktopCollapsed ? 'Expand main navigation' : 'Collapse main navigation'"
@@ -207,7 +207,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
         <aside
             id="mobile-navigation-drawer"
-            class="relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-slate-100 shadow-xl"
+            class="relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-slate-100 bg-white/90 shadow-xl backdrop-blur-xl"
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation menu"
@@ -220,8 +220,8 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     class="h-11 w-11 shrink-0 rounded-xl border bg-white object-cover p-1 shadow-sm"
                     >
                     <div class="min-w-0">
-                        <p class="text-sm font-bold uppercase tracking-wide text-gray-900">
-                            Tuao
+                        <p class="text-[12pt] font-bold uppercase tracking-wide text-gray-900">
+                            LGU-Tuao
                         </p>
                         <p class="mt-1 text-xs text-gray-500">
                             Document Management System

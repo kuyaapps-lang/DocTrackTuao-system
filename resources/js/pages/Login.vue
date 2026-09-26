@@ -578,7 +578,6 @@ const submitResetRequest = async () => {
 
                         <Button
                             type="submit"
-                            class="bg-blue-600 text-white hover:bg-blue-700"
                             :disabled="resetRequestSaving"
                         >
                             {{ resetRequestSaving ? 'Submitting...' : 'Submit Request' }}
