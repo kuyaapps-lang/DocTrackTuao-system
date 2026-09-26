@@ -63,6 +63,8 @@ test('documents UI keeps process 23e color and date polish', async () => {
     assert.match(documents, /id="documents-per-page"\s+v-model\.number="perPage"\s+class="h-10 w-20 rounded-md/)
     assert.match(documents, /<CardContent\s+id="document-list-panel"\s+role="tabpanel"\s+:aria-busy="loading"\s+class="\[&_\*\]:!text-\[13pt\]"/)
     assert.match(documents, /formatDocumentDateTime/)
+    assert.match(documents, /<TableCell class="min-w-0 whitespace-normal">/)
+    assert.match(documents, /max-w-xs whitespace-normal break-words/)
 
     assert.match(details, /formatDocumentDateField/)
     assert.match(details, /formatDocumentDateTime/)
@@ -89,6 +91,8 @@ test('dashboard and shell polish copy stays user friendly', async () => {
     assert.match(shell, /aria-label="Account menu"/)
     assert.match(shell, /{{ officeLabel }}/)
     assert.match(shell, /@click="logout"/)
+    assert.match(shell, /const isAdministrator = computed\(/)
+    assert.match(shell, /'administrator-font': isAdministrator/)
     assert.doesNotMatch(`${sidebar}\n${login}\n${resolver}`, /Document Tracking System/)
 })
 
@@ -169,6 +173,8 @@ test('shared interface styling covers administrator-only routes and form control
     assert.match(styles, /button,\s+input,\s+select,\s+textarea/)
     assert.match(styles, /font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif;/)
     assert.match(styles, /#app,\s+#app button,\s+#app input,\s+#app select,\s+#app textarea/)
+    assert.match(styles, /#app\.administrator-font,/)
+    assert.match(styles, /font-family: Arial, sans-serif !important;/)
     assert.match(styles, /font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif;/)
     assert.match(details, /min-h-screen bg-slate-100/)
     assert.match(changePassword, /min-h-screen bg-slate-100 p-6/)

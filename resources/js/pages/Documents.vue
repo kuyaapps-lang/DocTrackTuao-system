@@ -1344,12 +1344,12 @@ onBeforeUnmount(() => {
                                     </TableCell>
 
                                     <!-- Title -->
-                                    <TableCell>
+                                    <TableCell class="min-w-0 whitespace-normal">
                                         <div
-                                            class="max-w-xs"
+                                            class="max-w-xs whitespace-normal break-words"
                                         >
                                             <p
-                                                class="font-medium
+                                                class="break-words font-medium leading-6
                                                        text-gray-800"
                                             >
                                                 {{ document.title }}
