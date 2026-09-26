@@ -146,8 +146,8 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-100">
-        <div class="border-b bg-white px-6 py-4">
+    <div class="min-h-screen bg-slate-100">
+        <div class="border-b border-white/80 bg-white px-6 py-4 shadow-[0_4px_14px_rgb(92_113_138/0.07)]">
             <h1 class="text-2xl font-bold text-gray-800">Audit Logs</h1>
             <p class="mt-1 text-sm text-gray-500">
                 Review recorded system activity in newest-first order.
@@ -242,14 +242,14 @@ onMounted(() => {
 
                     <div v-else class="overflow-x-auto">
                         <Table>
-                            <TableHeader>
+                            <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
-                                    <TableHead>Time</TableHead>
-                                    <TableHead>Actor</TableHead>
-                                    <TableHead>Module / Action</TableHead>
-                                    <TableHead>Record ID</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead>IP</TableHead>
+                                    <TableHead class="text-white font-semibold">Time</TableHead>
+                                    <TableHead class="text-white font-semibold">Actor</TableHead>
+                                    <TableHead class="text-white font-semibold">Module / Action</TableHead>
+                                    <TableHead class="text-white font-semibold">Record ID</TableHead>
+                                    <TableHead class="text-white font-semibold">Description</TableHead>
+                                    <TableHead class="text-white font-semibold">IP</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

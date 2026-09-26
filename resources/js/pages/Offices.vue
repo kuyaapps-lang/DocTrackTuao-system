@@ -60,10 +60,10 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-100">
+    <div class="min-h-screen bg-slate-100">
 
         <!-- Header -->
-        <div class="bg-white border-b px-6 py-4">
+        <div class="border-b border-white/80 bg-white px-6 py-4 shadow-[0_4px_14px_rgb(92_113_138/0.07)]">
             <div class="flex items-center justify-between">
 
                 <div>
@@ -125,27 +125,28 @@ onMounted(() => {
                     <!-- Office Table -->
                     <Table v-else>
 
-                        <TableHeader>
+                        <TableHeader class="bg-blue-900 text-white">
                             <TableRow>
 
-                                <TableHead>
+                                <TableHead class="text-white font-semibold">
                                     Office Code
                                 </TableHead>
 
-                                <TableHead>
+                                <TableHead class="text-white font-semibold">
                                     Office Name
                                 </TableHead>
 
-                                <TableHead>
+                                <TableHead class="text-white font-semibold">
                                     Department
                                 </TableHead>
 
-                                <TableHead>
+                                <TableHead class="text-white font-semibold">
                                     Description
                                 </TableHead>
 
                                 <TableHead
                                     v-if="canManageMasterData"
+                                    class="text-white font-semibold"
                                 >
                                     Actions
                                 </TableHead>

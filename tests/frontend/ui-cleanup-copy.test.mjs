@@ -153,12 +153,8 @@ test('process 24a keeps the soft dashboard foundation scoped to the Vue shell', 
     assert.match(dashboard, /rounded-2xl border border-blue-100 bg-blue-50/)
 })
 
-test('process 24a uses existing dashboard dates for the registration trend', async () => {
+test('process 24a retains the dashboard data view without a registration trend', async () => {
     const dashboard = await readSource('resources/js/pages/Dashboard.vue')
 
-    assert.match(dashboard, /const registrationTrend = computed\(/)
-    assert.match(dashboard, /dashboard\.value\?\.recent_documents/)
-    assert.match(dashboard, /Document Registration Trend/)
-    assert.match(dashboard, /registrationTrendHeight\(entry\.count\)/)
-    assert.match(dashboard, /formatTrendDate\(entry\.date\)/)
+    assert.doesNotMatch(dashboard, /registrationTrend|Document Registration Trend|formatTrendDate/)
 })

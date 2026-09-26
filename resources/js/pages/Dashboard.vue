@@ -25,33 +25,6 @@ const metrics = computed(() => dashboard.value ? [
     ['In Transit', dashboard.value.summary.in_transit_documents],
     ['Received', dashboard.value.summary.received_documents],
 ] : [])
-const registrationTrend = computed(() => {
-    const counts = new Map()
-
-    for (const document of dashboard.value?.recent_documents || []) {
-        const date = new Date(document.created_at)
-
-        if (Number.isNaN(date.getTime())) continue
-
-        const parts = new Intl.DateTimeFormat('en-CA', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            timeZone: 'Asia/Manila',
-        }).formatToParts(date)
-        const dateKey = `${parts.find(part => part.type === 'year')?.value}-${parts.find(part => part.type === 'month')?.value}-${parts.find(part => part.type === 'day')?.value}`
-
-        counts.set(dateKey, (counts.get(dateKey) || 0) + 1)
-    }
-
-    return [...counts.entries()]
-        .sort(([firstDate], [secondDate]) => firstDate.localeCompare(secondDate))
-        .map(([date, count]) => ({ date, count }))
-})
-const registrationTrendMax = computed(() => Math.max(1, ...registrationTrend.value.map(item => item.count)))
-const registrationTrendHeight = count => Math.max(12, Math.round((count / registrationTrendMax.value) * 100))
-const formatTrendDate = value => new Date(`${value}T00:00:00+08:00`)
-    .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })
 const scopeLabel = computed(() => !dashboard.value ? '' : dashboard.value.scope.type === 'system' ? 'All offices' : dashboard.value.scope.office.name)
 const formatDashboardMonth = month => {
     if (!month) return 'All time'
@@ -244,28 +217,6 @@ onBeforeUnmount(() => {
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     <Card v-for="metric in metrics" :key="metric[0]" class="overflow-hidden border-blue-100 bg-white py-0"><CardHeader class="bg-blue-900 px-3 py-1.5 text-left text-white"><CardTitle class="text-[15pt] font-semibold">{{ metric[0] }}</CardTitle></CardHeader><CardContent class="px-3 py-3 text-center"><p class="text-2xl font-bold tabular-nums text-slate-900">{{ metric[1] }}</p></CardContent></Card>
                 </div>
-
-                <Card class="overflow-hidden border-white/80 py-0">
-                    <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <CardTitle class="text-[15pt] font-semibold">Document Registration Trend</CardTitle>
-                            <span class="rounded-full bg-white/15 px-2.5 py-1 text-xs font-semibold">{{ monthLabel }}</span>
-                        </div>
-                    </CardHeader>
-                    <CardContent class="px-4 py-5">
-                        <p class="mb-5 text-sm text-slate-500">Daily registrations from the document records currently available for this reporting period.</p>
-                        <p v-if="registrationTrend.length === 0" class="py-8 text-center text-[13pt] text-gray-500">No recent registration dates are available for this period.</p>
-                        <div v-else class="flex min-h-48 items-end gap-3 overflow-x-auto px-2 pb-1" role="img" :aria-label="`Document registration trend for ${monthLabel}`">
-                            <div v-for="(entry, index) in registrationTrend" :key="entry.date" class="flex min-w-12 flex-1 flex-col items-center gap-2">
-                                <span class="text-xs font-bold tabular-nums text-slate-600">{{ entry.count }}</span>
-                                <div class="flex h-32 w-full items-end rounded-xl bg-slate-100 p-1 shadow-inner">
-                                    <div class="w-full rounded-lg shadow-sm" :class="index % 2 === 0 ? 'bg-blue-700' : 'bg-emerald-600'" :style="{ height: `${registrationTrendHeight(entry.count)}%` }" />
-                                </div>
-                                <span class="whitespace-nowrap text-xs font-semibold text-slate-500">{{ formatTrendDate(entry.date) }}</span>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
 
                 <div class="grid gap-4 xl:grid-cols-3">
                     <Card v-for="distribution in [['Documents by status', dashboard.status_distribution, 'status'], ['Documents by current office', dashboard.current_office_distribution, 'office'], ['Documents by origin office', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]" class="overflow-hidden border-blue-100 py-0">
