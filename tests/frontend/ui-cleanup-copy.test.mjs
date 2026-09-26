@@ -127,9 +127,10 @@ test('process 23c dashboard and users polish keeps alignment scoped to frontend'
     assert.match(dashboard, /routingEventLabel\(activity\.event_type\)/)
     assert.doesNotMatch(dashboard, /<TableHead scope="col" class="text-center font-semibold">Tracking no\.<\/TableHead>/)
 
-    assert.match(users, /<TableHead class="text-center">\s+Role\s+<\/TableHead>/)
-    assert.match(users, /<TableHead class="text-center">\s+Office\s+<\/TableHead>/)
-    assert.match(users, /<TableHead class="text-center">\s+Action\s+<\/TableHead>/)
+    assert.match(users, /<TableHeader class="bg-blue-900 text-white">/)
+    assert.match(users, /<TableHead class="text-center text-white font-semibold">\s+Role\s+<\/TableHead>/)
+    assert.match(users, /<TableHead class="text-center text-white font-semibold">\s+Office\s+<\/TableHead>/)
+    assert.match(users, /<TableHead class="text-center text-white font-semibold">\s+Action\s+<\/TableHead>/)
     assert.match(users, /<div class="flex justify-center gap-2">/)
 
     assert.doesNotMatch(dashboardHelper, /office_id|requesting_office|processing_office/)
@@ -157,4 +158,17 @@ test('process 24a retains the dashboard data view without a registration trend',
     const dashboard = await readSource('resources/js/pages/Dashboard.vue')
 
     assert.doesNotMatch(dashboard, /registrationTrend|Document Registration Trend|formatTrendDate/)
+})
+
+test('shared interface styling covers administrator-only routes and form controls', async () => {
+    const styles = await readSource('resources/css/app.css')
+    const details = await readSource('resources/js/pages/DocumentDetails.vue')
+    const changePassword = await readSource('resources/js/pages/ChangePassword.vue')
+    const users = await readSource('resources/js/pages/Users.vue')
+
+    assert.match(styles, /button,\s+input,\s+select,\s+textarea/)
+    assert.match(styles, /font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif;/)
+    assert.match(details, /min-h-screen bg-slate-100/)
+    assert.match(changePassword, /min-h-screen bg-slate-100 p-6/)
+    assert.match(users, /<TableHeader class="bg-blue-900 text-white">/)
 })

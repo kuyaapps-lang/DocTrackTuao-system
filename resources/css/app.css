@@ -123,6 +123,10 @@
 }
 
 @layer base {
+  html {
+    font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif;
+  }
+
   * {
     @apply border-border outline-ring/50;
     }
@@ -133,6 +137,13 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
 }
 
 @layer components {
@@ -157,7 +168,7 @@
   [data-slot="input"],
   select,
   textarea {
-    @apply rounded-xl border-white/80 bg-white shadow-sm;
-    box-shadow: inset 1px 1px 3px rgb(92 113 138 / 0.1), inset -1px -1px 2px rgb(255 255 255 / 0.9);
+    @apply !rounded-xl !border-white/80 !bg-white;
+    box-shadow: inset 1px 1px 3px rgb(92 113 138 / 0.1), inset -1px -1px 2px rgb(255 255 255 / 0.9) !important;
   }
 }

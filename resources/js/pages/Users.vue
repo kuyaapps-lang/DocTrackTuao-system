@@ -772,21 +772,21 @@ onMounted(() => {
                         class="overflow-x-auto"
                     >
                         <Table>
-                            <TableHeader>
+                            <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
-                                    <TableHead>
+                                    <TableHead class="text-white font-semibold">
                                         User
                                     </TableHead>
 
-                                    <TableHead class="text-center">
+                                    <TableHead class="text-center text-white font-semibold">
                                         Role
                                     </TableHead>
 
-                                    <TableHead class="text-center">
+                                    <TableHead class="text-center text-white font-semibold">
                                         Office
                                     </TableHead>
 
-                                    <TableHead class="text-center">
+                                    <TableHead class="text-center text-white font-semibold">
                                         Action
                                     </TableHead>
                                 </TableRow>

@@ -81,7 +81,7 @@ const submitPasswordChange = async () => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-100 p-6">
+    <div class="min-h-screen bg-slate-100 p-6">
         <div class="mx-auto max-w-xl">
             <Card class="bg-white">
                 <CardHeader>
