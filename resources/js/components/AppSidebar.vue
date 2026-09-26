@@ -83,19 +83,19 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
         'items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
         collapsed ? 'justify-center' : '',
         activeKey.value === key
-            ? 'bg-white text-blue-900 shadow-sm shadow-blue-950/20'
-            : 'text-blue-100 hover:bg-white/10 hover:text-white',
+            ? 'bg-white text-blue-900 shadow-[5px_5px_12px_rgb(92_113_138/0.14),-3px_-3px_8px_rgb(255_255_255/0.9)]'
+            : 'text-slate-600 hover:bg-white hover:text-blue-900',
     ]
 }
 </script>
 
 <template>
     <aside
-        class="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-blue-950 bg-gradient-to-b from-blue-950 via-blue-900 to-blue-950 text-white shadow-xl transition-[width] md:flex"
+        class="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-white/80 bg-slate-100 text-slate-800 shadow-[8px_0_22px_rgb(92_113_138/0.1)] transition-[width] md:flex"
         :class="desktopCollapsed ? 'w-20' : 'w-64'"
     >
         <div
-            class="flex min-h-24 items-center border-b border-white/10"
+            class="flex min-h-24 items-center border-b border-white/80"
             :class="desktopCollapsed ? 'justify-center px-3' : 'justify-between gap-3 px-5'"
         >
             <div
@@ -109,11 +109,11 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 >
 
                 <div class="min-w-0">
-                    <p class="text-sm font-bold uppercase tracking-wide text-white">
+                    <p class="text-sm font-bold uppercase tracking-wide text-blue-950">
                         Tuao
                     </p>
 
-                    <p class="mt-1 text-xs text-blue-100">
+                    <p class="mt-1 text-xs text-slate-500">
                         Document Management System
                     </p>
                 </div>
@@ -123,7 +123,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 type="button"
                 variant="ghost"
                 size="icon"
-                class="text-white hover:bg-white/10 hover:text-white"
+                class="text-blue-900 hover:bg-white hover:text-blue-950"
                 aria-controls="desktop-navigation"
                 :aria-expanded="!desktopCollapsed"
                 :aria-label="desktopCollapsed ? 'Expand main navigation' : 'Collapse main navigation'"
@@ -148,7 +148,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     class="space-y-1"
                 >
                     <p
-                        class="pt-3 text-xs font-bold uppercase tracking-wide text-gray-400"
+                        class="pt-3 text-xs font-bold uppercase tracking-wide text-slate-400"
                         :class="desktopCollapsed ? 'sr-only' : 'px-3'"
                     >
                         {{ item.label }}
@@ -207,7 +207,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
         <aside
             id="mobile-navigation-drawer"
-            class="relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-slate-50 shadow-xl"
+            class="relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-slate-100 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation menu"

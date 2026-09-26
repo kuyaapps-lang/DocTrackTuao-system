@@ -550,9 +550,9 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-100">
+    <div class="min-h-screen bg-slate-100">
         <div
-            class="flex items-center justify-between border-b bg-white px-6 py-4"
+            class="flex items-center justify-between border-b border-white/80 bg-white px-6 py-4 shadow-[0_4px_14px_rgb(92_113_138/0.07)]"
         >
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">

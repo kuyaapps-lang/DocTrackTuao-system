@@ -1047,7 +1047,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="p-6">
+    <div class="min-h-screen bg-slate-100 p-6">
 
             <!-- QR Verification -->
             <div

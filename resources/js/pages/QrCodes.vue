@@ -752,12 +752,12 @@ onBeforeUnmount(() => {
 
 <template>
     <div
-        class="min-h-screen bg-gray-100"
+        class="min-h-screen bg-slate-100"
     >
 
         <!-- Header -->
         <div
-            class="bg-blue-900 px-6 py-4 text-white shadow-sm"
+            class="border-b border-white/70 bg-blue-900 px-6 py-4 text-white shadow-[0_5px_16px_rgb(15_41_70/0.13)]"
         >
 
             <div

@@ -137,15 +137,26 @@
 
 @layer components {
   [data-slot="card"] {
-    @apply border-slate-200/90 shadow-sm;
-    box-shadow: 0 8px 22px rgb(15 41 70 / 0.06);
+    @apply border-white/80 bg-white;
+    box-shadow: 10px 10px 24px rgb(92 113 138 / 0.12), -8px -8px 20px rgb(255 255 255 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.92);
+  }
+
+  [data-slot="table-container"] {
+    @apply overflow-hidden rounded-2xl border border-white/80 bg-white;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 6px 6px 16px rgb(92 113 138 / 0.08);
   }
 
   [data-slot="table"] {
-    @apply overflow-hidden rounded-xl border border-slate-200 bg-white;
+    @apply border-separate border-spacing-0;
   }
 
   [data-slot="table-head"] {
     @apply text-slate-700;
+  }
+
+  [data-slot="input"],
+  select {
+    @apply rounded-xl border-white/80 bg-white shadow-sm;
+    box-shadow: inset 1px 1px 3px rgb(92 113 138 / 0.1), inset -1px -1px 2px rgb(255 255 255 / 0.9);
   }
 }
