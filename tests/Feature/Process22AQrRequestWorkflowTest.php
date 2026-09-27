@@ -278,6 +278,49 @@ class Process22AQrRequestWorkflowTest extends TestCase
             ->assertOk();
     }
 
+    public function test_qr_first_registration_verifies_scope_and_claims_once(): void
+    {
+        $valid = $this->qr('ABCDE-2345678', 'unused', $this->officeA);
+        $used = $this->qr('FGHJK-2345678', 'registered', $this->officeA);
+        $void = $this->qr('MNPQR-2345678', 'void', $this->officeA);
+        $otherOffice = $this->qr('STUVW-2345678', 'unused', $this->officeB);
+
+        Sanctum::actingAs($this->recordsA);
+        $this->postJson('/api/qr-codes/verify-registration', ['qr_token' => $valid->qr_token])
+            ->assertOk()
+            ->assertJsonPath('qr_token', $valid->qr_token);
+        $this->postJson('/api/qr-codes/verify-registration', [
+            'qr_token' => 'http://192.168.100.107:8000/q/'.$valid->qr_token,
+        ])
+            ->assertOk()
+            ->assertJsonPath('qr_token', $valid->qr_token);
+        $this->postJson('/api/qr-codes/verify-registration', ['qr_token' => 'ZZZZZ-2345678'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('qr_token');
+        $this->postJson('/api/qr-codes/verify-registration', ['qr_token' => $used->qr_token])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.qr_token.0', 'This QR code has already been registered to a document.');
+        $this->postJson('/api/qr-codes/verify-registration', ['qr_token' => $void->qr_token])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('qr_token');
+        $this->postJson('/api/qr-codes/verify-registration', ['qr_token' => $otherOffice->qr_token])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.qr_token.0', 'This QR code is assigned to another office.');
+        $this->postJson('/api/documents', $this->documentPayload($this->officeA, ''))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('qr_token');
+
+        $payload = $this->documentPayload(
+            $this->officeA,
+            'http://192.168.100.107:8000/q/'.$valid->qr_token
+        );
+        $this->postJson('/api/documents', $payload)->assertCreated();
+        $this->postJson('/api/documents', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('qr_token');
+        $this->assertSame('registered', $valid->fresh()->status);
+    }
+
     private function user(string $roleName, string $email, int $officeId): User
     {
         return User::create([
@@ -301,5 +344,16 @@ class Process22AQrRequestWorkflowTest extends TestCase
             'document_date' => '2026-09-22',
             'qr_token' => $qrToken,
         ];
+    }
+
+    private function qr(string $token, string $status, int $officeId): DocumentQrCode
+    {
+        return DocumentQrCode::create([
+            'qr_token' => $token,
+            'status' => $status,
+            'assigned_office_id' => $officeId,
+            'generated_by' => $this->admin->id,
+            'generated_at' => now(),
+        ]);
     }
 }

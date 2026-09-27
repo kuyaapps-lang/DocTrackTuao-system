@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\DocumentQrCode;
 use App\Services\AuditLogger;
+use App\Services\DocumentQrRegistration;
 use App\Support\PublicLookupSecurity;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -16,6 +17,25 @@ use Illuminate\Validation\ValidationException;
 
 class DocumentQrCodeController extends Controller
 {
+    public function verifyForRegistration(
+        Request $request,
+        DocumentQrRegistration $registration
+    ) {
+        $validated = $request->validate([
+            'qr_token' => ['required', 'string', 'max:2048'],
+        ]);
+
+        $qrCode = $registration->verify(
+            $request->user(),
+            $validated['qr_token']
+        );
+
+        return response()->json([
+            'message' => 'QR code verified. Continue with document registration.',
+            'qr_token' => $qrCode->qr_token,
+        ]);
+    }
+
     /**
      * Display issued QR codes.
      */

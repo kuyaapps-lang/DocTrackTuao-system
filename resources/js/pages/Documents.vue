@@ -1,6 +1,7 @@
 ﻿<script setup>
 import {
     computed,
+    nextTick,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -28,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { can } from '@/lib/auth'
 import { formatDocumentDateTime } from '@/lib/document-dates'
+import { normalizeRegistrationQrInput } from '@/lib/qr-registration'
 import {
     buildDocumentListQuery,
     buildDocumentListRequestQuery,
@@ -155,12 +157,11 @@ const createSuccess = ref('')
 */
 
 const qrToken = ref('')
-const qrResolving = ref(false)
-const qrStateError = ref('')
-
-const isQrRegistration = () => {
-    return Boolean(qrToken.value)
-}
+const qrInput = ref('')
+const qrVerified = ref(false)
+const qrVerifying = ref(false)
+const qrVerificationError = ref('')
+const qrInputElement = ref(null)
 
 const form = ref({
     title: '',
@@ -381,71 +382,52 @@ const changePage = async page => {
 |--------------------------------------------------------------------------
 */
 
-const resolveQrForRegistration = async (token) => {
-    qrResolving.value = true
-    qrStateError.value = ''
+const verifyQrForRegistration = async () => {
+    const token = normalizeRegistrationQrInput(qrInput.value)
+    qrInput.value = token
+    qrVerificationError.value = ''
+    qrVerified.value = false
+
+    if (!token) {
+        qrVerificationError.value = 'Enter or scan a QR code first.'
+        return
+    }
+
+    qrVerifying.value = true
 
     try {
         const response = await fetch(
-            `/api/q/${encodeURIComponent(token)}`,
+            '/api/qr-codes/verify-registration',
             {
+                method: 'POST',
                 headers: {
                     Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
                 },
+                body: JSON.stringify({ qr_token: token }),
             }
         )
 
-        const data = await response.json()
+        const data = await response.json().catch(() => ({}))
 
         if (!response.ok) {
             throw new Error(
-                data.message ||
-                'Unable to verify this QR code.'
+                data?.errors?.qr_token?.[0] || data?.message ||
+                'This QR code cannot be used for document registration.'
             )
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | UNUSED = allow registration
-        |--------------------------------------------------------------------------
-        */
-
-        if (data.state === 'unused') {
-            qrToken.value = token
-
-            await openCreateForm()
-
-            return
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | REGISTERED = redirect to tracking
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            data.state === 'registered' &&
-            data.tracking_path
-        ) {
-            router.replace(
-                data.tracking_path
-            )
-
-            return
-        }
-
-        throw new Error(
-            data.message ||
-            'This QR code cannot be used for document registration.'
-        )
-
+        qrToken.value = data.qr_token
+        qrVerified.value = true
+        await loadRegistrationOptions()
     } catch (err) {
-        qrStateError.value =
+        qrToken.value = ''
+        qrVerificationError.value =
             err.message ||
-            'Unable to verify this QR code.'
+            'This QR code cannot be used for document registration.'
     } finally {
-        qrResolving.value = false
+        qrVerifying.value = false
     }
 }
 
@@ -523,6 +505,18 @@ const resetForm = () => {
     createSuccess.value = ''
 }
 
+const loadRegistrationOptions = async () => {
+    if (documentTypes.value.length === 0 || priorities.value.length === 0 || confidentialityLevels.value.length === 0 || offices.value.length === 0) {
+        await fetchFormOptions()
+    }
+
+    const normalPriority = priorities.value.find(item => item.priority_name === 'Normal')
+    const publicLevel = confidentialityLevels.value.find(item => item.level_name === 'Public')
+
+    if (normalPriority) form.value.priority_id = normalPriority.id
+    if (publicLevel) form.value.confidentiality_level_id = publicLevel.id
+}
+
 /*
 |--------------------------------------------------------------------------
 | Open Registration Form
@@ -535,51 +529,13 @@ const openCreateForm = async () => {
     }
 
     resetForm()
-
+    qrToken.value = ''
+    qrInput.value = ''
+    qrVerified.value = false
+    qrVerificationError.value = ''
     showCreateForm.value = true
-
-    if (
-        documentTypes.value.length === 0 ||
-        priorities.value.length === 0 ||
-        confidentialityLevels.value.length === 0 ||
-        offices.value.length === 0
-    ) {
-        await fetchFormOptions()
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Default Priority = Normal
-    |--------------------------------------------------------------------------
-    */
-
-    const normalPriority =
-        priorities.value.find(
-            priority =>
-                priority.priority_name === 'Normal'
-        )
-
-    if (normalPriority) {
-        form.value.priority_id =
-            normalPriority.id
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Default Confidentiality = Public
-    |--------------------------------------------------------------------------
-    */
-
-    const publicLevel =
-        confidentialityLevels.value.find(
-            level =>
-                level.level_name === 'Public'
-        )
-
-    if (publicLevel) {
-        form.value.confidentiality_level_id =
-            publicLevel.id
-    }
+    await nextTick()
+    qrInputElement.value?.$el?.focus()
 }
 
 /*
@@ -597,12 +553,13 @@ const closeCreateForm = () => {
 
     resetForm()
 
-    if (qrToken.value) {
-        qrToken.value = ''
+    qrToken.value = ''
+    qrInput.value = ''
+    qrVerified.value = false
+    qrVerificationError.value = ''
 
-        if (route.name === 'qr-document-registration') {
-            router.replace('/documents')
-        }
+    if (route.name === 'qr-document-registration') {
+        router.replace('/documents')
     }
 }
 
@@ -621,6 +578,11 @@ const createDocument = async () => {
 
     createError.value = ''
     createSuccess.value = ''
+
+    if (!qrVerified.value || !qrToken.value) {
+        createError.value = 'Verify a valid QR code before registering this document.'
+        return
+    }
 
     if (!form.value.title.trim()) {
         createError.value =
@@ -715,8 +677,7 @@ const createDocument = async () => {
                         null,
 
                     qr_token:
-                        qrToken.value ||
-                        null,
+                        qrToken.value,
                 }),
             }
         )
@@ -725,6 +686,12 @@ const createDocument = async () => {
 
         if (!response.ok) {
             if (data.errors) {
+                if (data.errors.qr_token?.[0]) {
+                    qrVerified.value = false
+                    qrToken.value = ''
+                    qrVerificationError.value = data.errors.qr_token[0]
+                    return
+                }
                 const firstError =
                     Object.values(
                         data.errors
@@ -1060,9 +1027,7 @@ onMounted(async () => {
         route.params.qrToken
 
     if (scannedToken) {
-        await resolveQrForRegistration(
-            String(scannedToken)
-        )
+        await openCreateForm()
     }
 })
 
@@ -1077,21 +1042,6 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="min-h-screen bg-slate-100 p-6">
-
-            <!-- QR Verification -->
-            <div
-                v-if="qrResolving"
-                class="mb-5 rounded-md border border-blue-200 bg-blue-50 p-4 text-[13pt] font-semibold text-blue-700"
-            >
-                Verifying scanned QR code...
-            </div>
-
-            <div
-                v-if="qrStateError"
-                class="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-[13pt] text-red-700"
-            >
-                {{ qrStateError }}
-            </div>
 
             <Card>
 
@@ -1117,7 +1067,7 @@ onBeforeUnmount(() => {
 
                         <Button
                             v-if="canCreateDocuments"
-                            @click="openCreateForm"
+                            @click="openCreateForm()"
                             class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                         >
                             + Register Document
@@ -1589,53 +1539,29 @@ onBeforeUnmount(() => {
 
                 <CardHeader>
 
-                    <CardTitle>
-                        {{
-                            isQrRegistration()
-                                ? 'Register Scanned Document'
-                                : 'Register New Document'
-                        }}
-                    </CardTitle>
+                    <CardTitle>{{ qrVerified ? 'Register New Document' : 'Verify QR Code' }}</CardTitle>
 
-                    <p
-                        class="text-sm text-gray-500"
-                    >
-                        {{
-                            isQrRegistration()
-                                ? 'Enter the document information below. Saving will activate and permanently link this QR code to the document.'
-                                : 'Enter the document information below. Tracking number will be generated automatically.'
-                        }}
+                    <p v-if="!qrVerified" class="text-sm text-gray-500">
+                        Scan or enter an issued QR code before registering a document.
                     </p>
 
                 </CardHeader>
 
                 <CardContent>
 
-                    <!-- Scanned QR Token -->
-                    <div
-                        v-if="isQrRegistration()"
-                        class="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4"
-                    >
-                        <p
-                            class="text-xs font-semibold uppercase tracking-wide text-blue-600"
-                        >
-                            Scanned QR Token
-                        </p>
+                    <form v-if="!qrVerified" class="space-y-4" @submit.prevent="verifyQrForRegistration">
+                        <div>
+                            <label for="registration-qr-token" class="mb-2 block text-sm font-semibold text-gray-700">QR Code <span class="text-red-600">*</span></label>
+                            <Input ref="qrInputElement" id="registration-qr-token" v-model="qrInput" type="text" autocomplete="off" autofocus placeholder="Scan or enter QR code" :disabled="qrVerifying" class="h-11 font-mono" />
+                        </div>
+                        <p v-if="qrVerificationError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ qrVerificationError }}</p>
+                        <div class="flex justify-end gap-3">
+                            <Button type="button" variant="outline" :disabled="qrVerifying" @click="closeCreateForm">Cancel</Button>
+                            <Button type="submit" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="qrVerifying">{{ qrVerifying ? 'Verifying...' : 'Verify QR' }}</Button>
+                        </div>
+                    </form>
 
-                        <p
-                            class="mt-1 font-mono text-lg font-bold text-blue-900"
-                        >
-                            {{ qrToken }}
-                        </p>
-
-                        <p
-                            class="mt-1 text-xs text-blue-700"
-                        >
-                            This QR is currently unused and will become registered after this form is saved successfully.
-                        </p>
-                    </div>
-
-                    <!-- Options Loading -->
+                    <template v-else>
                     <div
                         v-if="optionsLoading"
                         class="py-10 text-center text-gray-500"
@@ -1662,7 +1588,7 @@ onBeforeUnmount(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Document Type *
+                                    Document Type <span class="text-red-600">*</span>
                                 </label>
 
                                 <select
@@ -1696,7 +1622,7 @@ onBeforeUnmount(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Priority *
+                                    Priority <span class="text-red-600">*</span>
                                 </label>
 
                                 <select
@@ -1732,7 +1658,7 @@ onBeforeUnmount(() => {
                                 class="block mb-2 text-sm
                                        font-semibold text-gray-700"
                             >
-                                Title / Subject *
+                                Title / Subject <span class="text-red-600">*</span>
                             </label>
 
                             <Input
@@ -1779,7 +1705,7 @@ onBeforeUnmount(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Confidentiality *
+                                    Confidentiality <span class="text-red-600">*</span>
                                 </label>
 
                                 <select
@@ -1818,7 +1744,7 @@ onBeforeUnmount(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Origin Office *
+                                    Origin Office <span class="text-red-600">*</span>
                                 </label>
 
                                 <select
@@ -1850,10 +1776,7 @@ onBeforeUnmount(() => {
                         </div>
 
                         <!-- Dates -->
-                        <div
-                            class="grid grid-cols-1
-                                   md:grid-cols-2 gap-4"
-                        >
+                        <div class="ml-auto grid w-full grid-cols-1 gap-4 md:w-auto md:grid-cols-2">
 
                             <div>
                                 <label
@@ -1861,13 +1784,13 @@ onBeforeUnmount(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Document Date *
+                                    Document Date <span class="text-red-600">*</span>
                                 </label>
 
                                 <Input
                                     v-model="form.document_date"
                                     type="date"
-                                    class="h-11"
+                                    class="h-11 text-right"
                                     :disabled="creating"
                                 />
                             </div>
@@ -1884,7 +1807,7 @@ onBeforeUnmount(() => {
                                 <Input
                                     v-model="form.due_date"
                                     type="date"
-                                    class="h-11"
+                                    class="h-11 text-right"
                                     :disabled="creating"
                                 />
                             </div>
@@ -1939,6 +1862,7 @@ onBeforeUnmount(() => {
                         </div>
 
                     </form>
+                    </template>
 
                 </CardContent>
 

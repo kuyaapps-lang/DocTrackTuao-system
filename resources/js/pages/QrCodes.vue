@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import QRCode from 'qrcode'
 import { clearCurrentUser, useAuth } from '@/lib/auth'
+import { publicQrUrl } from '@/lib/qr-registration'
 import {
     printQrLabels,
     qrPrintFailureMessage,
@@ -185,8 +186,7 @@ const loadImage = (src) => {
 */
 
 const createQrImage = async (qr) => {
-    const scanUrl =
-        `${window.location.origin}/q/${qr.qr_token}`
+    const scanUrl = publicQrUrl(qr.qr_token)
 
     /*
     |--------------------------------------------------------------------------

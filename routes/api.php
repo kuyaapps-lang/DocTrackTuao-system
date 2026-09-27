@@ -249,6 +249,11 @@ Route::middleware([
         [DocumentQrCodeController::class, 'summary']
     )->middleware('can:qr.view');
 
+    Route::post(
+        'qr-codes/verify-registration',
+        [DocumentQrCodeController::class, 'verifyForRegistration']
+    )->middleware('can:documents.create');
+
     Route::get(
         'qr-codes/inventory',
         [DocumentQrCodeController::class, 'inventory']

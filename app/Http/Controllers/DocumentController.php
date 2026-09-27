@@ -20,6 +20,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Services\AuditLogger;
 use App\Services\DocumentReadScope;
+use App\Services\DocumentQrRegistration;
 
 class DocumentController extends Controller
 {
@@ -474,7 +475,8 @@ class DocumentController extends Controller
      */
     public function store(
     Request $request,
-    AuditLogger $auditLogger)
+    AuditLogger $auditLogger,
+    DocumentQrRegistration $qrRegistration)
 
     {
         $validated = $request->validate([
@@ -502,20 +504,10 @@ class DocumentController extends Controller
             'due_date' =>
                 'nullable|date|after_or_equal:document_date',
 
-            /*
-            |--------------------------------------------------------------------------
-            | Optional QR token
-            |--------------------------------------------------------------------------
-            |
-            | Normal manual registration may omit this field.
-            | QR-based registration supplies the issued token.
-            |
-            */
-
             'qr_token' => [
-                'nullable',
+                'required',
                 'string',
-                'max:100',
+                'max:2048',
             ],
         ]);
 
@@ -523,7 +515,8 @@ class DocumentController extends Controller
             function () use (
                 $validated,
                 $request,
-                $auditLogger
+                $auditLogger,
+                $qrRegistration
             ) {
                 /*
                 |--------------------------------------------------------------------------
@@ -535,53 +528,11 @@ class DocumentController extends Controller
                 |
                 */
 
-                $qrCode = null;
-
-                if (!empty($validated['qr_token'])) {
-                    $qrCode =
-                        DocumentQrCode::where(
-                            'qr_token',
-                            $validated['qr_token']
-                        )
-                            ->lockForUpdate()
-                            ->first();
-
-                    if (!$qrCode) {
-                        throw ValidationException::withMessages([
-                            'qr_token' =>
-                                'The QR code is invalid or does not exist.',
-                        ]);
-                    }
-
-                    if ($qrCode->status === 'void') {
-                        throw ValidationException::withMessages([
-                            'qr_token' =>
-                                'This QR code has been voided and can no longer be used.',
-                        ]);
-                    }
-
-                    if (
-                        $qrCode->status !== 'unused' ||
-                        $qrCode->document_id
-                    ) {
-                        throw ValidationException::withMessages([
-                            'qr_token' =>
-                                'This QR code has already been registered to a document.',
-                        ]);
-                    }
-
-                    if (
-                        Schema::hasColumn('document_qr_codes', 'assigned_office_id') &&
-                        $qrCode->assigned_office_id !== null &&
-                        !$request->user()->hasRole('Administrator') &&
-                        (int) $qrCode->assigned_office_id !== (int) $request->user()->office_id
-                    ) {
-                        throw ValidationException::withMessages([
-                            'qr_token' =>
-                                'This QR code is assigned to another office.',
-                        ]);
-                    }
-                }
+                $qrCode = $qrRegistration->verify(
+                    $request->user(),
+                    $validated['qr_token'],
+                    true
+                );
 
                 /*
                 |--------------------------------------------------------------------------
@@ -763,15 +714,13 @@ class DocumentController extends Controller
 
         return response()->json([
             'message' =>
-                !empty($validated['qr_token'])
-                    ? 'Document registered and QR code activated successfully'
-                    : 'Document registered successfully',
+                'Document registered and QR code activated successfully',
 
             'document' =>
                 $document,
 
             'qr_linked' =>
-                !empty($validated['qr_token']),
+                true,
         ], 201);
     }
 

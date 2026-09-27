@@ -63,15 +63,17 @@ class DocumentWorkflowAuditTest extends TestCase
                 $this->lookupId('confidentiality_levels'),
             'origin_office_id' => $officeId,
             'document_date' => '2026-08-26',
+            'qr_token' => $this->issuedQrToken(),
         ])->assertCreated();
 
         $documentId = $response->json('document.id');
-        $this->assertSingleAudit(
-            AuditLog::MODULE_DOCUMENTS,
-            AuditLog::ACTION_CREATED,
-            $documentId,
-            $user->id
-        );
+        $this->assertSame(2, AuditLog::count());
+        $this->assertDatabaseHas('audit_logs', [
+            'module' => AuditLog::MODULE_DOCUMENTS,
+            'action' => AuditLog::ACTION_CREATED,
+            'record_id' => $documentId,
+            'user_id' => $user->id,
+        ]);
     }
 
     public function test_unauthorized_and_invalid_create_attempts_create_nothing(): void
@@ -121,7 +123,7 @@ class DocumentWorkflowAuditTest extends TestCase
         $officeId = $this->createOffice('QRREGISTER');
         $user = $this->createUser('Records Officer', $officeId);
         $qrCode = DocumentQrCode::create([
-            'qr_token' => 'SECRET-QR-TOKEN',
+            'qr_token' => 'ABCDE-2345678',
             'status' => 'unused',
             'generated_by' => $user->id,
             'generated_at' => now(),
@@ -174,12 +176,12 @@ class DocumentWorkflowAuditTest extends TestCase
         $user = $this->createUser('Records Officer', $officeId);
         $existingDocument = $this->createDocument($officeId);
         $voidQr = DocumentQrCode::create([
-            'qr_token' => 'VOID-QR-TOKEN',
+            'qr_token' => 'FGHJK-2345678',
             'status' => 'void',
             'generated_by' => $user->id,
         ]);
         $registeredQr = DocumentQrCode::create([
-            'qr_token' => 'USED-QR-TOKEN',
+            'qr_token' => 'MNPQR-2345678',
             'status' => 'registered',
             'document_id' => $existingDocument->id,
             'generated_by' => $user->id,
@@ -187,7 +189,7 @@ class DocumentWorkflowAuditTest extends TestCase
         $initialDocumentCount = Document::count();
         Sanctum::actingAs($user);
 
-        foreach (['MISSING-TOKEN', $voidQr->qr_token, $registeredQr->qr_token] as $token) {
+        foreach (['STUVW-2345678', $voidQr->qr_token, $registeredQr->qr_token] as $token) {
             $this->postJson('/api/documents', [
                 'title' => 'Rejected QR document',
                 'document_type_id' => $this->lookupId('document_types'),
@@ -211,7 +213,7 @@ class DocumentWorkflowAuditTest extends TestCase
         $officeId = $this->createOffice('QRFAILURE');
         $user = $this->createUser('Records Officer', $officeId);
         $qrCode = DocumentQrCode::create([
-            'qr_token' => 'FAILURE-TOKEN',
+            'qr_token' => 'XYZAB-2345678',
             'status' => 'unused',
             'generated_by' => $user->id,
         ]);
@@ -911,7 +913,22 @@ class DocumentWorkflowAuditTest extends TestCase
             'confidentiality_level_id' => $this->lookupId('confidentiality_levels'),
             'origin_office_id' => $officeId,
             'document_date' => '2026-08-28',
+            'qr_token' => $this->issuedQrToken(),
         ];
+    }
+
+    private function issuedQrToken(): string
+    {
+        $token = 'ABCDE-2345678';
+
+        DocumentQrCode::firstOrCreate([
+            'qr_token' => $token,
+        ], [
+            'status' => 'unused',
+            'generated_at' => now(),
+        ]);
+
+        return $token;
     }
 
     private function createPendingRoute(

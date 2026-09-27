@@ -23,6 +23,7 @@ import {
 } from 'lucide-vue-next'
 
 import { can } from '@/lib/auth'
+import { publicQrUrl } from '@/lib/qr-registration'
 import {
     formatDocumentDateField,
     formatDocumentDateTime,
@@ -207,10 +208,7 @@ const generateQRCode = async () => {
     }
 
     try {
-        const documentUrl =
-            `${window.location.origin}/q/${encodeURIComponent(
-                qrToken
-            )}`
+        const documentUrl = publicQrUrl(qrToken)
 
         qrDataUrl.value =
             await QRCode.toDataURL(
