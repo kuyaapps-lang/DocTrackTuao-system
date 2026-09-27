@@ -86,6 +86,14 @@ class DocumentListApiContractTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('document_qr_codes', function (Blueprint $table) {
+            $table->id();
+            $table->string('qr_token')->unique();
+            $table->string('status')->default('unused');
+            $table->unsignedBigInteger('document_id')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('document_routes', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('document_id');
@@ -124,6 +132,7 @@ class DocumentListApiContractTest extends TestCase
             'document_processing_logs',
             'audit_logs',
             'document_routes',
+            'document_qr_codes',
             'documents',
             'priorities',
             'document_statuses',
@@ -488,6 +497,52 @@ class DocumentListApiContractTest extends TestCase
         }
     }
 
+    public function test_qr_search_normalizes_raw_and_url_tokens_without_bypassing_movement_scope(): void
+    {
+        $office = $this->createOffice('QR-SEARCH');
+        $other = $this->createOffice('QR-OTHER');
+        $visible = $this->createDocument($other, $office, now(), 'Normal keyword regression');
+        $hidden = $this->createDocument($other, $other, now(), 'Hidden QR document');
+        $this->createRoute($visible, $other, $office, now(), null);
+        $this->createRoute($hidden, $other, $other, now(), null);
+
+        $visibleToken = 'ABCDE-2345678';
+        $hiddenToken = 'FGHJK-2345678';
+        $this->createQrCode($visibleToken, 'registered', $visible->id);
+        $this->createQrCode($hiddenToken, 'registered', $hidden->id);
+        $this->createQrCode('MNPQR-2345678', 'unused');
+        $this->createQrCode('STUVW-2345678', 'void');
+        Sanctum::actingAs($this->createUser('Viewer', $office));
+
+        foreach ([
+            $visibleToken,
+            'https://doctrack.example/q/'.$visibleToken,
+            'http://192.168.100.107:8000/q/'.$visibleToken,
+        ] as $search) {
+            $this->getJson('/api/documents/incoming?search='.urlencode($search))
+                ->assertOk()
+                ->assertJsonPath('meta.total', 1)
+                ->assertJsonPath('data.0.id', $visible->id);
+        }
+
+        $this->getJson('/api/documents/incoming?search=Normal%20keyword%20regression')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $visible->id);
+
+        foreach ([
+            'MNPQR-2345678',
+            'STUVW-2345678',
+            'XYZAB-2345678',
+            $hiddenToken,
+        ] as $search) {
+            $this->getJson('/api/documents/incoming?search='.urlencode($search))
+                ->assertOk()
+                ->assertJsonPath('data', [])
+                ->assertJsonPath('meta.total', 0);
+        }
+    }
+
     public function test_incoming_state_uses_only_the_newest_relevant_route(): void
     {
         $office = $this->createOffice('STATE');
@@ -665,6 +720,11 @@ class DocumentListApiContractTest extends TestCase
                 ])
                 ->map(fn ($row): array => (array) $row)
                 ->all(),
+            'qr_codes' => DB::table('document_qr_codes')
+                ->orderBy('id')
+                ->get(['id', 'qr_token', 'status', 'document_id', 'updated_at'])
+                ->map(fn ($row): array => (array) $row)
+                ->all(),
             'audit_count' => DB::table('audit_logs')->count(),
             'audits' => DB::table('audit_logs')
                 ->orderBy('id')
@@ -696,6 +756,7 @@ class DocumentListApiContractTest extends TestCase
             'documents',
             'route_count',
             'routes',
+            'qr_codes',
             'audit_count',
             'audits',
             'processing_history_count',
@@ -776,6 +837,20 @@ class DocumentListApiContractTest extends TestCase
             'remarks' => 'Sensitive route remarks',
             'created_at' => $forwardedAt,
             'updated_at' => $forwardedAt,
+        ]);
+    }
+
+    private function createQrCode(
+        string $token,
+        string $status,
+        ?int $documentId = null
+    ): void {
+        DB::table('document_qr_codes')->insert([
+            'qr_token' => $token,
+            'status' => $status,
+            'document_id' => $documentId,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 }

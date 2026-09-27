@@ -172,6 +172,17 @@ test('QR inventory page gates the void button behind the Admin-only permission',
     assert.match(source, /const canVoidQr = computed\(\(\) => permissions\.value\.includes\('qr\.void'\)\)/)
     assert.match(source, /v-if="canVoidInventoryItem\(item, canVoidQr\)"/)
     assert.doesNotMatch(source, /v-if="canVoidInventoryItem\(item\)"/)
+    assert.match(source, /const inventoryPaginationItems = computed\(\(\) =>/)
+    assert.match(source, /\{\{ inventoryMeta\.total \}\} total results/)
+    assert.match(source, /aria-label="QR inventory pagination"/)
+    assert.match(source, /@click="changeInventoryPage\(inventoryPaginationState\.previousPage\)"/)
+    assert.match(source, /bg-blue-900 px-6 text-white hover:bg-blue-950 hover:text-white/)
+    assert.match(source, /v-else-if="!inventoryError" class="overflow-hidden rounded-t-lg border-t border-blue-900">/)
+    assert.match(source, /class="h-auto px-2 py-\[1\.5px\] text-xs"/)
+    assert.match(source, /QR Code Inventory/)
+    assert.match(source, /<Card v-if="canManageQr" class="mt-6 overflow-hidden py-0">/)
+    assert.match(source, /class="flex items-center gap-2 text-sm font-medium text-gray-700"/)
+    assert.match(source, /bg-white text-blue-900 hover:bg-blue-50 hover:text-blue-900[\s\S]*?Retry/)
 })
 
 test('confirmation identity contains only safe ID and issuance time', () => {

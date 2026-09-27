@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DocumentQrCode;
 use App\Models\User;
 use App\Support\PublicLookupSecurity;
+use App\Support\QrTokenInput;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
@@ -12,7 +13,7 @@ class DocumentQrRegistration
 {
     public function verify(User $user, string $input, bool $lock = false): DocumentQrCode
     {
-        $token = $this->normalizeToken($input);
+        $token = QrTokenInput::normalize($input);
 
         if (!PublicLookupSecurity::validQrToken($token)) {
             $this->reject('The QR code is invalid or does not exist.');
@@ -48,33 +49,6 @@ class DocumentQrRegistration
         }
 
         return $qrCode;
-    }
-
-    private function normalizeToken(string $input): string
-    {
-        $input = trim($input);
-
-        if (PublicLookupSecurity::validQrToken($input)) {
-            return $input;
-        }
-
-        $parts = parse_url($input);
-
-        if (
-            !is_array($parts) ||
-            !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true) ||
-            !isset($parts['host'], $parts['path'])
-        ) {
-            return $input;
-        }
-
-        $path = trim($parts['path'], '/');
-
-        if ($path === '') {
-            return $input;
-        }
-
-        return rawurldecode(basename($path));
     }
 
     private function reject(string $message): never

@@ -47,7 +47,7 @@ test('dashboard documents and public tracking show clearer helper copy', async (
     assert.match(dashboard, /Documents by status/)
     assert.match(dashboard, /No routing activity was recorded in this period/)
     assert.match(documents, /Try a different keyword or clear the filter/)
-    assert.match(documents, /placeholder="Tracking number, title, type, or office"/)
+    assert.match(documents, /placeholder="Tracking number, QR code, title, type, or office"/)
     assert.match(tracking, /Document Tracking/)
     assert.match(tracking, /Limited public details are shown for this protected document/)
 })

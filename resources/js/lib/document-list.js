@@ -1,5 +1,6 @@
 const DOCUMENT_VIEWS = new Set(['all', 'incoming', 'outgoing'])
 const INCOMING_STATES = new Set(['all', 'pending', 'received'])
+const QR_TOKEN_PATTERN = /^(?:[A-HJ-KM-NP-Z2-9]{5}-[A-HJ-KM-NP-Z2-9]{7}|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-5][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12})$/
 
 export const DOCUMENT_LIST_DEFAULT_PER_PAGE = 25
 export const DOCUMENT_LIST_PER_PAGE_OPTIONS = Object.freeze([10, 25, 50])
@@ -18,9 +19,23 @@ export const normalizeDocumentView = value => {
 
 export const normalizeDocumentSearch = value => {
     const candidate = firstQueryValue(value)
-    return typeof candidate === 'string'
-        ? candidate.trim().slice(0, DOCUMENT_SEARCH_MAX_LENGTH)
-        : ''
+    if (typeof candidate !== 'string') return ''
+
+    const search = candidate.trim().slice(0, DOCUMENT_SEARCH_MAX_LENGTH)
+    if (!search) return ''
+
+    if (QR_TOKEN_PATTERN.test(search)) return search
+
+    try {
+        const url = new URL(search)
+        if (!['http:', 'https:'].includes(url.protocol)) return search
+
+        const token = decodeURIComponent(url.pathname.split('/').filter(Boolean).at(-1) || '').trim()
+
+        return QR_TOKEN_PATTERN.test(token) ? token : search
+    } catch {
+        return search
+    }
 }
 
 export const normalizeIncomingState = value => {

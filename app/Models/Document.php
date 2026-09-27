@@ -195,4 +195,11 @@ class Document extends Model
             DocumentProcessingLog::class
         );
     }
+
+    public function qrCodes(): HasMany
+    {
+        return $this->hasMany(
+            DocumentQrCode::class
+        );
+    }
 }

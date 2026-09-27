@@ -1115,7 +1115,7 @@ onBeforeUnmount(() => {
                                 v-model="searchTerm"
                                 type="search"
                                 :maxlength="DOCUMENT_SEARCH_MAX_LENGTH"
-                                placeholder="Tracking number, title, type, or office"
+                                placeholder="Tracking number, QR code, title, type, or office"
                                 autocomplete="off"
                                 class="h-10 border-slate-600 px-[10px]"
                             />

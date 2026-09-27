@@ -64,13 +64,14 @@ const requestsLoading = ref(true)
 const requestsError = ref('')
 const requestSaving = ref(false)
 const reviewPendingId = ref(null)
+const expandedRequestId = ref(null)
 const requestNotice = ref('')
 const requestForm = ref({
     quantity: 10,
     purpose: '',
 })
 
-const quantity = ref(10)
+const quantity = ref(5)
 const lastGeneratedBatch = ref([])
 
 const error = ref('')
@@ -88,6 +89,47 @@ const voidingId = ref(null)
 const confirmButton = ref(null)
 const inventoryHeading = ref(null)
 const voidReturnFocus = ref(null)
+
+const inventoryPaginationState = computed(() => {
+    const currentPage = inventoryMeta.value?.current_page || 1
+    const lastPage = inventoryMeta.value?.last_page || 1
+
+    return {
+        canGoPrevious: currentPage > 1,
+        canGoNext: currentPage < lastPage,
+        previousPage: Math.max(1, currentPage - 1),
+        nextPage: Math.min(lastPage, currentPage + 1),
+    }
+})
+
+const inventoryPaginationItems = computed(() => {
+    const lastPage = Math.max(1, inventoryMeta.value?.last_page || 1)
+    const currentPage = Math.min(
+        Math.max(1, inventoryMeta.value?.current_page || 1),
+        lastPage
+    )
+
+    if (lastPage <= 7) {
+        return Array.from(
+            { length: lastPage },
+            (_, index) => ({ type: 'page', page: index + 1 })
+        )
+    }
+
+    const pages = [1, currentPage - 1, currentPage, currentPage + 1, lastPage]
+        .filter(page => page >= 1 && page <= lastPage)
+        .filter((page, index, items) => items.indexOf(page) === index)
+        .sort((left, right) => left - right)
+
+    return pages.flatMap((page, index) => {
+        const previous = pages[index - 1]
+        const ellipsis = previous && page - previous > 1
+            ? [{ type: 'ellipsis', key: `ellipsis-${previous}-${page}` }]
+            : []
+
+        return [...ellipsis, { type: 'page', page }]
+    })
+})
 
 /*
 |--------------------------------------------------------------------------
@@ -127,26 +169,6 @@ const normalizeQuantity = () => {
         Math.min(
             maxBatchSize,
             Math.max(1, value)
-        )
-}
-
-const decreaseQuantity = () => {
-    normalizeQuantity()
-
-    quantity.value =
-        Math.max(
-            1,
-            quantity.value - 1
-        )
-}
-
-const increaseQuantity = () => {
-    normalizeQuantity()
-
-    quantity.value =
-        Math.min(
-            maxBatchSize,
-            quantity.value + 1
         )
 }
 
@@ -439,6 +461,21 @@ const fetchInventory = (page = 1) => inventoryManager.load({
     status: inventoryStatus.value,
 })
 
+const changeInventoryPage = page => {
+    const meta = inventoryMeta.value
+
+    if (
+        inventoryLoading.value ||
+        voidingId.value !== null ||
+        !meta ||
+        page === meta.current_page ||
+        page < 1 ||
+        page > meta.last_page
+    ) return
+
+    fetchInventory(page)
+}
+
 const fetchRequests = async () => {
     if (!canRequestQr.value) {
         requests.value = []
@@ -454,6 +491,7 @@ const fetchRequests = async () => {
             fetchImpl: (...arguments_) => fetch(...arguments_),
             getToken,
         })
+        expandedRequestId.value = null
     } catch (err) {
         requestsError.value =
             err.message ||
@@ -461,6 +499,12 @@ const fetchRequests = async () => {
     } finally {
         requestsLoading.value = false
     }
+}
+
+const toggleRequestQrCodes = requestId => {
+    expandedRequestId.value = expandedRequestId.value === requestId
+        ? null
+        : requestId
 }
 
 const normalizeRequestQuantity = () => {
@@ -757,6 +801,7 @@ onBeforeUnmount(() => {
 
         <!-- Header -->
         <div
+            v-if="!canApproveQr"
             class="border-b border-white/70 bg-blue-900 px-6 py-4 text-white shadow-[0_5px_16px_rgb(15_41_70/0.13)]"
         >
 
@@ -782,6 +827,14 @@ onBeforeUnmount(() => {
 
             </div>
 
+        </div>
+
+        <div v-if="canApproveQr" class="border-b border-blue-100 bg-white px-6 py-3 shadow-sm">
+            <div class="mx-auto grid max-w-5xl gap-3 text-sm md:grid-cols-3 md:items-center">
+                <p class="text-slate-600"><span class="font-semibold text-slate-900">1. Request Batch</span> — request unique QR labels.</p>
+                <p class="text-slate-600"><span class="font-semibold text-slate-900">2. Print & Attach</span> — attach ORIGINAL and retain RECORD COPY.</p>
+                <p class="text-slate-600"><span class="font-semibold text-slate-900">3. Scan & Register</span> — register or retrieve the document.</p>
+            </div>
         </div>
 
         <!-- Main -->
@@ -813,7 +866,7 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Request Workflow -->
-            <Card v-if="canRequestQr && !canApproveQr" class="overflow-hidden border-blue-200">
+            <Card v-if="canRequestQr && !canApproveQr" class="overflow-hidden border-blue-200 py-0">
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
                     <CardTitle class="text-base font-semibold">
                         Request QR Codes
@@ -856,7 +909,7 @@ onBeforeUnmount(() => {
 
                         <Button
                             type="submit"
-                            class="bg-blue-600 px-6 text-white hover:bg-blue-700"
+                            class="bg-blue-900 px-6 text-white hover:bg-blue-950 hover:text-white"
                             :disabled="requestSaving"
                         >
                             {{ requestSaving ? 'Submitting...' : 'Submit Request' }}
@@ -865,7 +918,7 @@ onBeforeUnmount(() => {
                 </CardContent>
             </Card>
 
-            <Card v-if="canRequestQr" class="mt-6 overflow-hidden border-blue-200">
+            <Card v-if="canRequestQr" class="mt-6 overflow-hidden border-blue-200 py-0">
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -879,7 +932,7 @@ onBeforeUnmount(() => {
 
                         <Button
                             variant="outline"
-                            class="bg-white text-blue-900 hover:bg-blue-50"
+                            class="bg-white !text-[12pt] text-blue-900 hover:bg-blue-50"
                             :disabled="requestsLoading || reviewPendingId !== null"
                             @click="fetchRequests"
                         >
@@ -899,6 +952,49 @@ onBeforeUnmount(() => {
 
                     <div v-else-if="requests.length === 0" class="py-6 text-center text-gray-500">
                         No QR requests found.
+                    </div>
+
+                    <div v-else-if="canApproveQr" class="overflow-hidden rounded-t-lg border-t border-blue-900">
+                        <table class="min-w-full divide-y divide-slate-200 text-left">
+                            <thead class="bg-blue-900 text-xs font-semibold tracking-wide text-white">
+                                <tr>
+                                    <th scope="col" class="px-3 py-1">Requesting Office</th>
+                                    <th scope="col" class="px-3 py-1">Date Requested</th>
+                                    <th scope="col" class="px-3 py-1">Assigned QR Code</th>
+                                    <th scope="col" class="px-3 py-1 text-right"><span class="sr-only">QR code actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 bg-white">
+                                <template v-for="request in requests" :key="request.id">
+                                    <tr class="align-top">
+                                        <td class="px-3 py-1">
+                                            <p class="font-semibold text-slate-900">{{ request.requested_office?.office_name || 'Unassigned office' }}</p>
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-1 text-sm text-slate-700">{{ formatDateTime(request.created_at) }}</td>
+                                        <td class="px-3 py-1 text-sm font-semibold text-slate-900">{{ request.qr_codes.length > 0 ? `${request.qr_codes.length} assigned` : 'Not assigned yet' }}</td>
+                                        <td class="px-3 py-1 text-right">
+                                            <Button type="button" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :aria-expanded="expandedRequestId === request.id" @click="toggleRequestQrCodes(request.id)">
+                                                {{ expandedRequestId === request.id ? 'Hide QR Codes' : 'Show QR Codes' }}
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="expandedRequestId === request.id">
+                                        <td colspan="4" class="bg-slate-50 px-3 py-4">
+                                            <div class="space-y-3">
+                                                <div v-if="request.qr_codes.length > 0" class="flex flex-wrap gap-2">
+                                                    <span v-for="qr in request.qr_codes" :key="qr.id" class="rounded-md border bg-white px-3 py-1.5 font-mono text-xs font-semibold text-gray-700">{{ qr.qr_token }}</span>
+                                                </div>
+                                                <p v-else class="text-sm text-slate-500">No QR codes have been assigned yet.</p>
+                                                <div v-if="request.status === 'pending'" class="flex gap-2">
+                                                    <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'approve')">{{ reviewPendingId === request.id ? 'Reviewing...' : 'Approve' }}</Button>
+                                                    <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'reject')">Reject</Button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
                     </div>
 
                     <div v-else class="space-y-3">
@@ -957,7 +1053,7 @@ onBeforeUnmount(() => {
                                     class="flex gap-2"
                                 >
                                     <Button
-                                        class="bg-green-600 text-white hover:bg-green-700"
+                                        class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                                         :disabled="reviewPendingId !== null"
                                         @click="reviewRequest(request, 'approve')"
                                     >
@@ -965,7 +1061,7 @@ onBeforeUnmount(() => {
                                     </Button>
 
                                     <Button
-                                        variant="destructive"
+                                        class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                                         :disabled="reviewPendingId !== null"
                                         @click="reviewRequest(request, 'reject')"
                                     >
@@ -996,124 +1092,6 @@ onBeforeUnmount(() => {
                 </CardContent>
             </Card>
 
-            <!-- Direct issuance -->
-            <Card v-if="canIssueQr" class="mt-6 overflow-hidden">
-
-                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-
-                    <CardTitle class="text-base font-semibold">
-                        Direct QR Issuance
-                    </CardTitle>
-
-                    <p
-                        class="text-xs text-blue-100"
-                    >
-                        Generate immediate QR labels when approval is not required.
-                    </p>
-
-                </CardHeader>
-
-                <CardContent class="[&_*]:!text-[13pt]">
-
-                    <div
-                        class="flex flex-col gap-5 md:flex-row md:items-end md:justify-between"
-                    >
-
-                        <div>
-
-                            <label
-                                class="block text-sm font-semibold text-gray-700"
-                            >
-                                Number of QR Codes
-                            </label>
-
-                            <div
-                                class="mt-2 flex items-center gap-2"
-                            >
-
-                                <button
-                                    type="button"
-                                    class="h-11 w-11 rounded-md border border-gray-300 bg-white text-xl font-bold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                    :disabled="
-                                        generating ||
-                                        quantity <= 1
-                                    "
-                                    @click="
-                                        decreaseQuantity
-                                    "
-                                >
-                                    −
-                                </button>
-
-                                <input
-                                    v-model.number="
-                                        quantity
-                                    "
-                                    type="number"
-                                    min="1"
-                                    :max="
-                                        maxBatchSize
-                                    "
-                                    class="h-11 w-24 rounded-md border border-gray-300 bg-white px-3 text-center text-lg font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                    :disabled="
-                                        generating
-                                    "
-                                    @blur="
-                                        normalizeQuantity
-                                    "
-                                    @change="
-                                        normalizeQuantity
-                                    "
-                                >
-
-                                <button
-                                    type="button"
-                                    class="h-11 w-11 rounded-md border border-gray-300 bg-white text-xl font-bold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                    :disabled="
-                                        generating ||
-                                        quantity >=
-                                            maxBatchSize
-                                    "
-                                    @click="
-                                        increaseQuantity
-                                    "
-                                >
-                                    +
-                                </button>
-
-                            </div>
-
-                            <p
-                                class="mt-2 text-xs text-gray-500"
-                            >
-                                1–50 unique QR codes
-                                per request.
-                            </p>
-
-                        </div>
-
-                        <Button
-                            class="bg-blue-600 px-6 text-white hover:bg-blue-700"
-                            :disabled="
-                                generating
-                            "
-                            @click="
-                                generateQrBatch
-                            "
-                        >
-                            {{
-                                generating
-                                    ? 'Generating...'
-                                    : `Generate ${quantity} QR Code${quantity === 1 ? '' : 's'}`
-                            }}
-                        </Button>
-
-                    </div>
-
-                </CardContent>
-
-            </Card>
-
             <!-- Last Batch -->
             <Card
                 v-if="
@@ -1122,7 +1100,7 @@ onBeforeUnmount(() => {
                     lastGeneratedBatch.length >
                     0
                 "
-                class="mt-6 overflow-hidden border-blue-200"
+                class="mt-6 overflow-hidden border-blue-200 py-0"
             >
 
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
@@ -1156,7 +1134,7 @@ onBeforeUnmount(() => {
                         </div>
 
                         <Button
-                            class="bg-white text-blue-900 hover:bg-blue-50"
+                            class="bg-white text-blue-900 hover:bg-blue-50 hover:text-blue-900"
                             @click="
                                 printLastBatch
                             "
@@ -1222,15 +1200,104 @@ onBeforeUnmount(() => {
 
             </Card>
 
-            <!-- Workflow -->
-            <Card class="mt-6 overflow-hidden">
+            <!-- Direct issuance and summary -->
+            <div v-if="canIssueQr || canManageQr" class="mt-6 grid gap-5 lg:grid-cols-[minmax(18rem,0.78fr)_minmax(0,1.22fr)]">
+            <Card v-if="canIssueQr" class="overflow-hidden py-0">
 
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
+
                     <CardTitle class="text-base font-semibold">
-                        QR Workflow
+                        Direct QR Issuance
                     </CardTitle>
+
+                    <p
+                        class="text-xs text-blue-100"
+                    >
+                        Generate immediate QR labels when approval is not required.
+                    </p>
+
                 </CardHeader>
 
+                <CardContent class="p-4 [&_*]:!text-[13pt]">
+
+                    <div
+                        class="flex flex-col items-center gap-4"
+                    >
+
+                        <div>
+
+                            <label
+                                class="block text-center text-sm font-semibold text-gray-700"
+                            >
+                                Number of QR Codes
+                            </label>
+
+                            <div class="mt-2">
+                                <input
+                                    v-model.number="
+                                        quantity
+                                    "
+                                    type="number"
+                                    min="1"
+                                    step="5"
+                                    :max="
+                                        maxBatchSize
+                                    "
+                                    class="h-11 w-48 rounded-md border border-gray-300 bg-white px-3 text-center !text-[15pt] font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    :disabled="
+                                        generating
+                                    "
+                                    @blur="
+                                        normalizeQuantity
+                                    "
+                                    @change="
+                                        normalizeQuantity
+                                    "
+                                >
+
+                            </div>
+
+                        </div>
+
+                        <Button
+                            class="w-48 bg-blue-900 text-sm text-white hover:bg-blue-950 hover:text-white"
+                            :disabled="
+                                generating
+                            "
+                            @click="
+                                generateQrBatch
+                            "
+                        >
+                            {{
+                                generating
+                                    ? 'Generating...'
+                                    : 'Generate QR Code'
+                            }}
+                        </Button>
+
+                    </div>
+
+                </CardContent>
+
+            </Card>
+
+            <Card v-if="canManageQr" class="overflow-hidden py-0">
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
+                    <CardTitle class="text-base font-semibold">QR Record Summary</CardTitle>
+                </CardHeader>
+                <CardContent class="px-4 pb-4 pt-[3pt] [&_*]:!text-[13pt]">
+                    <div v-if="summaryLoading" class="py-3 text-center text-gray-500">Loading QR records...</div>
+                    <div v-else class="space-y-2 text-center">
+                        <div class="rounded-md border bg-gray-50 px-2 py-1"><p class="text-xs font-semibold text-gray-500">Issued</p><p class="!text-[18pt] font-bold text-gray-900">{{ summary.total_issued }}</p></div>
+                        <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-800">{{ summary.counts.registered }}</p></div>
+                        <div class="rounded-md border bg-yellow-50 px-2 py-1"><p class="text-xs font-semibold text-yellow-700">Unused</p><p class="!text-[18pt] font-bold text-yellow-800">{{ summary.counts.unused }}</p></div>
+                    </div>
+                    <p v-if="summaryError" class="mt-2 text-sm text-red-600">{{ summaryError }}</p>
+                </CardContent>
+            </Card>
+            </div>
+
+            <Card v-if="!canApproveQr" class="mt-6 overflow-hidden">
                 <CardContent class="[&_*]:!text-[13pt]">
 
                     <div
@@ -1239,74 +1306,36 @@ onBeforeUnmount(() => {
 
                         <div>
 
-                            <p
-                                class="text-xs font-semibold uppercase text-gray-500"
-                            >
-                                Step 1
-                            </p>
-
-                            <p
-                                class="mt-1 font-semibold text-gray-900"
-                            >
-                                Request Batch
-                            </p>
+                            <p class="font-semibold text-gray-900">1. Request Batch</p>
 
                             <p
                                 class="mt-1 text-sm text-gray-500"
                             >
-                                Request the required
-                                number of unique QR
-                                labels.
+                                - Request unique QR labels.
                             </p>
 
                         </div>
 
                         <div>
 
-                            <p
-                                class="text-xs font-semibold uppercase text-gray-500"
-                            >
-                                Step 2
-                            </p>
-
-                            <p
-                                class="mt-1 font-semibold text-gray-900"
-                            >
-                                Print & Attach
-                            </p>
+                            <p class="font-semibold text-gray-900">2. Print &amp; Attach</p>
 
                             <p
                                 class="mt-1 text-sm text-gray-500"
                             >
-                                Attach ORIGINAL to
-                                the hardcopy and
-                                retain RECORD COPY
-                                for retrieval.
+                                - Attach ORIGINAL to the hardcopy and retain RECORD COPY.
                             </p>
 
                         </div>
 
                         <div>
 
-                            <p
-                                class="text-xs font-semibold uppercase text-gray-500"
-                            >
-                                Step 3
-                            </p>
-
-                            <p
-                                class="mt-1 font-semibold text-gray-900"
-                            >
-                                Scan & Register
-                            </p>
+                            <p class="font-semibold text-gray-900">3. Scan &amp; Register</p>
 
                             <p
                                 class="mt-1 text-sm text-gray-500"
                             >
-                                Scan either copy to
-                                encode the document
-                                or later retrieve its
-                                record.
+                                - Scan either copy to register or retrieve its record.
                             </p>
 
                         </div>
@@ -1317,128 +1346,34 @@ onBeforeUnmount(() => {
 
             </Card>
 
-            <!-- Record Summary -->
-            <Card v-if="canManageQr" class="mt-6 overflow-hidden">
-
-                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-                    <CardTitle class="text-base font-semibold">
-                        QR Record Summary
-                    </CardTitle>
+            <Card v-if="canManageQr" class="mt-6 overflow-hidden py-0">
+                <CardHeader class="flex flex-row items-center justify-between gap-3 bg-blue-900 px-4 py-2 text-white">
+                    <div>
+                        <CardTitle class="text-base font-semibold">
+                            <span ref="inventoryHeading" tabindex="-1">QR Code Inventory</span>
+                        </CardTitle>
+                        <p class="text-xs text-blue-100">
+                            Token-free issuance records for lifecycle administration.
+                        </p>
+                    </div>
+                    <Button
+                        variant="outline"
+                        class="bg-white !text-[12pt] text-blue-900 hover:bg-blue-50 hover:text-blue-900"
+                        :disabled="inventoryLoading || voidingId !== null"
+                        @click="fetchInventory(inventoryMeta?.current_page || 1)"
+                    >
+                        Retry
+                    </Button>
                 </CardHeader>
 
                 <CardContent class="[&_*]:!text-[13pt]">
-
-                    <div
-                        v-if="summaryLoading"
-                        class="py-5 text-center text-gray-500"
-                    >
-                        Loading QR records...
-                    </div>
-
-                    <div
-                        v-else
-                        class="grid gap-4 sm:grid-cols-3"
-                    >
-
-                        <div
-                            class="rounded-lg border bg-gray-50 p-4"
-                        >
-                            <p
-                                class="text-xs font-semibold uppercase text-gray-500"
-                            >
-                                Total Issued
-                            </p>
-
-                            <p
-                                class="mt-1 text-2xl font-bold text-gray-900"
-                            >
-                                {{
-                                    summary.total_issued
-                                }}
-                            </p>
-                        </div>
-
-                        <div
-                            class="rounded-lg border bg-yellow-50 p-4"
-                        >
-                            <p
-                                class="text-xs font-semibold uppercase text-yellow-700"
-                            >
-                                Unused
-                            </p>
-
-                            <p
-                                class="mt-1 text-2xl font-bold text-yellow-800"
-                            >
-                                {{
-                                    summary.counts.unused
-                                }}
-                            </p>
-                        </div>
-
-                        <div
-                            class="rounded-lg border bg-green-50 p-4"
-                        >
-                            <p
-                                class="text-xs font-semibold uppercase text-green-700"
-                            >
-                                Registered
-                            </p>
-
-                            <p
-                                class="mt-1 text-2xl font-bold text-green-800"
-                            >
-                                {{
-                                    summary.counts.registered
-                                }}
-                            </p>
-                        </div>
-
-                    </div>
-
-                    <p
-                        v-if="
-                            summary.latest_issued_at
-                        "
-                        class="mt-4 text-xs text-gray-500"
-                    >
-                        Latest issuance activity:
-                        {{
-                            formatDateTime(
-                                summary.latest_issued_at
-                            )
-                        }}
-                    </p>
-
-                    <p
-                        v-if="summaryError"
-                        class="mt-4 text-sm text-red-600"
-                    >
-                        {{ summaryError }}
-                    </p>
-
-                </CardContent>
-
-            </Card>
-
-            <Card v-if="canManageQr" class="mt-6 overflow-hidden">
-                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-                    <CardTitle class="text-base font-semibold">
-                        <span ref="inventoryHeading" tabindex="-1">Persisted QR Inventory</span>
-                    </CardTitle>
-                    <p class="text-xs text-blue-100">
-                        Token-free issuance records for lifecycle administration.
-                    </p>
-                </CardHeader>
-
-                <CardContent class="[&_*]:!text-[13pt]">
-                    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
-                        <label class="text-sm font-medium text-gray-700">
+                    <div class="mb-4 flex flex-wrap items-center gap-3">
+                        <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
                             Lifecycle status
                             <select
                                 v-model="inventoryStatus"
                                 :disabled="voidingId !== null"
-                                class="mt-1 block rounded-md border bg-white px-3 py-2"
+                                class="rounded-md border bg-white px-3 py-2"
                                 @change="fetchInventory(1)"
                             >
                                 <option value="">All statuses</option>
@@ -1448,13 +1383,6 @@ onBeforeUnmount(() => {
                             </select>
                         </label>
 
-                        <Button
-                            variant="outline"
-                            :disabled="inventoryLoading || voidingId !== null"
-                            @click="fetchInventory(inventoryMeta?.current_page || 1)"
-                        >
-                            Retry
-                        </Button>
                     </div>
 
                     <p
@@ -1478,30 +1406,31 @@ onBeforeUnmount(() => {
                             : 'No persisted QR records are available.' }}
                     </div>
 
-                    <div v-else-if="!inventoryError" class="overflow-x-auto">
+                    <div v-else-if="!inventoryError" class="overflow-hidden rounded-t-lg border-t border-blue-900">
                         <table class="min-w-full divide-y text-left text-sm">
                             <caption class="sr-only">
                                 Persisted QR records with lifecycle status and void eligibility
                             </caption>
                             <thead class="bg-blue-900 text-white">
                                 <tr>
-                                    <th scope="col" class="px-3 py-2 font-semibold">Record ID</th>
-                                    <th scope="col" class="px-3 py-2 font-semibold">Issued</th>
-                                    <th scope="col" class="px-3 py-2 font-semibold">Status</th>
-                                    <th scope="col" class="px-3 py-2 font-semibold">Link state</th>
-                                    <th scope="col" class="px-3 py-2 font-semibold">Action</th>
+                                    <th scope="col" class="px-3 py-1 font-semibold">Record ID</th>
+                                    <th scope="col" class="px-3 py-1 font-semibold">Issued</th>
+                                    <th scope="col" class="px-3 py-1 font-semibold">Status</th>
+                                    <th scope="col" class="px-3 py-1 font-semibold">Link state</th>
+                                    <th scope="col" class="px-3 py-1 font-semibold">Action</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y">
                                 <tr v-for="item in inventory" :key="item.id">
-                                    <td class="whitespace-nowrap px-3 py-2 font-mono">#{{ item.id }}</td>
-                                    <td class="whitespace-nowrap px-3 py-2">{{ formatDateTime(item.issued_at) }}</td>
-                                    <td class="whitespace-nowrap px-3 py-2 capitalize">{{ item.status }}</td>
-                                    <td class="whitespace-nowrap px-3 py-2">{{ item.linked ? 'Linked' : 'Unlinked' }}</td>
-                                    <td class="whitespace-nowrap px-3 py-2">
+                                    <td class="whitespace-nowrap px-3 py-1 font-mono">#{{ item.id }}</td>
+                                    <td class="whitespace-nowrap px-3 py-1">{{ formatDateTime(item.issued_at) }}</td>
+                                    <td class="whitespace-nowrap px-3 py-1 capitalize">{{ item.status }}</td>
+                                    <td class="whitespace-nowrap px-3 py-1">{{ item.linked ? 'Linked' : 'Unlinked' }}</td>
+                                    <td class="whitespace-nowrap px-3 py-1">
                                         <Button
                                             v-if="canVoidInventoryItem(item, canVoidQr)"
                                             variant="destructive"
+                                            class="h-auto px-2 py-[1.5px] text-xs"
                                             :disabled="voidingId !== null"
                                             :aria-label="`Void QR record ${item.id}`"
                                             @click="openVoidConfirmation(item, $event)"
@@ -1515,20 +1444,18 @@ onBeforeUnmount(() => {
                         </table>
                     </div>
 
-                    <div v-if="inventoryMeta" class="mt-4 flex items-center justify-between gap-3 text-sm">
-                        <span>Page {{ inventoryMeta.current_page }} of {{ inventoryMeta.last_page }} / {{ inventoryMeta.total }} records</span>
-                        <div class="flex gap-2">
-                            <Button
-                                variant="outline"
-                                :disabled="inventoryLoading || voidingId !== null || inventoryMeta.current_page <= 1"
-                                @click="fetchInventory(inventoryMeta.current_page - 1)"
-                            >Previous</Button>
-                            <Button
-                                variant="outline"
-                                :disabled="inventoryLoading || voidingId !== null || inventoryMeta.current_page >= inventoryMeta.last_page"
-                                @click="fetchInventory(inventoryMeta.current_page + 1)"
-                            >Next</Button>
-                        </div>
+                    <div v-if="inventoryMeta && !inventoryLoading && !inventoryError" class="mt-4 flex flex-col items-center gap-3 border-t pt-4">
+                        <p class="text-center text-sm text-gray-600">{{ inventoryMeta.total }} total results</p>
+                        <nav class="max-w-full overflow-x-auto rounded-full bg-white p-1 shadow-[0_8px_18px_rgb(15_41_70/0.12)]" aria-label="QR inventory pagination">
+                            <div class="flex min-w-max items-center gap-1">
+                                <button type="button" class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="voidingId !== null || !inventoryPaginationState.canGoPrevious" @click="changeInventoryPage(inventoryPaginationState.previousPage)">&lsaquo; Prev</button>
+                                <template v-for="item in inventoryPaginationItems" :key="item.type === 'page' ? item.page : item.key">
+                                    <span v-if="item.type === 'ellipsis'" class="flex size-10 items-center justify-center font-bold text-blue-900" aria-hidden="true">&hellip;</span>
+                                    <button v-else type="button" class="size-10 rounded-full font-semibold transition-colors" :class="item.page === inventoryMeta.current_page ? 'bg-blue-900 text-white shadow-[inset_0_1px_2px_rgb(15_41_70/0.18)]' : 'text-blue-900 hover:bg-blue-50'" :aria-current="item.page === inventoryMeta.current_page ? 'page' : undefined" :disabled="voidingId !== null" @click="changeInventoryPage(item.page)">{{ item.page }}</button>
+                                </template>
+                                <button type="button" class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="voidingId !== null || !inventoryPaginationState.canGoNext" @click="changeInventoryPage(inventoryPaginationState.nextPage)">Next &rsaquo;</button>
+                            </div>
+                        </nav>
                     </div>
                 </CardContent>
             </Card>
@@ -1548,7 +1475,7 @@ onBeforeUnmount(() => {
                         {{ voidConfirmationText(selectedQr) }}
                     </p>
                     <div class="mt-5 flex justify-end gap-2">
-                        <Button variant="outline" :disabled="voidingId !== null" @click="closeVoidConfirmation">
+                        <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="voidingId !== null" @click="closeVoidConfirmation">
                             Cancel
                         </Button>
                         <Button

@@ -21,6 +21,7 @@ use Illuminate\Validation\ValidationException;
 use App\Services\AuditLogger;
 use App\Services\DocumentReadScope;
 use App\Services\DocumentQrRegistration;
+use App\Support\QrTokenInput;
 
 class DocumentController extends Controller
 {
@@ -211,6 +212,14 @@ class DocumentController extends Controller
             return;
         }
 
+        $qrToken = QrTokenInput::validToken($search);
+
+        if ($qrToken !== null) {
+            $this->applyQrSearch($query, $qrToken);
+
+            return;
+        }
+
         $pattern = $this->escapedLikePattern($search);
 
         $query->where(function ($query) use ($pattern) {
@@ -237,6 +246,14 @@ class DocumentController extends Controller
         string $officeNameColumn
     ): void {
         if ($search === '') {
+            return;
+        }
+
+        $qrToken = QrTokenInput::validToken($search);
+
+        if ($qrToken !== null) {
+            $this->applyQrSearch($query, $qrToken);
+
             return;
         }
 
@@ -293,6 +310,16 @@ class DocumentController extends Controller
             } else {
                 $query->whereNotNull('received_at');
             }
+        });
+    }
+
+    private function applyQrSearch($query, string $token): void
+    {
+        $query->whereHas('qrCodes', function ($query) use ($token) {
+            $query
+                ->where('qr_token', $token)
+                ->where('status', 'registered')
+                ->whereNotNull('document_id');
         });
     }
 

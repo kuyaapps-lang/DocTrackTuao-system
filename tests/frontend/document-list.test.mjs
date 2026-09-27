@@ -49,6 +49,10 @@ test('normalizes view, state, and bounded search values', () => {
         normalizeDocumentSearch(overlong),
         'x'.repeat(DOCUMENT_SEARCH_MAX_LENGTH)
     )
+    assert.equal(normalizeDocumentSearch('YGK69-KM25UPS'), 'YGK69-KM25UPS')
+    assert.equal(normalizeDocumentSearch('https://doctrack.example/q/YGK69-KM25UPS'), 'YGK69-KM25UPS')
+    assert.equal(normalizeDocumentSearch('http://192.168.100.107:8000/q/YGK69-KM25UPS'), 'YGK69-KM25UPS')
+    assert.equal(normalizeDocumentSearch('normal keyword'), 'normal keyword')
 })
 
 test('parses page and per-page URL state with safe defaults', () => {
