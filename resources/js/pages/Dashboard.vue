@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
 
 <template>
     <section class="min-h-screen bg-slate-100 p-4 sm:p-6" :aria-busy="loading" aria-labelledby="dashboard-heading">
-        <div class="mx-auto max-w-7xl space-y-6">
+        <div class="mx-auto max-w-7xl space-y-2">
             <div class="rounded-2xl border border-slate-200 bg-white px-5 pb-5 pt-3 shadow-[0_8px_22px_rgb(15_41_70/0.06)] sm:px-6 sm:pb-5 sm:pt-4">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -191,12 +191,12 @@ onBeforeUnmount(() => {
                         <p class="mt-1 text-[13pt] font-semibold text-slate-600">{{ scopeLabel || 'Loading report scope...' }}</p>
                     </div>
                     <form class="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[18rem]" @submit.prevent="updateMonth">
-                        <label class="w-full text-[13pt] font-semibold text-gray-700">Reporting month
+                        <label class="block w-full text-center text-[13pt] font-semibold text-gray-700">Reporting month
                             <input v-model="selectedMonth" type="month" class="mt-1 block h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" :disabled="loading">
                         </label>
                         <div class="grid grid-cols-2 gap-2">
-                            <Button type="submit" :disabled="loading">Apply</Button>
-                            <Button type="button" variant="outline" :disabled="loading || !selectedMonth" @click="clearMonth">Clear</Button>
+                            <Button type="submit" class="border border-blue-900 bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="loading">Apply</Button>
+                            <Button type="button" variant="outline" class="border border-black bg-black text-white hover:bg-black/90 hover:text-white" :disabled="loading || !selectedMonth" @click="clearMonth">Clear</Button>
                         </div>
                     </form>
                 </div>
@@ -216,14 +216,14 @@ onBeforeUnmount(() => {
                     <span>Scope: {{ scopeLabel }}</span>
                     <span>Reporting period: {{ monthLabel }}</span>
                 </div>
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    <Card v-for="metric in metrics" :key="metric[0]" class="overflow-hidden border-blue-100 bg-white py-0"><CardHeader class="bg-blue-900 px-3 py-1.5 text-left text-white"><CardTitle class="text-[11pt] font-semibold">{{ metric[0] }}</CardTitle></CardHeader><CardContent class="px-3 pb-3 pt-1 text-center"><p class="text-[11.5pt] font-bold tabular-nums text-slate-900">{{ metric[1] }}</p></CardContent></Card>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                    <Card v-for="metric in metrics" :key="metric[0]" class="overflow-hidden border-blue-100 bg-white py-0"><CardHeader class="bg-blue-900 px-3 py-1.5 text-left text-white"><CardTitle class="text-[11pt] font-semibold">{{ metric[0] }}</CardTitle></CardHeader><CardContent class="px-3 pb-3 pt-0.5 text-center"><p class="text-[11.5pt] font-bold tabular-nums text-slate-900">{{ metric[1] }}</p></CardContent></Card>
                 </div>
 
-                <div class="grid gap-4 xl:grid-cols-3">
+                <div class="grid gap-2 xl:grid-cols-3">
                     <Card v-for="distribution in [['Documents by status', dashboard.status_distribution, 'status'], ['Documents by current office', dashboard.current_office_distribution, 'office'], ['Documents by origin office', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]" class="overflow-hidden border-blue-100 py-0">
                         <CardHeader class="bg-emerald-700 px-5 py-1.5 text-white"><CardTitle class="text-[11pt] font-semibold">{{ distribution[0] }}</CardTitle></CardHeader>
-                        <CardContent class="px-2 pb-3 pt-1">
+                        <CardContent class="px-2 pb-3 pt-0.5">
                             <p v-if="distribution[1].length === 0" class="py-4 text-center text-[12pt] text-gray-500">No matching documents for this period.</p>
                             <ul v-else class="space-y-2.5">
                                 <li v-for="item in distribution[1]" :key="`${distribution[0]}-${item[distribution[2]].id ?? 'none'}`" class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
@@ -238,8 +238,8 @@ onBeforeUnmount(() => {
                     </Card>
                 </div>
 
-                <div class="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
-                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-sky-700 px-4 py-2 text-white"><CardTitle class="text-[11pt] font-semibold">Recent Documents</CardTitle></CardHeader><CardContent class="px-4 pb-4 pt-0">
+                <div class="grid gap-2 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)]">
+                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-sky-700 px-4 py-2 text-white"><CardTitle class="text-[11pt] font-semibold">Recent Documents</CardTitle></CardHeader><CardContent class="px-4 pb-4 pt-0.5">
                         <p v-if="dashboard.recent_documents.length === 0" class="py-6 text-center text-[10.4pt] text-gray-500">No documents were registered in this period.</p>
                         <ul v-else class="max-h-72 space-y-2 overflow-auto pr-1" aria-label="Recent documents in the selected reporting period">
                             <li v-for="document in dashboard.recent_documents" :key="document.id" class="rounded-xl border border-sky-100 bg-white px-3 py-2 shadow-sm">
@@ -253,7 +253,7 @@ onBeforeUnmount(() => {
                             </li>
                         </ul>
                     </CardContent></Card>
-                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-indigo-800 px-4 py-2 text-white"><CardTitle class="text-[11pt] font-semibold">Recent Routing Activity</CardTitle></CardHeader><CardContent class="px-4 pb-4 pt-0">
+                    <Card class="overflow-hidden border-blue-100 py-0"><CardHeader class="bg-indigo-800 px-4 py-2 text-white"><CardTitle class="text-[11pt] font-semibold">Recent Routing Activity</CardTitle></CardHeader><CardContent class="px-4 pb-4 pt-0.5">
                         <p v-if="dashboard.recent_routing_activity.length === 0" class="py-8 text-center text-[10.4pt] text-gray-500">No routing activity was recorded in this period.</p>
                         <ul v-else class="max-h-72 space-y-2 overflow-auto pr-1" aria-label="Recent routing activity in the selected reporting period">
                             <li v-for="(activity, index) in dashboard.recent_routing_activity" :key="`${activity.document.id}-${activity.event_type}-${activity.occurred_at}-${index}`" class="rounded-xl border border-indigo-100 bg-white px-3 py-2.5 shadow-sm">

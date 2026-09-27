@@ -95,6 +95,35 @@ const paginationState = computed(() => {
     return getDocumentPaginationState(paginationMeta.value)
 })
 
+const paginationItems = computed(() => {
+    const lastPage = Math.max(1, paginationMeta.value.last_page)
+    const page = Math.min(
+        Math.max(1, paginationMeta.value.current_page),
+        lastPage
+    )
+
+    if (lastPage <= 7) {
+        return Array.from(
+            { length: lastPage },
+            (_, index) => ({ type: 'page', page: index + 1 })
+        )
+    }
+
+    const pages = [1, page - 1, page, page + 1, lastPage]
+        .filter(item => item >= 1 && item <= lastPage)
+        .filter((item, index, items) => items.indexOf(item) === index)
+        .sort((left, right) => left - right)
+
+    return pages.flatMap((item, index) => {
+        const previous = pages[index - 1]
+        const ellipsis = previous && item - previous > 1
+            ? [{ type: 'ellipsis', key: `ellipsis-${previous}-${item}` }]
+            : []
+
+        return [...ellipsis, { type: 'page', page: item }]
+    })
+})
+
 /*
 |--------------------------------------------------------------------------
 | Form Options
@@ -1089,7 +1118,7 @@ onBeforeUnmount(() => {
                         <Button
                             v-if="canCreateDocuments"
                             @click="openCreateForm"
-                            class="bg-blue-600 hover:bg-blue-700"
+                            class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                         >
                             + Register Document
                         </Button>
@@ -1097,7 +1126,7 @@ onBeforeUnmount(() => {
 
                     <!-- Tabs -->
                     <div
-                        class="flex flex-wrap gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 pt-3 [&_*]:!text-[13pt]"
+                        class="flex flex-wrap gap-2 rounded-lg border border-blue-900 bg-blue-900 px-3 pt-3 [&_*]:!text-[13pt]"
                         role="tablist"
                         aria-label="Document views"
                     >
@@ -1112,8 +1141,8 @@ onBeforeUnmount(() => {
                             class="rounded-t-md border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
                             :class="
                                 activeTab === tab.key
-                                    ? 'border-blue-700 bg-white text-blue-900 shadow-sm'
-                                    : 'border-transparent text-blue-700 hover:border-blue-300 hover:bg-white/70 hover:text-blue-950'
+                                    ? 'border-white bg-white text-blue-900 shadow-sm'
+                                    : 'border-transparent text-blue-100 hover:border-blue-200 hover:bg-blue-800 hover:text-white'
                             "
                         >
                             {{ tab.label }}
@@ -1121,9 +1150,9 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div
-                        class="grid gap-4 md:grid-cols-3 [&_*]:!text-[13pt]"
+                        class="grid gap-[26px] xl:gap-5 xl:grid-cols-[minmax(465px,1fr)_250px_130px] [&_*]:!text-[13pt]"
                     >
-                        <div>
+                        <div class="order-1 min-w-[315px] xl:order-none">
                             <label
                                 for="document-search"
                                 class="mb-2 block text-sm font-semibold text-gray-700"
@@ -1138,10 +1167,11 @@ onBeforeUnmount(() => {
                                 :maxlength="DOCUMENT_SEARCH_MAX_LENGTH"
                                 placeholder="Tracking number, title, type, or office"
                                 autocomplete="off"
+                                class="h-10 border-slate-600 px-[10px]"
                             />
                         </div>
 
-                        <div v-if="activeTab === 'incoming'">
+                        <div v-if="activeTab === 'incoming'" class="order-3 xl:order-none">
                             <label
                                 for="incoming-state"
                                 class="mb-2 block text-sm font-semibold text-gray-700"
@@ -1152,7 +1182,7 @@ onBeforeUnmount(() => {
                             <select
                                 id="incoming-state"
                                 v-model="incomingState"
-                                class="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                class="h-10 w-[250px] rounded-md border border-slate-600 bg-white px-[10px] text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             >
                                 <option value="all">
                                     All states
@@ -1166,10 +1196,13 @@ onBeforeUnmount(() => {
                             </select>
                         </div>
 
-                        <div>
+                        <div
+                            class="order-2 flex items-center justify-start gap-5 xl:order-none xl:block xl:text-right"
+                            :class="activeTab === 'incoming' ? '' : 'xl:col-start-3'"
+                        >
                             <label
                                 for="documents-per-page"
-                                class="mb-2 block text-sm font-semibold text-gray-700"
+                                class="w-[130px] shrink-0 whitespace-nowrap text-sm font-semibold text-gray-700 xl:mb-2 xl:ml-auto xl:block"
                             >
                                 Results per page
                             </label>
@@ -1177,7 +1210,7 @@ onBeforeUnmount(() => {
                             <select
                                 id="documents-per-page"
                                 v-model.number="perPage"
-                                class="h-10 w-20 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                class="h-10 w-[130px] rounded-md border border-slate-600 bg-white px-[10px] text-right text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             >
                                 <option
                                     v-for="option in DOCUMENT_LIST_PER_PAGE_OPTIONS"
@@ -1190,16 +1223,13 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <p class="text-[13pt] text-gray-500">
-                        Search by tracking number, title, type, or office. Filters only change what is shown here.
-                    </p>
                 </CardHeader>
 
                 <CardContent
                     id="document-list-panel"
                     role="tabpanel"
                     :aria-busy="loading"
-                    class="[&_*]:!text-[13pt]"
+                    class="px-[10px] pb-[10px] pt-[7px] [&_*]:!text-[13pt]"
                 >
 
                     <!-- Loading -->
@@ -1248,7 +1278,7 @@ onBeforeUnmount(() => {
                         v-else
                         class="overflow-x-auto"
                     >
-                        <Table class="table-fixed">
+                        <Table class="min-w-[46rem] table-auto [&_td]:whitespace-normal [&_td]:px-[10px] [&_td]:py-[10px] [&_th]:whitespace-normal [&_th]:px-[10px] [&_th]:py-[10px]">
 
                             <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
@@ -1319,7 +1349,7 @@ onBeforeUnmount(() => {
                                 <TableRow
                                     v-for="document in documents"
                                     :key="document.id"
-                                    class="hover:bg-gray-50"
+                                    class="border-b border-slate-200 hover:bg-gray-50 last:border-b-0"
                                 >
 
                                     <!-- Tracking -->
@@ -1377,7 +1407,7 @@ onBeforeUnmount(() => {
                                     >
                                         <span
                                             class="inline-flex rounded-full
-                                                   px-2.5 py-1 text-xs
+                                                   px-2.5 py-1 !text-[15.5px]
                                                    font-semibold"
                                             :class="
                                                 priorityClass(
@@ -1398,7 +1428,7 @@ onBeforeUnmount(() => {
                                     <TableCell>
                                         <span
                                             class="inline-flex rounded-full
-                                                   px-2.5 py-1 text-xs
+                                                   px-2.5 py-1 !text-[15.5px]
                                                    font-semibold"
                                             :class="
                                                 statusClass(
@@ -1496,36 +1526,48 @@ onBeforeUnmount(() => {
 
                     <div
                         v-if="!loading && !error"
-                        class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4"
+                        class="mt-4 flex flex-col items-center gap-3 border-t pt-4"
                     >
-                        <p class="text-sm text-gray-600">
+                        <p class="text-center text-sm text-gray-600">
                             {{ paginationMeta.total }} total results
-                            &middot; Page {{ paginationMeta.current_page }}
-                            of {{ paginationMeta.last_page }}
                         </p>
 
-                        <div
-                            class="flex gap-2"
-                            aria-label="Document list pagination"
-                        >
-                            <Button
-                                type="button"
-                                variant="outline"
-                                :disabled="loading || !paginationState.canGoPrevious"
-                                @click="changePage(paginationState.previousPage)"
-                            >
-                                Previous
-                            </Button>
+                        <nav class="max-w-full overflow-x-auto rounded-full bg-white p-1 shadow-[0_8px_18px_rgb(15_41_70/0.12)]" aria-label="Document list pagination">
+                            <div class="flex min-w-max items-center gap-1">
+                                <button
+                                    type="button"
+                                    class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                    :disabled="loading || !paginationState.canGoPrevious"
+                                    @click="changePage(paginationState.previousPage)"
+                                >
+                                    ‹ Prev
+                                </button>
 
-                            <Button
-                                type="button"
-                                variant="outline"
-                                :disabled="loading || !paginationState.canGoNext"
-                                @click="changePage(paginationState.nextPage)"
-                            >
-                                Next
-                            </Button>
-                        </div>
+                                <template v-for="item in paginationItems" :key="item.type === 'page' ? item.page : item.key">
+                                    <span v-if="item.type === 'ellipsis'" class="flex size-10 items-center justify-center font-bold text-blue-900" aria-hidden="true">…</span>
+                                    <button
+                                        v-else
+                                        type="button"
+                                        class="size-10 rounded-full font-semibold transition-colors"
+                                        :class="item.page === paginationMeta.current_page ? 'bg-blue-900 text-white shadow-[inset_0_1px_2px_rgb(15_41_70/0.18)]' : 'text-blue-900 hover:bg-blue-50'"
+                                        :aria-current="item.page === paginationMeta.current_page ? 'page' : undefined"
+                                        :disabled="loading"
+                                        @click="changePage(item.page)"
+                                    >
+                                        {{ item.page }}
+                                    </button>
+                                </template>
+
+                                <button
+                                    type="button"
+                                    class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                    :disabled="loading || !paginationState.canGoNext"
+                                    @click="changePage(paginationState.nextPage)"
+                                >
+                                    Next ›
+                                </button>
+                            </div>
+                        </nav>
                     </div>
 
                 </CardContent>
@@ -1885,7 +1927,7 @@ onBeforeUnmount(() => {
 
                             <Button
                                 type="submit"
-                                class="bg-blue-600 hover:bg-blue-700"
+                                class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                                 :disabled="creating"
                             >
                                 {{

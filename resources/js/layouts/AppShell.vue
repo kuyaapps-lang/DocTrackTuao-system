@@ -245,9 +245,10 @@ const toggleAccountMenu = () => {
             @navigate="closeMobileNavigation()"
         />
 
-        <div class="min-w-0 flex-1 bg-slate-100 bg-white/35 transition-colors duration-200">
+        <div class="min-w-0 flex-1 bg-slate-100 bg-white/35 pt-20 transition-[margin,background-color] duration-200" :class="desktopSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
             <header
-                class="flex min-h-20 items-center justify-between gap-4 border-b border-white/80 bg-white/80 px-6 py-4 shadow-[0_10px_30px_rgb(67_86_119/0.10),inset_0_1px_0_rgb(255_255_255/0.9)] backdrop-blur-xl transition-colors duration-200"
+                class="fixed inset-x-0 top-0 z-20 flex min-h-20 items-center justify-between gap-4 border-b border-white/80 bg-white/80 px-6 py-4 shadow-[0_10px_30px_rgb(67_86_119/0.10),inset_0_1px_0_rgb(255_255_255/0.9)] backdrop-blur-xl transition-[left,colors] duration-200"
+                :class="desktopSidebarCollapsed ? 'md:left-20' : 'md:left-64'"
             >
                 <div class="flex min-w-0 items-center gap-3">
                     <Button
