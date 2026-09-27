@@ -1562,6 +1562,10 @@ onBeforeUnmount(() => {
                     </form>
 
                     <template v-else>
+                    <output aria-label="Verified QR code" class="mb-4 inline-flex max-w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-sm font-semibold text-slate-800">
+                        {{ qrToken }}
+                    </output>
+
                     <div
                         v-if="optionsLoading"
                         class="py-10 text-center text-gray-500"
@@ -1842,6 +1846,7 @@ onBeforeUnmount(() => {
                             <Button
                                 type="button"
                                 variant="outline"
+                                class="border-black bg-black text-white hover:bg-black/90 hover:text-white"
                                 @click="closeCreateForm"
                                 :disabled="creating"
                             >
@@ -1850,7 +1855,7 @@ onBeforeUnmount(() => {
 
                             <Button
                                 type="submit"
-                                class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
+                                class="h-12 px-5 text-[19px] leading-none bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                                 :disabled="creating"
                             >
                                 {{
