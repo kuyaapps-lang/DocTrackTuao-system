@@ -17,11 +17,17 @@ class Process22AQrRequestWorkflowTest extends TestCase
     use RefreshDatabase;
 
     private int $officeA;
+
     private int $officeB;
+
     private User $admin;
+
     private User $recordsA;
+
     private User $officeAUser;
+
     private User $recordsB;
+
     private User $viewer;
 
     protected function setUp(): void
@@ -106,6 +112,11 @@ class Process22AQrRequestWorkflowTest extends TestCase
             'record_id' => $requestId,
             'user_id' => $this->recordsA->id,
         ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $this->admin->id,
+            'type' => 'qr_request_submitted',
+            'is_read' => false,
+        ]);
 
         Sanctum::actingAs($this->recordsB);
         $this->getJson('/api/qr-code-requests')
@@ -153,6 +164,11 @@ class Process22AQrRequestWorkflowTest extends TestCase
                 ->where('action', AuditLog::ACTION_GENERATED)
                 ->count()
         );
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $this->recordsA->id,
+            'type' => 'qr_request_approved',
+            'is_read' => false,
+        ]);
 
         $this->postJson("/api/qr-code-requests/{$requestId}/approve")
             ->assertConflict();
@@ -232,6 +248,11 @@ class Process22AQrRequestWorkflowTest extends TestCase
             'action' => AuditLog::ACTION_REJECTED,
             'record_id' => $requestId,
             'user_id' => $this->admin->id,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $this->recordsA->id,
+            'type' => 'qr_request_rejected',
+            'is_read' => false,
         ]);
 
         $this->postJson("/api/qr-code-requests/{$requestId}/reject")

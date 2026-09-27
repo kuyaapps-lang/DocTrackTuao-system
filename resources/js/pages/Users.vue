@@ -565,7 +565,7 @@ onMounted(() => {
             </div>
 
             <Button
-                class="bg-blue-600 text-white hover:bg-blue-700"
+                class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950"
                 @click="openAddForm"
             >
                 + Add User
@@ -582,9 +582,9 @@ onMounted(() => {
 
             <Card
                 v-if="canManageUsers"
-                class="mb-6"
+                class="relative mb-6 overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900"
             >
-                <CardHeader>
+                <CardHeader class="bg-blue-900 text-white">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <CardTitle>
@@ -595,7 +595,7 @@ onMounted(() => {
                                 </span>
                             </CardTitle>
 
-                            <p class="mt-1 text-sm text-gray-500">
+                            <p class="mt-1 text-sm text-blue-100">
                                 Review pending requests, then set a temporary password or reject the request.
                             </p>
                         </div>
@@ -604,6 +604,7 @@ onMounted(() => {
                             type="button"
                             variant="outline"
                             size="sm"
+                            class="bg-white text-[11.5pt] text-blue-900 hover:bg-blue-50 hover:text-blue-950"
                             :disabled="resetRequestsLoading"
                             @click="fetchPendingResetRequests"
                         >
@@ -612,7 +613,7 @@ onMounted(() => {
                     </div>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="bg-white">
                     <div
                         v-if="resetRequestsError"
                         class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
@@ -645,17 +646,17 @@ onMounted(() => {
                         >
                             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                 <div>
-                                    <div class="font-semibold text-gray-900">
+                                    <div class="text-[14pt] font-semibold text-gray-900">
                                         {{ request.user?.name || request.name || 'Unmatched request' }}
                                     </div>
 
-                                    <div class="mt-1 text-sm text-gray-500">
+                                    <div class="mt-1 text-[14pt] text-gray-500">
                                         {{ request.email }}
                                     </div>
 
                                     <p
                                         v-if="request.message"
-                                        class="mt-2 text-sm text-gray-600"
+                                        class="mt-2 text-[14pt] text-gray-600"
                                     >
                                         {{ request.message }}
                                     </p>
@@ -683,6 +684,7 @@ onMounted(() => {
                                         type="button"
                                         variant="outline"
                                         size="sm"
+                                        class="bg-black text-white hover:bg-black/90 hover:text-white"
                                         :disabled="resetPasswordSaving"
                                         @click="startRejectResetRequest(request)"
                                     >
@@ -734,18 +736,18 @@ onMounted(() => {
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader>
+            <Card class="relative overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900">
+                <CardHeader class="bg-blue-900 text-white">
                     <CardTitle>
                         System Users
                     </CardTitle>
 
-                    <p class="mt-1 text-sm text-gray-500">
+                    <p class="mt-1 text-sm text-blue-100">
                         Role controls what a user may do. Office controls which documents the user may act on.
                     </p>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="bg-white">
                     <div
                         v-if="loading"
                         class="py-10 text-center text-gray-500"
@@ -771,7 +773,7 @@ onMounted(() => {
                         v-else
                         class="overflow-x-auto"
                     >
-                        <Table>
+                        <Table class="text-[11.5pt] [&_td]:py-[7px] [&_th]:text-[12.5pt]">
                             <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
                                     <TableHead class="text-white font-semibold">
@@ -833,6 +835,7 @@ onMounted(() => {
                                                 v-if="canResetPassword(user)"
                                                 variant="outline"
                                                 size="sm"
+                                                class="bg-slate-200 text-[11.5pt] text-slate-700 hover:bg-slate-300 hover:text-slate-800"
                                                 @click="openResetPasswordForm(user)"
                                             >
                                                 Reset Password
@@ -841,6 +844,7 @@ onMounted(() => {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
+                                                class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                                                 @click="openEditForm(user)"
                                             >
                                                 Edit
@@ -1042,6 +1046,7 @@ onMounted(() => {
                             <Button
                                 type="button"
                                 variant="outline"
+                                class="bg-black text-white hover:bg-black/90 hover:text-white"
                                 :disabled="saving"
                                 @click="closeForm"
                             >
@@ -1174,6 +1179,7 @@ onMounted(() => {
                             <Button
                                 type="button"
                                 variant="outline"
+                                class="bg-black text-white hover:bg-black/90 hover:text-white"
                                 :disabled="resetPasswordSaving"
                                 @click="closeResetPasswordForm"
                             >

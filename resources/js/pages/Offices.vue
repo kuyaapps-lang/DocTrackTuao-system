@@ -78,6 +78,7 @@ onMounted(() => {
 
                 <Button
                     v-if="canManageMasterData"
+                    class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                 >
                     Add Office
                 </Button>
@@ -88,15 +89,15 @@ onMounted(() => {
         <!-- Main Content -->
         <div class="p-6">
 
-            <Card>
+            <Card class="relative overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900">
 
-                <CardHeader>
+                <CardHeader class="bg-blue-900 text-white">
                     <CardTitle>
                         Offices
                     </CardTitle>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="bg-white">
 
                     <!-- Loading -->
                     <div
@@ -123,7 +124,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Office Table -->
-                    <Table v-else>
+                    <Table v-else class="text-[11.5pt] [&_td]:py-[7px] [&_th]:text-[12.5pt]">
 
                         <TableHeader class="bg-blue-900 text-white">
                             <TableRow>
@@ -185,6 +186,7 @@ onMounted(() => {
                                         <Button
                                             variant="outline"
                                             size="sm"
+                                            class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                                         >
                                             Edit
                                         </Button>

@@ -12,6 +12,7 @@ use App\Models\ProcessingAction;
 use App\Models\RouteAction;
 use App\Services\AuditLogger;
 use App\Services\DocumentReadScope;
+use App\Services\InAppNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -64,30 +65,25 @@ class DocumentRoutingController extends Controller
                     : null,
             ],
 
-            'offices' =>
-                Office::where(
-                    'id',
-                    '!=',
-                    $document->current_office_id
+            'offices' => Office::where(
+                'id',
+                '!=',
+                $document->current_office_id
+            )
+                ->orderBy(
+                    'office_name'
                 )
-                    ->orderBy(
-                        'office_name'
-                    )
-                    ->get(['id', 'office_name', 'office_code']),
+                ->get(['id', 'office_name', 'office_code']),
 
             'user' => [
-                'id' =>
-                    $user->id,
+                'id' => $user->id,
 
-                'name' =>
-                    $user->name,
+                'name' => $user->name,
 
-                'office_id' =>
-                    $user->office_id,
+                'office_id' => $user->office_id,
             ],
 
-            'can_act' =>
-                $user->office_id !== null &&
+            'can_act' => $user->office_id !== null &&
                 (int) $user->office_id ===
                 (int) $document->current_office_id,
         ]);
@@ -99,6 +95,7 @@ class DocumentRoutingController extends Controller
     public function forward(
         Request $request,
         AuditLogger $auditLogger,
+        InAppNotificationService $notifications,
         $documentId
     ) {
         $validated = $request->validate([
@@ -114,8 +111,8 @@ class DocumentRoutingController extends Controller
                     ->firstOrFail();
 
                 if (
-                    !$user->office_id ||
-                    !Office::whereKey($user->office_id)->exists()
+                    ! $user->office_id ||
+                    ! Office::whereKey($user->office_id)->exists()
                 ) {
                     abort(403, 'Your user account is not assigned to a valid office.');
                 }
@@ -144,7 +141,7 @@ class DocumentRoutingController extends Controller
                 }
 
                 $destination = Office::whereKey($validated['to_office_id'])->first();
-                if (!$destination) {
+                if (! $destination) {
                     abort(422, 'The selected destination office is not available.');
                 }
 
@@ -160,172 +157,149 @@ class DocumentRoutingController extends Controller
                     'action_code',
                     'AWAITING_RECEIPT'
                 )->where('is_active', true)->firstOrFail();
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Remember source office before current office changes
-                    |--------------------------------------------------------------------------
-                    */
+                /*
+                |--------------------------------------------------------------------------
+                | Remember source office before current office changes
+                |--------------------------------------------------------------------------
+                */
 
-                    $fromOfficeId =
-                        $document->current_office_id;
+                $fromOfficeId =
+                    $document->current_office_id;
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Create routing record
-                    |--------------------------------------------------------------------------
-                    */
+                /*
+                |--------------------------------------------------------------------------
+                | Create routing record
+                |--------------------------------------------------------------------------
+                */
 
-                    $route =
-                        DocumentRoute::create([
-                            'document_id' =>
-                                $document->id,
+                $route =
+                    DocumentRoute::create([
+                        'document_id' => $document->id,
 
-                            'from_office_id' =>
-                                $fromOfficeId,
+                        'from_office_id' => $fromOfficeId,
 
-                            'to_office_id' =>
-                                $validated[
-                                    'to_office_id'
-                                ],
-
-                            'forwarded_by' =>
-                                $user->id,
-
-                            'forwarded_at' =>
-                                now(),
-
-                            'status_id' =>
-                                $forwardedStatus->id,
-
-                            'action_id' =>
-                                $forwardAction->id,
-
-                            'remarks' =>
-                                $validated[
-                                    'remarks'
-                                ] ?? null,
-                        ]);
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Move document to destination office
-                    |--------------------------------------------------------------------------
-                    |
-                    | The destination becomes current_office_id so the receiving office
-                    | becomes responsible for accepting it.
-                    |
-                    */
-
-                    $document->update([
-                        'current_office_id' =>
-                            $validated[
+                        'to_office_id' => $validated[
                                 'to_office_id'
                             ],
 
-                        'status_id' =>
-                            $forwardedStatus->id,
+                        'forwarded_by' => $user->id,
 
-                        'current_action_id' =>
-                            $awaitingReceiptAction->id,
+                        'forwarded_at' => now(),
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Previous processing note belongs to previous processing stage
-                        |--------------------------------------------------------------------------
-                        */
+                        'status_id' => $forwardedStatus->id,
 
-                        'processing_note' =>
-                            null,
+                        'action_id' => $forwardAction->id,
 
-                        'current_action_updated_by' =>
-                            $user->id,
-
-                        'current_action_updated_at' =>
-                            now(),
+                        'remarks' => $validated[
+                                'remarks'
+                            ] ?? null,
                     ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | Move document to destination office
+                |--------------------------------------------------------------------------
+                |
+                | The destination becomes current_office_id so the receiving office
+                | becomes responsible for accepting it.
+                |
+                */
+
+                $document->update([
+                    'current_office_id' => $validated[
+                            'to_office_id'
+                        ],
+
+                    'status_id' => $forwardedStatus->id,
+
+                    'current_action_id' => $awaitingReceiptAction->id,
 
                     /*
                     |--------------------------------------------------------------------------
-                    | Processing history
+                    | Previous processing note belongs to previous processing stage
                     |--------------------------------------------------------------------------
                     */
 
-                    $fromOffice =
-                        Office::find(
-                            $fromOfficeId
-                        );
+                    'processing_note' => null,
 
-                    $toOffice =
-                        Office::find(
-                            $validated[
-                                'to_office_id'
-                            ]
-                        );
+                    'current_action_updated_by' => $user->id,
 
-                    DocumentProcessingLog::create([
-                        'document_id' =>
-                            $document->id,
+                    'current_action_updated_at' => now(),
+                ]);
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Awaiting Receipt belongs to destination office
-                        |--------------------------------------------------------------------------
-                        */
+                /*
+                |--------------------------------------------------------------------------
+                | Processing history
+                |--------------------------------------------------------------------------
+                */
 
-                        'office_id' =>
-                            $validated[
-                                'to_office_id'
-                            ],
-
-                        'user_id' =>
-                            $user->id,
-
-                        'processing_action_id' =>
-                            $awaitingReceiptAction->id,
-
-                        'document_route_id' =>
-                            $route->id,
-
-                        'event_type' =>
-                            'forwarded',
-
-                        'processing_note' =>
-                            null,
-
-                        'event_note' =>
-                            'Forwarded from ' .
-                            (
-                                $fromOffice
-                                    ?->office_name
-                                ?? 'previous office'
-                            ) .
-                            ' to ' .
-                            (
-                                $toOffice
-                                    ?->office_name
-                                ?? 'destination office'
-                            ) .
-                            '.',
-                    ]);
-
-                    $auditLogger->log(
-                        module: AuditLog::MODULE_DOCUMENT_ROUTING,
-                        action: AuditLog::ACTION_FORWARDED,
-                        recordId: $document->id,
-                        description:
-                            'Document forwarded from ' .
-                            (
-                                $fromOffice?->office_name
-                                ?? 'previous office'
-                            ) .
-                            ' to ' .
-                            (
-                                $toOffice?->office_name
-                                ?? 'destination office'
-                            ) .
-                            '.',
-                        userId: $user->id
+                $fromOffice =
+                    Office::find(
+                        $fromOfficeId
                     );
+
+                $toOffice =
+                    Office::find(
+                        $validated[
+                            'to_office_id'
+                        ]
+                    );
+
+                DocumentProcessingLog::create([
+                    'document_id' => $document->id,
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Awaiting Receipt belongs to destination office
+                    |--------------------------------------------------------------------------
+                    */
+
+                    'office_id' => $validated[
+                            'to_office_id'
+                        ],
+
+                    'user_id' => $user->id,
+
+                    'processing_action_id' => $awaitingReceiptAction->id,
+
+                    'document_route_id' => $route->id,
+
+                    'event_type' => 'forwarded',
+
+                    'processing_note' => null,
+
+                    'event_note' => 'Forwarded from '.
+                        (
+                            $fromOffice
+                                ?->office_name
+                            ?? 'previous office'
+                        ).
+                        ' to '.
+                        (
+                            $toOffice
+                                ?->office_name
+                            ?? 'destination office'
+                        ).
+                        '.',
+                ]);
+
+                $auditLogger->log(
+                    module: AuditLog::MODULE_DOCUMENT_ROUTING,
+                    action: AuditLog::ACTION_FORWARDED,
+                    recordId: $document->id,
+                    description: 'Document forwarded from '.
+                        (
+                            $fromOffice?->office_name
+                            ?? 'previous office'
+                        ).
+                        ' to '.
+                        (
+                            $toOffice?->office_name
+                            ?? 'destination office'
+                        ).
+                        '.',
+                    userId: $user->id
+                );
 
                 return $route;
             }
@@ -340,12 +314,12 @@ class DocumentRoutingController extends Controller
             'action',
         ]);
 
-        return response()->json([
-            'message' =>
-                'Document forwarded successfully.',
+        $notifications->documentForwarded($route);
 
-            'route' =>
-                $route,
+        return response()->json([
+            'message' => 'Document forwarded successfully.',
+
+            'route' => $route,
         ], 201);
     }
 
@@ -355,6 +329,7 @@ class DocumentRoutingController extends Controller
     public function receive(
         Request $request,
         AuditLogger $auditLogger,
+        InAppNotificationService $notifications,
         $documentId
     ) {
         $user = $request->user();
@@ -366,8 +341,8 @@ class DocumentRoutingController extends Controller
                     ->firstOrFail();
 
                 if (
-                    !$user->office_id ||
-                    !Office::whereKey($user->office_id)->exists()
+                    ! $user->office_id ||
+                    ! Office::whereKey($user->office_id)->exists()
                 ) {
                     abort(403, 'Your user account is not assigned to a valid office.');
                 }
@@ -413,14 +388,11 @@ class DocumentRoutingController extends Controller
                 */
 
                 $route->update([
-                    'received_by' =>
-                        $user->id,
+                    'received_by' => $user->id,
 
-                    'received_at' =>
-                        now(),
+                    'received_at' => now(),
 
-                    'status_id' =>
-                        $receivedStatus->id,
+                    'status_id' => $receivedStatus->id,
                 ]);
 
                 /*
@@ -430,23 +402,17 @@ class DocumentRoutingController extends Controller
                 */
 
                 $document->update([
-                    'current_office_id' =>
-                        $route->to_office_id,
+                    'current_office_id' => $route->to_office_id,
 
-                    'status_id' =>
-                        $receivedStatus->id,
+                    'status_id' => $receivedStatus->id,
 
-                    'current_action_id' =>
-                        $forAction->id,
+                    'current_action_id' => $forAction->id,
 
-                    'processing_note' =>
-                        null,
+                    'processing_note' => null,
 
-                    'current_action_updated_by' =>
-                        $user->id,
+                    'current_action_updated_by' => $user->id,
 
-                    'current_action_updated_at' =>
-                        now(),
+                    'current_action_updated_at' => now(),
                 ]);
 
                 /*
@@ -456,40 +422,31 @@ class DocumentRoutingController extends Controller
                 */
 
                 DocumentProcessingLog::create([
-                    'document_id' =>
-                        $document->id,
+                    'document_id' => $document->id,
 
-                    'office_id' =>
-                        $route->to_office_id,
+                    'office_id' => $route->to_office_id,
 
-                    'user_id' =>
-                        $user->id,
+                    'user_id' => $user->id,
 
-                    'processing_action_id' =>
-                        $forAction->id,
+                    'processing_action_id' => $forAction->id,
 
-                    'document_route_id' =>
-                        $route->id,
+                    'document_route_id' => $route->id,
 
-                    'event_type' =>
-                        'received',
+                    'event_type' => 'received',
 
-                    'processing_note' =>
-                        null,
+                    'processing_note' => null,
 
-                    'event_note' =>
-                        'Document received and ready for action.',
+                    'event_note' => 'Document received and ready for action.',
                 ]);
 
                 $auditLogger->log(
                     module: AuditLog::MODULE_DOCUMENT_ROUTING,
                     action: AuditLog::ACTION_RECEIVED,
                     recordId: $document->id,
-                    description:
-                        'Document received by ' .
-                        $user->name .
-                        ' from office ID ' .
-                        $route->from_office_id .
+                    description: 'Document received by '.
+                        $user->name.
+                        ' from office ID '.
+                        $route->from_office_id.
                         '.',
                     userId: $user->id
                 );
@@ -507,12 +464,12 @@ class DocumentRoutingController extends Controller
             'action',
         ]);
 
-        return response()->json([
-            'message' =>
-                'Document received successfully.',
+        $notifications->documentReceived($route);
 
-            'route' =>
-                $route,
+        return response()->json([
+            'message' => 'Document received successfully.',
+
+            'route' => $route,
         ]);
     }
 

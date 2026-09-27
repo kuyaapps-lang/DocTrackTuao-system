@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\PasswordResetRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\InAppNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -22,7 +23,8 @@ class PasswordResetRequestController extends Controller
 
     public function store(
         Request $request,
-        AuditLogger $auditLogger
+        AuditLogger $auditLogger,
+        InAppNotificationService $notifications
     ): JsonResponse {
         if (RateLimiter::tooManyAttempts($this->limiterKey($request), 5)) {
             return response()->json([
@@ -98,6 +100,8 @@ class PasswordResetRequestController extends Controller
             userId: null
         );
 
+        $notifications->passwordResetSubmitted($resetRequest);
+
         return response()->json([
             'message' => self::GENERIC_PUBLIC_MESSAGE,
         ], 202);
@@ -131,8 +135,7 @@ class PasswordResetRequestController extends Controller
             ->paginate($validated['per_page'] ?? 25);
 
         $requests->through(
-            fn (PasswordResetRequest $resetRequest): array =>
-                $this->resetRequestShape($resetRequest)
+            fn (PasswordResetRequest $resetRequest): array => $this->resetRequestShape($resetRequest)
         );
 
         return response()->json($requests);
@@ -141,7 +144,8 @@ class PasswordResetRequestController extends Controller
     public function resolve(
         Request $request,
         PasswordResetRequest $passwordResetRequest,
-        AuditLogger $auditLogger
+        AuditLogger $auditLogger,
+        InAppNotificationService $notifications
     ): JsonResponse {
         $validated = $request->validate([
             'password' => [
@@ -207,6 +211,8 @@ class PasswordResetRequestController extends Controller
             userId: $request->user()->id
         );
 
+        $notifications->passwordResetReviewed($updatedRequest);
+
         return response()->json([
             'message' => 'Password reset request resolved successfully.',
             'password_reset_request' => $this->resetRequestShape(
@@ -218,7 +224,8 @@ class PasswordResetRequestController extends Controller
     public function reject(
         Request $request,
         PasswordResetRequest $passwordResetRequest,
-        AuditLogger $auditLogger
+        AuditLogger $auditLogger,
+        InAppNotificationService $notifications
     ): JsonResponse {
         $validated = $request->validate([
             'resolution_note' => [
@@ -261,6 +268,8 @@ class PasswordResetRequestController extends Controller
             description: 'Password reset request rejected.',
             userId: $request->user()->id
         );
+
+        $notifications->passwordResetReviewed($updatedRequest);
 
         return response()->json([
             'message' => 'Password reset request rejected.',

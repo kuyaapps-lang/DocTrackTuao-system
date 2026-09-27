@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\DocumentQrCode;
 use App\Models\QrCodeRequest;
 use App\Services\AuditLogger;
+use App\Services\InAppNotificationService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -38,8 +39,8 @@ class QrCodeRequestController extends Controller
             )
             ->latest('id');
 
-        if (!$user->hasPermission('qr.approve')) {
-            if (!$user->office_id) {
+        if (! $user->hasPermission('qr.approve')) {
+            if (! $user->office_id) {
                 abort(403);
             }
 
@@ -53,11 +54,14 @@ class QrCodeRequestController extends Controller
         ]);
     }
 
-    public function store(Request $request, AuditLogger $auditLogger)
-    {
+    public function store(
+        Request $request,
+        AuditLogger $auditLogger,
+        InAppNotificationService $notifications
+    ) {
         $user = $request->user();
 
-        if (!$user->office_id) {
+        if (! $user->office_id) {
             abort(403);
         }
 
@@ -82,6 +86,8 @@ class QrCodeRequestController extends Controller
             userId: $user->id
         );
 
+        $notifications->qrRequestSubmitted($qrRequest);
+
         return response()->json([
             'message' => 'QR code request submitted.',
             'request' => $this->requestShape($qrRequest->load(['requestedBy', 'requestedOffice'])),
@@ -91,6 +97,7 @@ class QrCodeRequestController extends Controller
     public function approve(
         Request $request,
         AuditLogger $auditLogger,
+        InAppNotificationService $notifications,
         QrCodeRequest $qrCodeRequest
     ) {
         $validated = $request->validate([
@@ -154,6 +161,8 @@ class QrCodeRequestController extends Controller
             );
         }
 
+        $notifications->qrRequestReviewed($approvedRequest);
+
         return response()->json([
             'message' => 'QR code request approved.',
             'request' => $this->requestShape($approvedRequest),
@@ -163,6 +172,7 @@ class QrCodeRequestController extends Controller
     public function reject(
         Request $request,
         AuditLogger $auditLogger,
+        InAppNotificationService $notifications,
         QrCodeRequest $qrCodeRequest
     ) {
         $validated = $request->validate([
@@ -199,6 +209,8 @@ class QrCodeRequestController extends Controller
             description: 'QR code request rejected.',
             userId: $user->id
         );
+
+        $notifications->qrRequestReviewed($rejectedRequest);
 
         return response()->json([
             'message' => 'QR code request rejected.',
@@ -241,7 +253,7 @@ class QrCodeRequestController extends Controller
                     'qr_token' => (string) $qrCode->qr_token,
                     'status' => (string) $qrCode->status,
                     'linked' => $qrCode->document_id !== null,
-                    'scan_path' => '/q/' . $qrCode->qr_token,
+                    'scan_path' => '/q/'.$qrCode->qr_token,
                 ])
                 ->values(),
             'created_at' => $qrRequest->created_at?->toIso8601String(),
@@ -265,7 +277,7 @@ class QrCodeRequestController extends Controller
         };
 
         do {
-            $token = $makePart(5) . '-' . $makePart(7);
+            $token = $makePart(5).'-'.$makePart(7);
         } while (DocumentQrCode::where('qr_token', $token)->exists());
 
         return $token;

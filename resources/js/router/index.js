@@ -15,6 +15,7 @@ import Offices from '../pages/Offices.vue'
 import DocumentTypes from '../pages/DocumentTypes.vue'
 import Users from '../pages/Users.vue'
 import AuditLogs from '../pages/AuditLogs.vue'
+import Notifications from '../pages/Notifications.vue'
 import AppShell from '../layouts/AppShell.vue'
 
 import {
@@ -103,6 +104,15 @@ const routes = [
                     title: 'Change Password',
                     navKey: null,
                     passwordChange: true,
+                },
+            },
+            {
+                path: 'notifications',
+                component: Notifications,
+                meta: {
+                    authenticated: true,
+                    title: 'Notifications',
+                    navKey: null,
                 },
             },
             {

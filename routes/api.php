@@ -1,11 +1,8 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-
 use App\Http\Controllers\AccountPasswordController;
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentAttachmentController;
 use App\Http\Controllers\DocumentController;
@@ -15,11 +12,14 @@ use App\Http\Controllers\DocumentQrCodeController;
 use App\Http\Controllers\DocumentRoutingController;
 use App\Http\Controllers\DocumentTrackingController;
 use App\Http\Controllers\DocumentTypeController;
-use App\Http\Middleware\EnsurePasswordChangeIsComplete;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\PasswordResetRequestController;
 use App\Http\Controllers\QrCodeRequestController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Middleware\EnsurePasswordChangeIsComplete;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,7 +35,7 @@ Route::post(
 Route::post(
     '/logout',
     [AuthController::class, 'logout']
-)-> middleware('auth:sanctum');
+)->middleware('auth:sanctum');
 
 Route::post(
     '/password-reset-requests',
@@ -128,6 +128,20 @@ Route::middleware([
         'me/password',
         [AccountPasswordController::class, 'update']
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | IN-APP NOTIFICATIONS
+    |--------------------------------------------------------------------------
+    |
+    | Each authenticated user can read and update only their own notification
+    | records. Linked resources retain their normal route/API authorization.
+    |
+    */
+
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::patch('notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
 
     /*
     |--------------------------------------------------------------------------

@@ -308,6 +308,7 @@ onMounted(() => {
 
                 <Button
                     v-if="canManageMasterData"
+                    class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                     @click="openAddForm"
                 >
                     + Add Document Type
@@ -331,10 +332,10 @@ onMounted(() => {
             <!-- Add / Edit Form -->
             <Card
                 v-if="showForm && canManageMasterData"
-                class="mb-6"
+                class="relative mb-6 overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900"
             >
 
-                <CardHeader>
+                <CardHeader class="bg-blue-900 text-white">
                     <CardTitle>
                         {{
                             editingId
@@ -344,7 +345,7 @@ onMounted(() => {
                     </CardTitle>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="bg-white">
 
                     <form
                         @submit.prevent="saveDocumentType"
@@ -403,6 +404,7 @@ onMounted(() => {
                             <Button
                                 type="button"
                                 variant="outline"
+                                class="bg-black text-white hover:bg-black/90 hover:text-white"
                                 :disabled="saving"
                                 @click="closeForm"
                             >
@@ -439,15 +441,15 @@ onMounted(() => {
             </div>
 
             <!-- Document Type List -->
-            <Card>
+            <Card class="relative overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900">
 
-                <CardHeader>
+                <CardHeader class="bg-blue-900 text-white">
                     <CardTitle>
                         Document Types
                     </CardTitle>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="bg-white">
 
                     <!-- Loading -->
                     <div
@@ -466,7 +468,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Table -->
-                    <Table v-else>
+                    <Table v-else class="text-[11.5pt] [&_td]:py-[7px] [&_th]:text-[12.5pt]">
 
                         <TableHeader class="bg-blue-900 text-white">
 
@@ -518,6 +520,7 @@ onMounted(() => {
                                         <Button
                                             variant="outline"
                                             size="sm"
+                                            class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                                             @click="openEditForm(documentType)"
                                         >
                                             Edit

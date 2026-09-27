@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -53,6 +53,39 @@ const lastPage = ref(1)
 const total = ref(0)
 const filters = ref({ module: '', action: '' })
 const appliedFilters = ref({ module: '', action: '' })
+
+const paginationState = computed(() => ({
+    canGoPrevious: page.value > 1,
+    canGoNext: page.value < lastPage.value,
+    previousPage: Math.max(1, page.value - 1),
+    nextPage: Math.min(lastPage.value, page.value + 1),
+}))
+
+const paginationItems = computed(() => {
+    const finalPage = Math.max(1, lastPage.value)
+    const currentPage = Math.min(Math.max(1, page.value), finalPage)
+
+    if (finalPage <= 7) {
+        return Array.from(
+            { length: finalPage },
+            (_, index) => ({ type: 'page', page: index + 1 })
+        )
+    }
+
+    const pages = [1, currentPage - 1, currentPage, currentPage + 1, finalPage]
+        .filter(item => item >= 1 && item <= finalPage)
+        .filter((item, index, items) => items.indexOf(item) === index)
+        .sort((left, right) => left - right)
+
+    return pages.flatMap((item, index) => {
+        const previous = pages[index - 1]
+        const ellipsis = previous && item - previous > 1
+            ? [{ type: 'ellipsis', key: `ellipsis-${previous}-${item}` }]
+            : []
+
+        return [...ellipsis, { type: 'page', page: item }]
+    })
+})
 
 const fetchAuditLogs = async (requestedPage = 1) => {
     loading.value = true
@@ -155,9 +188,9 @@ onMounted(() => {
         </div>
 
         <div class="space-y-4 p-6">
-            <Card>
-                <CardHeader><CardTitle>Filters</CardTitle></CardHeader>
-                <CardContent>
+            <Card class="relative overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900">
+                <CardHeader class="bg-blue-900 text-white"><CardTitle>Filters</CardTitle></CardHeader>
+                <CardContent class="bg-white">
                     <form
                         class="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end"
                         @submit.prevent="applyFilters"
@@ -199,10 +232,11 @@ onMounted(() => {
                         </label>
 
                         <div class="flex gap-2">
-                            <Button type="submit" :disabled="loading">Apply</Button>
+                            <Button type="submit" class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white" :disabled="loading">Apply</Button>
                             <Button
                                 type="button"
                                 variant="outline"
+                                class="bg-black text-white hover:bg-black/90 hover:text-white"
                                 :disabled="loading"
                                 @click="clearFilters"
                             >
@@ -213,15 +247,15 @@ onMounted(() => {
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader>
+            <Card class="relative overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900">
+                <CardHeader class="bg-blue-900 text-white">
                     <CardTitle>System Activity</CardTitle>
-                    <p class="text-sm text-gray-500">
+                    <p class="text-sm text-blue-100">
                         {{ total }} recorded event{{ total === 1 ? '' : 's' }}
                     </p>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent class="bg-white">
                     <div v-if="loading" class="py-10 text-center text-gray-500">
                         Loading audit logs...
                     </div>
@@ -241,7 +275,7 @@ onMounted(() => {
                     </div>
 
                     <div v-else class="overflow-x-auto">
-                        <Table>
+                        <Table class="text-[11.5pt] [&_td]:py-[7px] [&_th]:text-[12.5pt]">
                             <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
                                     <TableHead class="text-white font-semibold">Time</TableHead>
@@ -280,27 +314,18 @@ onMounted(() => {
                         </Table>
                     </div>
 
-                    <div
-                        v-if="!loading && !error && lastPage > 0"
-                        class="mt-4 flex items-center justify-between border-t pt-4"
-                    >
-                        <Button
-                            variant="outline"
-                            :disabled="page <= 1"
-                            @click="changePage(page - 1)"
-                        >
-                            Previous
-                        </Button>
-                        <span class="text-sm text-gray-600">
-                            Page {{ page }} of {{ lastPage }}
-                        </span>
-                        <Button
-                            variant="outline"
-                            :disabled="page >= lastPage"
-                            @click="changePage(page + 1)"
-                        >
-                            Next
-                        </Button>
+                    <div v-if="!loading && !error && lastPage > 0" class="mt-4 flex flex-col items-center gap-3 border-t pt-4">
+                        <p class="text-center text-sm text-gray-600">{{ total }} total results</p>
+                        <nav class="max-w-full overflow-x-auto rounded-full bg-white p-1 shadow-[0_8px_18px_rgb(15_41_70/0.12)]" aria-label="Audit log pagination">
+                            <div class="flex min-w-max items-center gap-1">
+                                <button type="button" class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="loading || !paginationState.canGoPrevious" @click="changePage(paginationState.previousPage)">‹ Prev</button>
+                                <template v-for="item in paginationItems" :key="item.type === 'page' ? item.page : item.key">
+                                    <span v-if="item.type === 'ellipsis'" class="flex size-10 items-center justify-center font-bold text-blue-900" aria-hidden="true">…</span>
+                                    <button v-else type="button" class="size-10 rounded-full font-semibold transition-colors" :class="item.page === page ? 'bg-blue-900 text-white shadow-[inset_0_1px_2px_rgb(15_41_70/0.18)]' : 'text-blue-900 hover:bg-blue-50'" :aria-current="item.page === page ? 'page' : undefined" :disabled="loading" @click="changePage(item.page)">{{ item.page }}</button>
+                                </template>
+                                <button type="button" class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="loading || !paginationState.canGoNext" @click="changePage(paginationState.nextPage)">Next ›</button>
+                            </div>
+                        </nav>
                     </div>
                 </CardContent>
             </Card>
