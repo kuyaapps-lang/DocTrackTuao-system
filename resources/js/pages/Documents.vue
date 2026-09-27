@@ -1556,7 +1556,7 @@ onBeforeUnmount(() => {
                         </div>
                         <p v-if="qrVerificationError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ qrVerificationError }}</p>
                         <div class="flex justify-end gap-3">
-                            <Button type="button" variant="outline" :disabled="qrVerifying" @click="closeCreateForm">Cancel</Button>
+                            <Button type="button" variant="outline" class="border-black bg-black text-white hover:bg-black/90 hover:text-white" :disabled="qrVerifying" @click="closeCreateForm">Cancel</Button>
                             <Button type="submit" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="qrVerifying">{{ qrVerifying ? 'Verifying...' : 'Verify QR' }}</Button>
                         </div>
                     </form>
@@ -1846,7 +1846,7 @@ onBeforeUnmount(() => {
                             <Button
                                 type="button"
                                 variant="outline"
-                                class="border-black bg-black text-white hover:bg-black/90 hover:text-white"
+                                class="border-black bg-black text-[17px] text-white hover:bg-black/90 hover:text-white"
                                 @click="closeCreateForm"
                                 :disabled="creating"
                             >
@@ -1855,7 +1855,7 @@ onBeforeUnmount(() => {
 
                             <Button
                                 type="submit"
-                                class="h-12 px-5 text-[19px] leading-none bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
+                                class="h-12 px-5 text-[18px] leading-none bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                                 :disabled="creating"
                             >
                                 {{

@@ -43,5 +43,7 @@ test('registration modal resets scanner input and verifies the normalized QR val
     assert.match(source, /v-model="form\.document_date"[\s\S]*?class="h-11 text-right"/)
     assert.match(source, /v-model="form\.due_date"[\s\S]*?class="h-11 text-right"/)
     assert.match(source, /class="border-black bg-black text-white hover:bg-black\/90 hover:text-white"/)
-    assert.match(source, /class="h-12 px-5 text-\[19px\] leading-none bg-blue-900/)
+    assert.match(source, /:disabled="qrVerifying" @click="closeCreateForm">Cancel<\/Button>/)
+    assert.match(source, /class="border-black bg-black text-\[17px\] text-white hover:bg-black\/90 hover:text-white"/)
+    assert.match(source, /class="h-12 px-5 text-\[18px\] leading-none bg-blue-900/)
 })
