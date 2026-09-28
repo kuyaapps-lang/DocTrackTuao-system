@@ -1993,10 +1993,10 @@ onMounted(() => {
                             >
 
                                 <div
-                                    class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3"
+                                    class="grid grid-cols-2 gap-x-4 gap-y-5 max-[359px]:grid-cols-1 md:grid-cols-2 md:gap-5 lg:grid-cols-3"
                                 >
 
-                                    <div>
+                                    <div class="min-w-0">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2004,7 +2004,7 @@ onMounted(() => {
                                         </p>
 
                                         <p
-                                            class="mt-1 font-medium text-gray-900"
+                                            class="mt-1 break-words font-medium text-gray-900"
                                         >
                                             {{
                                                 document.type
@@ -2014,7 +2014,7 @@ onMounted(() => {
                                         </p>
                                     </div>
 
-                                    <div>
+                                    <div class="min-w-0">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2022,7 +2022,7 @@ onMounted(() => {
                                         </p>
 
                                         <p
-                                            class="mt-1 font-semibold text-gray-900"
+                                            class="mt-1 inline-flex max-w-full break-words font-semibold text-gray-900"
                                         >
                                             {{
                                                 document.status
@@ -2032,7 +2032,7 @@ onMounted(() => {
                                         </p>
                                     </div>
 
-                                    <div>
+                                    <div class="min-w-0">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2040,7 +2040,7 @@ onMounted(() => {
                                         </p>
 
                                         <p
-                                            class="mt-1 font-medium text-gray-900"
+                                            class="mt-1 break-words font-medium text-gray-900"
                                         >
                                             {{
                                                 document.priority
@@ -2050,7 +2050,7 @@ onMounted(() => {
                                         </p>
                                     </div>
 
-                                    <div>
+                                    <div class="min-w-0">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2058,7 +2058,7 @@ onMounted(() => {
                                         </p>
 
                                         <p
-                                            class="mt-1 font-medium text-gray-900"
+                                            class="mt-1 break-words font-medium text-gray-900"
                                         >
                                             {{
                                                 document.confidentiality
@@ -2068,7 +2068,7 @@ onMounted(() => {
                                         </p>
                                     </div>
 
-                                    <div>
+                                    <div class="min-w-0">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2076,7 +2076,7 @@ onMounted(() => {
                                         </p>
 
                                         <p
-                                            class="mt-1 font-medium text-gray-900"
+                                            class="mt-1 break-words font-medium text-gray-900"
                                         >
                                             {{
                                                 document.origin_office
@@ -2086,7 +2086,7 @@ onMounted(() => {
                                         </p>
                                     </div>
 
-                                    <div>
+                                    <div class="min-w-0">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2094,7 +2094,7 @@ onMounted(() => {
                                         </p>
 
                                         <p
-                                            class="mt-1 font-semibold text-blue-700"
+                                            class="mt-1 break-words font-semibold text-blue-700"
                                         >
                                             {{
                                                 document.current_office
@@ -2104,7 +2104,7 @@ onMounted(() => {
                                         </p>
                                     </div>
 
-                                    <div>
+                                    <div class="min-w-0">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2122,7 +2122,7 @@ onMounted(() => {
                                         </p>
                                     </div>
 
-                                    <div>
+                                    <div class="min-w-0">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2140,7 +2140,7 @@ onMounted(() => {
                                         </p>
                                     </div>
 
-                                    <div>
+                                    <div class="col-span-2 min-w-0 max-[359px]:col-span-1 md:col-span-1">
                                         <p
                                             class="text-xs font-semibold uppercase text-gray-500"
                                         >
@@ -2148,7 +2148,7 @@ onMounted(() => {
                                         </p>
 
                                         <p
-                                            class="mt-1 text-gray-900"
+                                            class="mt-1 break-words text-gray-900"
                                         >
                                             {{
                                                 document.creator
