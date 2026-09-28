@@ -1920,7 +1920,7 @@ onMounted(() => {
 
                                 <Button
                                     v-if="canForward"
-                                    class="bg-blue-600 text-white hover:bg-blue-700"
+                                    class="bg-blue-900 text-white hover:bg-blue-950"
                                     @click="openForwardModal"
                                 >
                                     <Send class="mr-2 h-4 w-4" />
@@ -2189,11 +2189,11 @@ onMounted(() => {
                                     Issued Document QR
                                 </h3>
 
-                                <p
-                                    class="mt-1 text-xs text-gray-500"
+                                <div
+                                    class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
                                 >
                                     Permanent QR assigned to this physical document
-                                </p>
+                                </div>
 
                                 <div
                                     v-if="qrDataUrl && document.qr_code?.qr_token"
@@ -2217,19 +2217,6 @@ onMounted(() => {
                                     >
                                         {{ document.tracking_no }}
                                     </p>
-
-                                    <div
-                                        class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
-                                    >
-                                        Registered QR &middot; Linked to this document
-                                    </div>
-
-                                    <Button
-                                        class="mt-4 w-full bg-gray-900 text-white hover:bg-black"
-                                        @click="printQRCode"
-                                    >
-                                        Print Linked QR
-                                    </Button>
 
                                 </div>
 
@@ -2520,7 +2507,7 @@ onMounted(() => {
                                     <Button
                                         type="submit"
                                         :disabled="processingSaving"
-                                        class="bg-blue-600 text-white hover:bg-blue-700"
+                                        class="bg-blue-900 text-white hover:bg-blue-950"
                                     >
                                         {{
                                             processingSaving
@@ -2855,7 +2842,7 @@ onMounted(() => {
                                         </button>
 
                                         <Button
-                                            class="bg-blue-600 text-white hover:bg-blue-700"
+                                            class="bg-blue-900 text-white hover:bg-blue-950"
                                             :disabled="
 
                                                 uploadingAttachment ||
@@ -3142,7 +3129,7 @@ onMounted(() => {
 
                     <button
                         type="button"
-                        class="rounded-md bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                        class="rounded-md bg-blue-900 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-950 disabled:opacity-50"
                         :disabled="actionLoading"
                         @click="forwardDocument"
                     >

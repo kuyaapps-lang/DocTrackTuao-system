@@ -35,7 +35,8 @@ test('document details keeps terminal action confirms with clearer warning copy'
     assert.match(source, /window\.confirm\(/)
     assert.match(source, /Complete this document now\?\\n\\nAfter completion/)
     assert.match(source, /Archive this completed document now\?\\n\\nArchived documents/)
-    assert.match(source, /Registered QR &middot; Linked to this document/)
+    assert.match(source, /Permanent QR assigned to this physical document/)
+    assert.doesNotMatch(source, /Registered QR &middot; Linked to this document|Print Linked QR/)
     assert.match(source, /&times;/)
 })
 
@@ -105,7 +106,7 @@ test('QR UI keeps compact blue header palette', async () => {
     assert.match(qrCodes, /<CardHeader class="bg-blue-900 px-4 py-2 text-white">/)
     assert.match(qrCodes, /<CardTitle class="text-base font-semibold">/)
     assert.match(qrCodes, /<CardContent class="\[&_\*\]:!text-\[13pt\]">/)
-    assert.match(qrCodes, /QR Code Administration/)
+    assert.match(qrCodes, /Office QR Requests/)
     assert.match(qrCodes, /Review and manage office QR requests/)
     assert.match(qrCodes, /<thead class="bg-blue-900 text-white">/)
     assert.match(qrCodes, /class="text-xs text-blue-100"/)
