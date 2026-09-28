@@ -933,8 +933,8 @@ onBeforeUnmount(() => {
                     <div v-if="summaryLoading" class="space-y-2 py-1"><SkeletonBlock v-for="item in 3" :key="item" class-name="h-14 w-full" /></div>
                     <div v-else class="space-y-2 text-center">
                         <div class="rounded-md border bg-gray-50 px-2 py-1"><p class="text-xs font-semibold text-gray-500">Issued</p><p class="!text-[18pt] font-bold text-gray-900">{{ summary.total_issued }}</p></div>
-                        <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-800">{{ summary.counts.registered }}</p></div>
-                        <div class="rounded-md border bg-yellow-50 px-2 py-1"><p class="text-xs font-semibold text-yellow-700">Unused</p><p class="!text-[18pt] font-bold text-yellow-800">{{ summary.counts.unused }}</p></div>
+                        <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-700">{{ summary.counts.registered }}</p></div>
+                        <div class="rounded-md border bg-yellow-50 px-2 py-1"><p class="text-xs font-semibold text-yellow-700">Unused</p><p class="!text-[18pt] font-bold text-yellow-700">{{ summary.counts.unused }}</p></div>
                     </div>
                     <p v-if="summaryError" class="mt-2 text-sm text-red-600">{{ summaryError }}</p>
                 </CardContent>
@@ -1239,8 +1239,8 @@ onBeforeUnmount(() => {
                     <div v-if="summaryLoading" class="space-y-2 py-1"><SkeletonBlock v-for="item in 3" :key="item" class-name="h-14 w-full" /></div>
                     <div v-else class="space-y-2 text-center">
                         <div class="rounded-md border bg-gray-50 px-2 py-1"><p class="text-xs font-semibold text-gray-500">Issued</p><p class="!text-[18pt] font-bold text-gray-900">{{ summary.total_issued }}</p></div>
-                        <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-800">{{ summary.counts.registered }}</p></div>
-                        <div class="rounded-md border bg-yellow-50 px-2 py-1"><p class="text-xs font-semibold text-yellow-700">Unused</p><p class="!text-[18pt] font-bold text-yellow-800">{{ summary.counts.unused }}</p></div>
+                        <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-700">{{ summary.counts.registered }}</p></div>
+                        <div class="rounded-md border bg-yellow-50 px-2 py-1"><p class="text-xs font-semibold text-yellow-700">Unused</p><p class="!text-[18pt] font-bold text-yellow-700">{{ summary.counts.unused }}</p></div>
                     </div>
                     <p v-if="summaryError" class="mt-2 text-sm text-red-600">{{ summaryError }}</p>
                 </CardContent>
