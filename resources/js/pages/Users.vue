@@ -809,7 +809,7 @@ onMounted(() => {
 
                                     <TableCell class="text-center">
                                         <span
-                                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                                            class="inline-flex rounded-full px-2.5 py-1 text-[13.5px] font-semibold"
                                             :class="roleClass(user.role?.name)"
                                         >
                                             {{ user.role?.name || 'N/A' }}
@@ -826,7 +826,7 @@ onMounted(() => {
                                                 v-if="canResetPassword(user)"
                                                 variant="outline"
                                                 size="sm"
-                                                class="bg-slate-200 text-[11.5pt] text-slate-700 hover:bg-slate-300 hover:text-slate-800"
+                                                class="doctrack-reset-password-button border-[0.5px] border-blue-900 bg-white text-[11.5pt] text-blue-900 hover:bg-blue-50 hover:text-blue-950"
                                                 @click="openResetPasswordForm(user)"
                                             >
                                                 Reset Password

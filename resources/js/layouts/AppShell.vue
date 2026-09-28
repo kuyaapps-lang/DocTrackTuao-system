@@ -15,6 +15,7 @@ import {
 
 import AppSidebar from '@/components/AppSidebar.vue'
 import NotificationBell from '@/components/NotificationBell.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth'
 import {
@@ -274,6 +275,7 @@ const toggleAccountMenu = () => {
                 </div>
 
                 <div class="flex shrink-0 items-center gap-2">
+                    <ThemeToggle />
                     <NotificationBell />
                     <div ref="accountMenu" class="relative">
                         <Button

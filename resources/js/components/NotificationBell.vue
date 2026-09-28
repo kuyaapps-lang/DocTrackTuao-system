@@ -9,6 +9,7 @@ import {
     listNotifications,
     markNotificationRead,
 } from '@/lib/notifications'
+import { createNotificationPoller } from '@/lib/notificationPoller'
 
 const router = useRouter()
 const { getToken } = useAuth()
@@ -19,21 +20,24 @@ const error = ref('')
 const notifications = ref([])
 const unreadCount = ref(0)
 const root = ref(null)
+let poller = null
 
 const badgeLabel = computed(() => unreadCount.value > 99 ? '99+' : unreadCount.value)
 
-const load = async () => {
+const load = async ({ quiet = false } = {}) => {
+    if (loading.value) return
+
     const token = getToken()
     if (!token) return
 
     loading.value = true
-    error.value = ''
+    if (!quiet) error.value = ''
     try {
         const data = await listNotifications({ token, limit: 12 })
         notifications.value = data.notifications
         unreadCount.value = data.unreadCount
     } catch (err) {
-        error.value = err.message || 'Unable to load notifications.'
+        if (!quiet) error.value = err.message || 'Unable to load notifications.'
     } finally {
         loading.value = false
     }
@@ -84,10 +88,18 @@ const outsideClick = (event) => {
 
 onMounted(() => {
     load()
+    poller = createNotificationPoller({
+        load: () => load({ quiet: true }),
+        documentRef: document,
+    })
+    poller.start()
     document.addEventListener('pointerdown', outsideClick)
 })
 
-onBeforeUnmount(() => document.removeEventListener('pointerdown', outsideClick))
+onBeforeUnmount(() => {
+    poller?.stop()
+    document.removeEventListener('pointerdown', outsideClick)
+})
 </script>
 
 <template>
