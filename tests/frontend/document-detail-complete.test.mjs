@@ -257,3 +257,42 @@ test('document history rows have a scoped charcoal-slate dark hover and focus tr
     assert.match(styles, /\.dark \.doctrack-document-history-row:hover,[\s\S]*?background-color: #2c3a4c !important/)
     assert.match(styles, /\.dark \.doctrack-document-history-row:focus-within/)
 })
+
+test('document history table matches the Documents list typography scale', async () => {
+    const source = await readFile(
+        new URL('../../resources/js/pages/DocumentDetails.vue', import.meta.url),
+        'utf8'
+    )
+
+    assert.match(source, /min-w-\[900px\] border-collapse text-left text-sm \[&_\*\]:!text-\[13pt\]/)
+    assert.match(source, /rounded-full px-2\.5 py-1 !text-\[15\.5px\] font-semibold/)
+})
+
+test('document history timestamps wrap their existing date and time formatting onto separate lines', async () => {
+    const source = await readFile(
+        new URL('../../resources/js/pages/DocumentDetails.vue', import.meta.url),
+        'utf8'
+    )
+
+    assert.match(source, /const formatHistoryDateTime = \(date\) => \{[\s\S]*?formatted\.split\(' '\)/)
+    assert.match(source, /formatHistoryDateTime\(row\.date\)\.date/)
+    assert.match(source, /formatHistoryDateTime\(row\.date\)\.time/)
+})
+
+test('document details processing and summary typography keeps requested readable responsive sizing', async () => {
+    const source = await readFile(
+        new URL('../../resources/js/pages/DocumentDetails.vue', import.meta.url),
+        'utf8'
+    )
+
+    assert.match(source, /Permanent QR assigned to this physical document[\s\S]*?<\/div>/)
+    assert.match(source, /text-\[10pt\] font-semibold text-green-700/)
+    assert.match(source, /text-\[11\.5pt\] font-semibold leading-tight text-blue-700/)
+    assert.match(source, /text-\[10pt\] font-semibold uppercase text-gray-500/)
+    assert.match(source, /mt-1 text-sm font-bold text-gray-900/)
+    assert.match(source, /text-\[10pt\] font-semibold uppercase text-amber-700/)
+    assert.match(source, /text-\[11\.5pt\] text-amber-900/)
+    assert.match(source, /bg-blue-900 text-xs font-semibold uppercase tracking-wide text-white/)
+    assert.match(source, /text-\[11pt\] font-semibold leading-tight text-gray-600 sm:flex-row sm:gap-1/)
+    assert.match(source, /Only the office currently holding this document can upload or delete attachments/)
+})

@@ -71,7 +71,8 @@ test('documents UI keeps process 23e color and date polish', async () => {
 
     assert.match(details, /formatDocumentDateField/)
     assert.match(details, /formatDocumentDateTime/)
-    assert.match(details, /{{ formatDate\(row\.date\) }}/)
+    assert.match(details, /formatHistoryDateTime\(row\.date\)\.date/)
+    assert.match(details, /formatHistoryDateTime\(row\.date\)\.time/)
     assert.doesNotMatch(details, /formatHistoryDateOnly|formatHistoryTimeOnly/)
 })
 

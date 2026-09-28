@@ -1798,6 +1798,16 @@ const formatDate = (date) => {
     return formatDocumentDateTime(date)
 }
 
+const formatHistoryDateTime = (date) => {
+    const formatted = formatDate(date)
+    const [datePart, ...timeParts] = formatted.split(' ')
+
+    return {
+        date: datePart,
+        time: timeParts.join(' '),
+    }
+}
+
 const formatSimpleDate = (date) => {
     return formatDocumentDateField(date)
 }
@@ -2186,7 +2196,7 @@ onMounted(() => {
                                 </h3>
 
                                 <div
-                                    class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
+                                    class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-[10pt] font-semibold text-green-700"
                                 >
                                     Permanent QR assigned to this physical document
                                 </div>
@@ -2264,7 +2274,7 @@ onMounted(() => {
 
                             <div
                                 v-if="processingInfo?.current_action"
-                                class="inline-flex self-start rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700"
+                                class="inline-flex max-w-full self-start whitespace-normal break-words rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-center text-[11.5pt] font-semibold leading-tight text-blue-700"
                             >
                                 {{
                                     processingInfo
@@ -2297,7 +2307,7 @@ onMounted(() => {
                                     class="rounded-lg border bg-gray-50 p-4"
                                 >
                                     <p
-                                        class="text-xs font-semibold uppercase text-gray-500"
+                                        class="text-[10pt] font-semibold uppercase text-gray-500"
                                     >
                                         Current Office
                                     </p>
@@ -2321,7 +2331,7 @@ onMounted(() => {
                                     class="rounded-lg border bg-gray-50 p-4"
                                 >
                                     <p
-                                        class="text-xs font-semibold uppercase text-gray-500"
+                                        class="text-[10pt] font-semibold uppercase text-gray-500"
                                     >
                                         Current Action
                                     </p>
@@ -2342,13 +2352,13 @@ onMounted(() => {
                                     class="rounded-lg border bg-gray-50 p-4"
                                 >
                                     <p
-                                        class="text-xs font-semibold uppercase text-gray-500"
+                                        class="text-[10pt] font-semibold uppercase text-gray-500"
                                     >
                                         Last Updated
                                     </p>
 
                                     <p
-                                        class="mt-1 text-sm font-medium text-gray-900"
+                                        class="mt-1 text-sm font-bold text-gray-900"
                                     >
                                         {{
                                             processingInfo
@@ -2382,13 +2392,13 @@ onMounted(() => {
                                 class="rounded-lg border border-amber-200 bg-amber-50 p-4"
                             >
                                 <p
-                                    class="text-xs font-semibold uppercase text-amber-700"
+                                    class="text-[10pt] font-semibold uppercase text-amber-700"
                                 >
                                     Internal Processing Note
                                 </p>
 
                                 <p
-                                    class="mt-2 whitespace-pre-line text-sm text-amber-900"
+                                    class="mt-2 whitespace-pre-line text-[11.5pt] text-amber-900"
                                 >
                                     {{
                                         processingInfo
@@ -2400,7 +2410,7 @@ onMounted(() => {
                             <!-- Permission / Restriction -->
                             <div
                                 v-if="processingInfo && !canUpdateProcessing"
-                                class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600"
+                                class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-[11.5pt] text-gray-600"
                             >
                                 {{
                                     processingInfo
@@ -2552,10 +2562,10 @@ onMounted(() => {
                             </div>
 
                             <span
-                                class="inline-flex self-start rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600"
+                                class="inline-flex flex-col items-center justify-center self-start rounded-full bg-gray-100 px-3 py-1 text-center text-[11pt] font-semibold leading-tight text-gray-600 sm:flex-row sm:gap-1"
                             >
-                                {{ historyRows.length }}
-                                records
+                                <span>{{ historyRows.length }}</span>
+                                <span>records</span>
                             </span>
 
                         </div>
@@ -2577,11 +2587,11 @@ onMounted(() => {
                         >
 
                             <table
-                                class="w-full min-w-[900px] border-collapse text-left text-sm"
+                                class="w-full min-w-[900px] border-collapse text-left text-sm [&_*]:!text-[13pt]"
                             >
 
                                 <thead
-                                    class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600"
+                                    class="bg-blue-900 text-xs font-semibold uppercase tracking-wide text-white"
                                 >
 
                                     <tr>
@@ -2642,7 +2652,7 @@ onMounted(() => {
 
                                             <span
                                                 :class="[
-                                                    'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold',
+                                                    'inline-flex rounded-full px-2.5 py-1 !text-[15.5px] font-semibold',
                                                     row.status === 'Received'
                                                         ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-200'
                                                         : row.status === 'Forwarded'
@@ -2703,11 +2713,13 @@ onMounted(() => {
                                         <td
                                             class="w-[150px] px-2 py-4 text-center text-gray-600"
                                         >
-                                            <span
-                                                class="whitespace-nowrap text-xs font-medium"
+                                            <time
+                                                :datetime="row.date"
+                                                class="font-medium"
                                             >
-                                                {{ formatDate(row.date) }}
-                                            </span>
+                                                <span class="block whitespace-nowrap">{{ formatHistoryDateTime(row.date).date }}</span>
+                                                <span v-if="formatHistoryDateTime(row.date).time" class="mt-1 block whitespace-nowrap text-xs text-gray-500">{{ formatHistoryDateTime(row.date).time }}</span>
+                                            </time>
                                         </td>
 
                                         <td
@@ -2768,14 +2780,10 @@ onMounted(() => {
                             </div>
 
                             <span
-                                class="w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600"
+                                class="inline-flex w-fit flex-col items-center justify-center rounded-full bg-gray-100 px-3 py-1 text-center text-[11pt] font-semibold leading-tight text-gray-600 sm:flex-row sm:gap-1"
                             >
-                                {{ attachments.length }}
-                                {{
-                                    attachments.length === 1
-                                        ? 'file'
-                                        : 'files'
-                                }}
+                                <span>{{ attachments.length }}</span>
+                                <span>{{ attachments.length === 1 ? 'file' : 'files' }}</span>
                             </span>
 
                         </div>
@@ -2924,7 +2932,7 @@ onMounted(() => {
 
                         <div
                             v-else
-                            class="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700"
+                            class="rounded-lg border border-blue-100 bg-blue-50 p-4 text-[11.5pt] text-blue-700"
                         >
                             Only the office currently holding this document can upload or delete attachments.
                         </div>
