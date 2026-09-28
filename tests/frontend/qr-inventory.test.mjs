@@ -176,7 +176,7 @@ test('QR inventory page gates the void button behind the Admin-only permission',
     assert.match(source, /\{\{ inventoryMeta\.total \}\} total results/)
     assert.match(source, /aria-label="QR inventory pagination"/)
     assert.match(source, /@click="changeInventoryPage\(inventoryPaginationState\.previousPage\)"/)
-    assert.match(source, /bg-blue-900 px-6 text-white hover:bg-blue-950 hover:text-white/)
+    assert.match(source, /w-48 bg-blue-900 text-sm text-white hover:bg-blue-950 hover:text-white/)
     assert.match(source, /v-else-if="!inventoryError" class="overflow-hidden rounded-t-lg border-t border-blue-900">/)
     assert.match(source, /class="h-auto px-2 py-\[1\.5px\] text-xs"/)
     assert.match(source, /QR Code Inventory/)

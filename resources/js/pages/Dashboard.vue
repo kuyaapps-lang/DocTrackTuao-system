@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import DashboardSkeleton from '@/components/loaders/DashboardSkeleton.vue'
 import { useAuth } from '@/lib/auth'
 import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, normalizeDashboardMonth } from '@/lib/dashboard'
 
@@ -203,7 +204,7 @@ onBeforeUnmount(() => {
             </div>
 
             <p class="sr-only" aria-live="polite">{{ loading ? 'Loading dashboard summary.' : state === 'success' ? `Dashboard summary loaded for ${monthLabel}.` : 'Dashboard summary could not be loaded.' }}</p>
-            <div v-if="loading && !dashboard" class="rounded-2xl border border-slate-200 bg-white p-10 text-center text-[13pt] text-slate-600 shadow-[0_8px_22px_rgb(15_41_70/0.06)]">Loading dashboard summary...</div>
+            <DashboardSkeleton v-if="loading && !dashboard" />
             <div v-else-if="state !== 'success'" class="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-[13pt] text-red-800 shadow-sm" role="alert">
                 <p v-if="state === 'permission-denied'">You do not have permission to view dashboard reports.</p>
                 <p v-else-if="state === 'office-denied'">Dashboard reporting is unavailable because your account has no valid office assignment.</p>

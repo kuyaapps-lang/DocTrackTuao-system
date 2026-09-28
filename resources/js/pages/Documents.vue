@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/table'
 
 import { Button } from '@/components/ui/button'
+import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 import { Input } from '@/components/ui/input'
 import { can } from '@/lib/auth'
 import { formatDocumentDateTime } from '@/lib/document-dates'
@@ -1183,14 +1184,7 @@ onBeforeUnmount(() => {
                 >
 
                     <!-- Loading -->
-                    <div
-                        v-if="loading"
-                        class="py-10 text-center text-gray-500"
-                        role="status"
-                        aria-live="polite"
-                    >
-                        Loading documents...
-                    </div>
+                    <TableSkeleton v-if="loading" :columns="6" />
 
                     <!-- Error -->
                     <div

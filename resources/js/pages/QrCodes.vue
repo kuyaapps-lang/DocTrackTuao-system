@@ -31,6 +31,8 @@ import {
 } from '@/components/ui/card'
 
 import { Button } from '@/components/ui/button'
+import SkeletonBlock from '@/components/loaders/SkeletonBlock.vue'
+import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 
 /*
 |--------------------------------------------------------------------------
@@ -928,7 +930,7 @@ onBeforeUnmount(() => {
                     <CardTitle class="text-base font-semibold">QR Record Summary</CardTitle>
                 </CardHeader>
                 <CardContent class="px-4 pb-4 pt-[3pt] [&_*]:!text-[13pt]">
-                    <div v-if="summaryLoading" class="py-3 text-center text-gray-500">Loading QR records...</div>
+                    <div v-if="summaryLoading" class="space-y-2 py-1"><SkeletonBlock v-for="item in 3" :key="item" class-name="h-14 w-full" /></div>
                     <div v-else class="space-y-2 text-center">
                         <div class="rounded-md border bg-gray-50 px-2 py-1"><p class="text-xs font-semibold text-gray-500">Issued</p><p class="!text-[18pt] font-bold text-gray-900">{{ summary.total_issued }}</p></div>
                         <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-800">{{ summary.counts.registered }}</p></div>
@@ -1006,9 +1008,7 @@ onBeforeUnmount(() => {
                         {{ requestsError }}
                     </p>
 
-                    <div v-if="requestsLoading" class="py-6 text-center text-gray-500" role="status">
-                        Loading QR requests...
-                    </div>
+                    <TableSkeleton v-if="requestsLoading" :columns="canApproveQr ? 4 : 3" :rows="4" />
 
                     <div v-else-if="requests.length === 0" class="py-6 text-center text-gray-500">
                         No QR requests found.
@@ -1236,7 +1236,7 @@ onBeforeUnmount(() => {
                     <CardTitle class="text-base font-semibold">QR Record Summary</CardTitle>
                 </CardHeader>
                 <CardContent class="px-4 pb-4 pt-[3pt] [&_*]:!text-[13pt]">
-                    <div v-if="summaryLoading" class="py-3 text-center text-gray-500">Loading QR records...</div>
+                    <div v-if="summaryLoading" class="space-y-2 py-1"><SkeletonBlock v-for="item in 3" :key="item" class-name="h-14 w-full" /></div>
                     <div v-else class="space-y-2 text-center">
                         <div class="rounded-md border bg-gray-50 px-2 py-1"><p class="text-xs font-semibold text-gray-500">Issued</p><p class="!text-[18pt] font-bold text-gray-900">{{ summary.total_issued }}</p></div>
                         <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-800">{{ summary.counts.registered }}</p></div>
@@ -1297,9 +1297,7 @@ onBeforeUnmount(() => {
                         {{ inventoryError }}
                     </p>
 
-                    <div v-if="inventoryLoading" class="py-6 text-center text-gray-500" role="status">
-                        Loading persisted QR inventory...
-                    </div>
+                    <TableSkeleton v-if="inventoryLoading" :columns="5" :rows="5" />
 
                     <div v-else-if="!inventoryError && inventory.length === 0" class="py-6 text-center text-gray-500">
                         {{ inventoryStatus

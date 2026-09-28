@@ -17,6 +17,7 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { useAuth } from '@/lib/auth'
+import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 
 const modules = [
     ['authentication', 'Authentication'],
@@ -256,9 +257,7 @@ onMounted(() => {
                 </CardHeader>
 
                 <CardContent class="bg-white">
-                    <div v-if="loading" class="py-10 text-center text-gray-500">
-                        Loading audit logs...
-                    </div>
+                    <TableSkeleton v-if="loading" :columns="6" />
                     <div
                         v-else-if="error"
                         class="rounded-md border border-red-200 bg-red-50 p-4 text-center text-red-700"

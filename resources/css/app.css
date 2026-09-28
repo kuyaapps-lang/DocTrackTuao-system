@@ -3,6 +3,14 @@
 
 @import "tw-animate-css";
 
+@keyframes doctrack-skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.doctrack-skeleton { position: relative; overflow: hidden; }
+.doctrack-skeleton::after { position: absolute; inset: 0; content: ''; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent); animation: doctrack-skeleton-shimmer 1.6s infinite; }
+@media (prefers-reduced-motion: reduce) { .doctrack-skeleton::after { animation: none; } }
+
 @custom-variant dark (&:is(.dark *));
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';

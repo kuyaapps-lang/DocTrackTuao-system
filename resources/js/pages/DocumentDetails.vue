@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card'
 
 import { Button } from '@/components/ui/button'
+import DocumentDetailsSkeleton from '@/components/loaders/DocumentDetailsSkeleton.vue'
 
 import {
     Archive,
@@ -1855,12 +1856,7 @@ onMounted(() => {
         <div class="max-w-6xl mx-auto p-6">
 
             <!-- Loading -->
-            <div
-                v-if="loading"
-                class="py-12 text-center text-gray-500"
-            >
-                Loading document...
-            </div>
+            <DocumentDetailsSkeleton v-if="loading" />
 
             <!-- Error -->
             <div

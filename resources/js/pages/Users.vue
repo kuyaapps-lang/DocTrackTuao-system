@@ -24,6 +24,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 
 import {
     useAuth,
@@ -621,12 +622,7 @@ onMounted(() => {
                         {{ resetRequestsError }}
                     </div>
 
-                    <div
-                        v-if="resetRequestsLoading"
-                        class="py-6 text-center text-sm text-gray-500"
-                    >
-                        Loading password reset requests...
-                    </div>
+                    <TableSkeleton v-if="resetRequestsLoading" :columns="4" :rows="3" />
 
                     <div
                         v-else-if="pendingResetRequests.length === 0"
@@ -748,12 +744,7 @@ onMounted(() => {
                 </CardHeader>
 
                 <CardContent class="bg-white">
-                    <div
-                        v-if="loading"
-                        class="py-10 text-center text-gray-500"
-                    >
-                        Loading users...
-                    </div>
+                    <TableSkeleton v-if="loading" :columns="6" />
 
                     <div
                         v-else-if="error"
