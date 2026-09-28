@@ -63,12 +63,13 @@ const requests = ref([])
 const requestsLoading = ref(true)
 const requestsError = ref('')
 const requestSaving = ref(false)
+const printingRequestId = ref(null)
+const printedRequestIds = ref(new Set())
 const reviewPendingId = ref(null)
 const expandedRequestId = ref(null)
 const requestNotice = ref('')
 const requestForm = ref({
     quantity: 10,
-    purpose: '',
 })
 
 const quantity = ref(5)
@@ -131,6 +132,16 @@ const inventoryPaginationItems = computed(() => {
     })
 })
 
+const printableRequest = computed(() => {
+    if (canApproveQr.value) return null
+
+    return requests.value.find(request => (
+        request.status === 'approved' &&
+        request.qr_codes.length > 0 &&
+        !printedRequestIds.value.has(request.id)
+    )) || null
+})
+
 /*
 |--------------------------------------------------------------------------
 | Authentication
@@ -143,6 +154,7 @@ const getToken = () => {
 
 const { permissions } = useAuth()
 const canRequestQr = computed(() => permissions.value.includes('qr.request'))
+const canViewQr = computed(() => permissions.value.includes('qr.view'))
 const canManageQr = computed(() => permissions.value.includes('qr.manage'))
 const canIssueQr = computed(() => permissions.value.includes('qr.issue'))
 const canApproveQr = computed(() => permissions.value.includes('qr.approve'))
@@ -535,7 +547,6 @@ const submitRequest = async () => {
             'QR code request submitted.'
         requestForm.value = {
             quantity: 10,
-            purpose: '',
         }
         await fetchRequests()
     } catch (err) {
@@ -756,6 +767,36 @@ const printLastBatch = async () => {
     }
 }
 
+const printRequestQrCodes = async (request) => {
+    if (!request?.id || !Array.isArray(request.qr_codes) || request.qr_codes.length === 0) {
+        return
+    }
+
+    printingRequestId.value = request.id
+    requestsError.value = ''
+
+    try {
+        await printQrLabels({
+            windowRef: window,
+            items: request.qr_codes.map(qr => ({
+                identifier: qr.qr_token,
+                qr,
+            })),
+            getImageSource: item => createQrImage(item.qr),
+        })
+        printedRequestIds.value = new Set([
+            ...printedRequestIds.value,
+            request.id,
+        ])
+        return true
+    } catch (err) {
+        requestsError.value = qrPrintFailureMessage(err)
+        return false
+    } finally {
+        printingRequestId.value = null
+    }
+}
+
 /*
 |--------------------------------------------------------------------------
 | Formatting
@@ -799,37 +840,7 @@ onBeforeUnmount(() => {
         class="min-h-screen bg-slate-100"
     >
 
-        <!-- Header -->
-        <div
-            v-if="!canApproveQr"
-            class="border-b border-white/70 bg-blue-900 px-6 py-4 text-white shadow-[0_5px_16px_rgb(15_41_70/0.13)]"
-        >
-
-            <div
-                class="mx-auto max-w-5xl"
-            >
-
-                <h1
-                    class="text-2xl font-bold"
-                >
-                    {{ canApproveQr ? 'QR Code Administration' : 'QR Code Requests' }}
-                </h1>
-
-                <p
-                    class="mt-1 text-sm text-blue-100"
-                >
-                    {{
-                        canApproveQr
-                            ? 'Review office requests, issue approved QR labels, and manage QR records.'
-                            : 'Request QR codes in bulk, print approved labels, and attach them to physical documents.'
-                    }}
-                </p>
-
-            </div>
-
-        </div>
-
-        <div v-if="canApproveQr" class="border-b border-blue-100 bg-white px-6 py-3 shadow-sm">
+        <div v-if="canApproveQr || (canRequestQr && !canApproveQr)" class="border-b border-blue-100 bg-white px-6 py-3 shadow-sm">
             <div class="mx-auto grid max-w-5xl gap-3 text-sm md:grid-cols-3 md:items-center">
                 <p class="text-slate-600"><span class="font-semibold text-slate-900">1. Request Batch</span> — request unique QR labels.</p>
                 <p class="text-slate-600"><span class="font-semibold text-slate-900">2. Print & Attach</span> — attach ORIGINAL and retain RECORD COPY.</p>
@@ -865,8 +876,9 @@ onBeforeUnmount(() => {
                 {{ requestNotice }}
             </div>
 
-            <!-- Request Workflow -->
-            <Card v-if="canRequestQr && !canApproveQr" class="overflow-hidden border-blue-200 py-0">
+            <!-- Request and summary use the administrator card design. -->
+            <div v-if="canRequestQr && !canApproveQr" class="grid gap-5 lg:grid-cols-[minmax(18rem,0.78fr)_minmax(0,1.22fr)]">
+            <Card class="overflow-hidden py-0">
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
                     <CardTitle class="text-base font-semibold">
                         Request QR Codes
@@ -877,44 +889,81 @@ onBeforeUnmount(() => {
                     </p>
                 </CardHeader>
 
-                <CardContent class="[&_*]:!text-[13pt]">
+                <CardContent class="p-4 [&_*]:!text-[13pt]">
                     <form
-                        class="grid gap-5 md:grid-cols-[220px_1fr_auto] md:items-end"
+                        class="flex flex-col items-center gap-4"
                         @submit.prevent="submitRequest"
                     >
-                        <label class="block text-sm font-semibold text-gray-700">
+                        <div>
+                        <label class="block text-center text-sm font-semibold text-gray-700">
                             Number of QR Codes
+                        </label>
+                        <div class="mt-2">
                             <input
                                 v-model.number="requestForm.quantity"
                                 type="number"
                                 min="1"
                                 :max="maxBatchSize"
-                                class="mt-2 h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-lg font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                class="h-11 w-48 rounded-md border border-gray-300 bg-white px-3 text-center !text-[15pt] font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                 :disabled="requestSaving"
                                 @blur="normalizeRequestQuantity"
                                 @change="normalizeRequestQuantity"
                             >
-                        </label>
-
-                        <label class="block text-sm font-semibold text-gray-700">
-                            Purpose
-                            <textarea
-                                v-model="requestForm.purpose"
-                                :disabled="requestSaving"
-                                rows="2"
-                                class="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-                                placeholder="Optional note"
-                            ></textarea>
-                        </label>
+                        </div>
+                        </div>
 
                         <Button
                             type="submit"
-                            class="bg-blue-900 px-6 text-white hover:bg-blue-950 hover:text-white"
+                            class="w-48 bg-blue-900 text-sm text-white hover:bg-blue-950 hover:text-white"
                             :disabled="requestSaving"
                         >
-                            {{ requestSaving ? 'Submitting...' : 'Submit Request' }}
+                            {{ requestSaving ? 'Submitting...' : 'Request QR Code' }}
                         </Button>
                     </form>
+                </CardContent>
+            </Card>
+
+            <Card v-if="canViewQr" class="overflow-hidden py-0">
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
+                    <CardTitle class="text-base font-semibold">QR Record Summary</CardTitle>
+                </CardHeader>
+                <CardContent class="px-4 pb-4 pt-[3pt] [&_*]:!text-[13pt]">
+                    <div v-if="summaryLoading" class="py-3 text-center text-gray-500">Loading QR records...</div>
+                    <div v-else class="space-y-2 text-center">
+                        <div class="rounded-md border bg-gray-50 px-2 py-1"><p class="text-xs font-semibold text-gray-500">Issued</p><p class="!text-[18pt] font-bold text-gray-900">{{ summary.total_issued }}</p></div>
+                        <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-800">{{ summary.counts.registered }}</p></div>
+                        <div class="rounded-md border bg-yellow-50 px-2 py-1"><p class="text-xs font-semibold text-yellow-700">Unused</p><p class="!text-[18pt] font-bold text-yellow-800">{{ summary.counts.unused }}</p></div>
+                    </div>
+                    <p v-if="summaryError" class="mt-2 text-sm text-red-600">{{ summaryError }}</p>
+                </CardContent>
+            </Card>
+            </div>
+
+            <Card
+                v-if="canManageQr && canIssueQr && lastGeneratedBatch.length > 0"
+                class="mt-6 overflow-hidden border-blue-200 py-0"
+            >
+                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <CardTitle class="text-base font-semibold">Last Generated Batch</CardTitle>
+                            <p class="mt-1 text-xs text-blue-100">
+                                {{ lastGeneratedBatch.length }} unique QR code{{ lastGeneratedBatch.length === 1 ? '' : 's' }} generated and ready for printing.
+                            </p>
+                        </div>
+                        <Button class="bg-white text-blue-900 hover:bg-blue-50 hover:text-blue-900" @click="printLastBatch">Print Last Batch</Button>
+                    </div>
+                </CardHeader>
+                <CardContent class="[&_*]:!text-[13pt]">
+                    <div class="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+                        Every unique QR prints as a <strong>1 × 1 inch ORIGINAL</strong> label with its matching <strong>RECORD COPY</strong> directly underneath. Both copies contain the same QR token.
+                    </div>
+                    <div class="mt-5">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Generated Tokens</p>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            <span v-for="qr in lastGeneratedBatch" :key="qr.id" class="rounded-md border bg-white px-3 py-1.5 font-mono text-sm font-semibold text-gray-700">{{ qr.qr_token }}</span>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
 
@@ -930,14 +979,25 @@ onBeforeUnmount(() => {
                             </p>
                         </div>
 
-                        <Button
-                            variant="outline"
-                            class="bg-white !text-[12pt] text-blue-900 hover:bg-blue-50"
-                            :disabled="requestsLoading || reviewPendingId !== null"
-                            @click="fetchRequests"
-                        >
-                            Refresh
-                        </Button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <Button
+                                v-if="printableRequest"
+                                type="button"
+                                class="bg-white !text-[12pt] text-blue-900 hover:bg-blue-50 hover:text-blue-900"
+                                :disabled="printingRequestId !== null"
+                                @click="printRequestQrCodes(printableRequest)"
+                            >
+                                {{ printingRequestId === printableRequest.id ? 'Preparing...' : 'Print QR Codes' }}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                class="bg-white !text-[12pt] text-blue-900 hover:bg-blue-50"
+                                :disabled="requestsLoading || reviewPendingId !== null || printingRequestId !== null"
+                                @click="fetchRequests"
+                            >
+                                Refresh
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
 
@@ -1074,9 +1134,7 @@ onBeforeUnmount(() => {
                                 v-if="request.qr_codes.length > 0"
                                 class="mt-4"
                             >
-                                <p class="text-xs font-semibold uppercase text-gray-500">
-                                    Assigned QR Codes
-                                </p>
+                                <p class="text-xs font-semibold uppercase text-gray-500">Assigned QR Codes</p>
                                 <div class="mt-2 flex flex-wrap gap-2">
                                     <span
                                         v-for="qr in request.qr_codes"
@@ -1092,116 +1150,8 @@ onBeforeUnmount(() => {
                 </CardContent>
             </Card>
 
-            <!-- Last Batch -->
-            <Card
-                v-if="
-                    canManageQr &&
-                    canIssueQr &&
-                    lastGeneratedBatch.length >
-                    0
-                "
-                class="mt-6 overflow-hidden border-blue-200 py-0"
-            >
-
-                <CardHeader class="bg-blue-900 px-4 py-2 text-white">
-
-                    <div
-                        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-
-                        <div>
-
-                            <CardTitle class="text-base font-semibold">
-                                Last Generated Batch
-                            </CardTitle>
-
-                            <p
-                                class="mt-1 text-xs text-blue-100"
-                            >
-                                {{
-                                    lastGeneratedBatch.length
-                                }}
-                                unique QR code{{
-                                    lastGeneratedBatch.length ===
-                                    1
-                                        ? ''
-                                        : 's'
-                                }}
-                                generated and ready
-                                for printing.
-                            </p>
-
-                        </div>
-
-                        <Button
-                            class="bg-white text-blue-900 hover:bg-blue-50 hover:text-blue-900"
-                            @click="
-                                printLastBatch
-                            "
-                        >
-                            Print Last Batch
-                        </Button>
-
-                    </div>
-
-                </CardHeader>
-
-                <CardContent class="[&_*]:!text-[13pt]">
-
-                    <div
-                        class="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800"
-                    >
-                        Every unique QR prints as a
-                        <strong>
-                            1 × 1 inch ORIGINAL
-                        </strong>
-                        label with its matching
-                        <strong>
-                            RECORD COPY
-                        </strong>
-                        directly underneath.
-                        Both copies contain the same
-                        QR token.
-                    </div>
-
-                    <!-- Token Preview -->
-                    <div
-                        class="mt-5"
-                    >
-
-                        <p
-                            class="text-xs font-semibold uppercase tracking-wide text-gray-500"
-                        >
-                            Generated Tokens
-                        </p>
-
-                        <div
-                            class="mt-2 flex flex-wrap gap-2"
-                        >
-
-                            <span
-                                v-for="
-                                    qr in
-                                    lastGeneratedBatch
-                                "
-                                :key="qr.id"
-                                class="rounded-md border bg-white px-3 py-1.5 font-mono text-sm font-semibold text-gray-700"
-                            >
-                                {{
-                                    qr.qr_token
-                                }}
-                            </span>
-
-                        </div>
-
-                    </div>
-
-                </CardContent>
-
-            </Card>
-
             <!-- Direct issuance and summary -->
-            <div v-if="canIssueQr || canManageQr" class="mt-6 grid gap-5 lg:grid-cols-[minmax(18rem,0.78fr)_minmax(0,1.22fr)]">
+            <div v-if="canIssueQr || (canManageQr && canApproveQr)" class="mt-6 grid gap-5 lg:grid-cols-[minmax(18rem,0.78fr)_minmax(0,1.22fr)]">
             <Card v-if="canIssueQr" class="overflow-hidden py-0">
 
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
@@ -1281,7 +1231,7 @@ onBeforeUnmount(() => {
 
             </Card>
 
-            <Card v-if="canManageQr" class="overflow-hidden py-0">
+            <Card v-if="canManageQr && canApproveQr" class="overflow-hidden py-0">
                 <CardHeader class="bg-blue-900 px-4 py-2 text-white">
                     <CardTitle class="text-base font-semibold">QR Record Summary</CardTitle>
                 </CardHeader>
@@ -1296,55 +1246,6 @@ onBeforeUnmount(() => {
                 </CardContent>
             </Card>
             </div>
-
-            <Card v-if="!canApproveQr" class="mt-6 overflow-hidden">
-                <CardContent class="[&_*]:!text-[13pt]">
-
-                    <div
-                        class="grid gap-5 md:grid-cols-3"
-                    >
-
-                        <div>
-
-                            <p class="font-semibold text-gray-900">1. Request Batch</p>
-
-                            <p
-                                class="mt-1 text-sm text-gray-500"
-                            >
-                                - Request unique QR labels.
-                            </p>
-
-                        </div>
-
-                        <div>
-
-                            <p class="font-semibold text-gray-900">2. Print &amp; Attach</p>
-
-                            <p
-                                class="mt-1 text-sm text-gray-500"
-                            >
-                                - Attach ORIGINAL to the hardcopy and retain RECORD COPY.
-                            </p>
-
-                        </div>
-
-                        <div>
-
-                            <p class="font-semibold text-gray-900">3. Scan &amp; Register</p>
-
-                            <p
-                                class="mt-1 text-sm text-gray-500"
-                            >
-                                - Scan either copy to register or retrieve its record.
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                </CardContent>
-
-            </Card>
 
             <Card v-if="canManageQr" class="mt-6 overflow-hidden py-0">
                 <CardHeader class="flex flex-row items-center justify-between gap-3 bg-blue-900 px-4 py-2 text-white">

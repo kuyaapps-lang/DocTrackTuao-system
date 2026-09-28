@@ -64,7 +64,6 @@ test('QR request helpers call narrow endpoints with safe payloads', async () => 
             if (options.method === 'POST') {
                 assert.deepEqual(JSON.parse(options.body), {
                     quantity: 3,
-                    purpose: 'Office batch',
                 })
                 return jsonResponse(201, { request: structuredClone(request) })
             }
@@ -83,19 +82,13 @@ test('QR request helpers call narrow endpoints with safe payloads', async () => 
 
     const getToken = () => 'test-token'
 
-    assert.deepEqual(createQrRequestPayload({
-        quantity: 3,
-        purpose: '  Office batch  ',
-    }), {
-        quantity: 3,
-        purpose: 'Office batch',
-    })
+    assert.deepEqual(createQrRequestPayload({ quantity: 3 }), { quantity: 3 })
 
     assert.equal((await fetchQrCodeRequests({ fetchImpl, getToken }))[0].id, 9)
     assert.equal((await submitQrCodeRequest({
         fetchImpl,
         getToken,
-        form: { quantity: 3, purpose: 'Office batch' },
+        form: { quantity: 3 },
     })).request.id, 9)
     assert.equal((await reviewQrCodeRequest({
         fetchImpl,
@@ -147,26 +140,31 @@ test('QR page exposes request workflow and keeps destructive controls admin gate
     const router = await readFile(new URL('../../resources/js/router/index.js', import.meta.url), 'utf8')
     const navigation = await readFile(new URL('../../resources/js/lib/navigation.js', import.meta.url), 'utf8')
 
-    assert.match(source, /Submit Request/)
+    assert.match(source, /Request QR Code/)
     assert.match(source, /Office QR Requests/)
     assert.match(source, /My QR Requests/)
     assert.match(source, /Requesting Office/)
     assert.match(source, /Date Requested/)
     assert.match(source, /Assigned QR Codes/)
+    assert.match(source, /Print QR Codes/)
+    assert.match(source, /const printRequestQrCodes = async \(request\) =>/)
+    assert.match(source, /@click="printRequestQrCodes\(printableRequest\)"/)
+    assert.match(source, /const printedRequestIds = ref\(new Set\(\)\)/)
+    assert.match(source, /!printedRequestIds\.value\.has\(request\.id\)/)
     assert.match(source, /Assigned QR Code/)
     assert.match(source, /<th scope="col" class="px-3 py-1 text-right"><span class="sr-only">QR code actions<\/span><\/th>/)
     const expandedQrRow = source.match(/<tr v-if="expandedRequestId === request\.id">([\s\S]*?)<\/tr>/)?.[1] || ''
     assert.doesNotMatch(expandedQrRow, /request\.(purpose|review_note)/)
     assert.match(source, /const toggleRequestQrCodes = requestId =>/)
     assert.match(source, /expandedRequestId === request\.id/)
-    assert.match(source, /v-if="!canApproveQr"[\s\S]*?QR Code Requests/)
+    assert.doesNotMatch(source, /QR Code Requests/)
     assert.match(source, /v-else-if="canApproveQr" class="overflow-hidden rounded-t-lg border-t border-blue-900">[\s\S]*?<thead class="bg-blue-900 text-xs font-semibold tracking-wide text-white">/)
-    assert.match(source, /v-if="canApproveQr" class="border-b border-blue-100 bg-white/)
+    assert.match(source, /v-if="canApproveQr \|\| \(canRequestQr && !canApproveQr\)" class="border-b border-blue-100 bg-white/)
     assert.doesNotMatch(source, />\s*QR Workflow\s*</)
-    assert.match(source, /1\. Request Batch[\s\S]*?- Request unique QR labels\./)
-    assert.match(source, /2\. Print &amp; Attach[\s\S]*?- Attach ORIGINAL to the hardcopy and retain RECORD COPY\./)
-    assert.match(source, /3\. Scan &amp; Register[\s\S]*?- Scan either copy to register or retrieve its record\./)
-    assert.match(source, /<Card v-if="canRequestQr && !canApproveQr" class="overflow-hidden border-blue-200 py-0">[\s\S]*Submit Request/)
+    assert.match(source, /1\. Request Batch[\s\S]*?request unique QR labels\./i)
+    assert.match(source, /2\. Print & Attach[\s\S]*?attach ORIGINAL and retain RECORD COPY\./i)
+    assert.match(source, /3\. Scan & Register[\s\S]*?register or retrieve the document\./i)
+    assert.match(source, /<div v-if="canRequestQr && !canApproveQr" class="grid gap-5 lg:grid-cols-\[minmax\(18rem,0\.78fr\)_minmax\(0,1\.22fr\)\]">[\s\S]*Request QR Code/)
     assert.match(source, /<Card v-if="canRequestQr" class="mt-6 overflow-hidden border-blue-200 py-0">[\s\S]*Office QR Requests/)
     assert.match(source, /<CardHeader class="bg-blue-900 px-4 py-2 text-white">/)
     assert.match(source, /<CardTitle class="text-base font-semibold">/)
@@ -175,7 +173,7 @@ test('QR page exposes request workflow and keeps destructive controls admin gate
     assert.match(source, /reviewRequest\(request, 'approve'\)/)
     assert.match(source, /reviewRequest\(request, 'reject'\)/)
     assert.match(source, /v-if="canVoidInventoryItem\(item, canVoidQr\)"/)
-    assert.match(source, /<div v-if="canIssueQr \|\| canManageQr" class="mt-6 grid gap-5 lg:grid-cols-\[minmax\(18rem,0\.78fr\)_minmax\(0,1\.22fr\)\]">[\s\S]*?Direct QR Issuance[\s\S]*?QR Record Summary/)
+    assert.match(source, /<div v-if="canIssueQr \|\| \(canManageQr && canApproveQr\)" class="mt-6 grid gap-5 lg:grid-cols-\[minmax\(18rem,0\.78fr\)_minmax\(0,1\.22fr\)\]">[\s\S]*?Direct QR Issuance[\s\S]*?QR Record Summary/)
     assert.match(source, /class="flex flex-col items-center gap-4"[\s\S]*?Generate QR Code/)
     assert.match(source, /type="number"[\s\S]*?step="5"[\s\S]*?class="h-11 w-48[\s\S]*?class="w-48 bg-blue-900[\s\S]*?Generate QR Code/)
     assert.doesNotMatch(source, /const decreaseQuantity = \(\) =>/)
@@ -184,12 +182,13 @@ test('QR page exposes request workflow and keeps destructive controls admin gate
     assert.doesNotMatch(source, /<Card v-if="canManageQr" class="mt-6">[\s\S]*Direct QR Issuance/)
     assert.match(source, /<Card v-if="canManageQr" class="mt-6 overflow-hidden py-0">[\s\S]*QR Code Inventory/)
     assert.match(source, /Last Generated Batch[\s\S]*?Direct QR Issuance/)
+    assert.match(source, /Last Generated Batch[\s\S]*?<Card v-if="canRequestQr" class="mt-6 overflow-hidden border-blue-200 py-0">/)
     assert.match(source, /class="bg-white text-blue-900 hover:bg-blue-50 hover:text-blue-900"[\s\S]*?Print Last Batch/)
     assert.match(source, /Issued[\s\S]*?Registered[\s\S]*?Unused/)
     assert.match(source, /const quantity = ref\(5\)/)
     assert.match(source, /h-11 w-48[\s\S]*?!text-\[15pt\]/)
     assert.match(source, /QR Record Summary[\s\S]*?px-4 pb-4 pt-\[3pt\]/)
-    assert.equal((source.match(/!text-\[18pt\] font-bold/g) || []).length, 3)
+    assert.equal((source.match(/!text-\[18pt\] font-bold/g) || []).length, 6)
     assert.match(source, /class="bg-white !text-\[12pt\] text-blue-900 hover:bg-blue-50"[\s\S]*?Refresh/)
     assert.match(source, /class="bg-white !text-\[12pt\] text-blue-900 hover:bg-blue-50 hover:text-blue-900"[\s\S]*?Retry/)
     assert.match(source, /<thead class="bg-blue-900 text-white">/)

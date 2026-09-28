@@ -49,10 +49,7 @@ export const qrRequestFailureMessage = status => {
     return 'Unable to load QR requests. Please try again.'
 }
 
-export const createQrRequestPayload = ({ quantity, purpose }) => ({
-    quantity,
-    purpose: typeof purpose === 'string' ? purpose.trim() : '',
-})
+export const createQrRequestPayload = ({ quantity }) => ({ quantity })
 
 export const fetchQrCodeRequests = async ({ fetchImpl, getToken, status = '' }) => {
     const query = REQUEST_STATUSES.includes(status)
