@@ -212,6 +212,32 @@
     box-shadow: inset 0 2px 5px rgb(15 41 70 / 0.16), inset 0 -1px 2px rgb(255 255 255 / 0.94), 0 1px 0 rgb(255 255 255 / 0.75) !important;
   }
 
+  #app input:is([type='date'], [type='datetime-local'], [type='month']) {
+    min-height: 2.75rem;
+    border-radius: 0.75rem !important;
+    border-color: #94a3b8 !important;
+    background-color: #fff !important;
+    color: #1e293b !important;
+    font-family: 'Century Gothic', 'Segoe UI', Arial, sans-serif !important;
+    font-size: calc(1em + 0.5px);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+    text-align: start;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  }
+
+  #app input:is([type='date'], [type='datetime-local'], [type='month']):hover { border-color: #64748b !important; }
+  #app input:is([type='date'], [type='datetime-local'], [type='month']):focus-visible {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.24), inset 0 1px 2px rgb(15 41 70 / 0.12) !important;
+  }
+  #app input:is([type='date'], [type='datetime-local'], [type='month'])::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    margin-inline-start: 0.35rem;
+    padding: 0.2rem;
+    opacity: 0.82;
+  }
+
   .dark .doctrack-shell::before {
     background-image:
       radial-gradient(circle at 70% 7%, rgb(54 116 255 / 0.16), transparent 31rem),
@@ -257,6 +283,19 @@
     color: #eff6ff !important;
     box-shadow: inset 0 2px 5px rgb(2 8 22 / 0.45), inset 0 -1px 2px rgb(190 215 255 / 0.08) !important;
   }
+  .dark #app input:is([type='date'], [type='datetime-local'], [type='month']) {
+    border-color: #64748b !important;
+    background-color: #202329 !important;
+    color: #f8fafc !important;
+    color-scheme: dark;
+  }
+  .dark #app input:is([type='date'], [type='datetime-local'], [type='month']):hover { border-color: #93a4ba !important; }
+  .dark #app input:is([type='date'], [type='datetime-local'], [type='month']):focus-visible {
+    border-color: #93c5fd !important;
+    box-shadow: 0 0 0 3px rgb(147 197 253 / 0.28), inset 0 1px 2px rgb(2 8 22 / 0.38) !important;
+  }
+  .dark #app input:is([type='date'], [type='datetime-local'], [type='month'])::-webkit-calendar-picker-indicator { opacity: 1; }
+  .dark :is(.text-red-500, .text-red-600) { color: #fca5a5 !important; }
   .dark input::placeholder,
   .dark textarea::placeholder { color: #9aaec8 !important; }
   .dark .doctrack-skeleton { background-color: #3b414c !important; }
