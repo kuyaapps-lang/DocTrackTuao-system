@@ -23,13 +23,20 @@ const props = defineProps({
     clearable: { type: Boolean, default: false },
     required: { type: Boolean, default: false },
     ariaLabel: { type: String, default: 'Choose date' },
+    placement: {
+        type: String,
+        default: 'below',
+        validator: value => ['below', 'prefer-above'].includes(value),
+    },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 const root = ref(null)
 const trigger = ref(null)
+const popover = ref(null)
 const isOpen = ref(false)
+const resolvedPlacement = ref('below')
 const selectedDate = computed(() => props.mode === 'month'
     ? parseMonthValue(props.modelValue)
     : parseDateValue(props.modelValue))
@@ -50,6 +57,37 @@ watch(selectedDate, date => {
 })
 
 const focusTrigger = () => nextTick(() => trigger.value?.focus())
+const resolvePlacement = () => {
+    if (!isOpen.value || !root.value || !popover.value) return
+
+    const triggerBounds = root.value.getBoundingClientRect()
+    const popoverBounds = popover.value.getBoundingClientRect()
+    const margin = 8
+    const boundaryBounds = root.value
+        .closest('.doctrack-date-picker-boundary')
+        ?.getBoundingClientRect()
+    const topBoundary = Math.max(0, boundaryBounds?.top ?? 0)
+    const bottomBoundary = Math.min(window.innerHeight, boundaryBounds?.bottom ?? window.innerHeight)
+    const spaceAbove = triggerBounds.top - topBoundary
+    const spaceBelow = bottomBoundary - triggerBounds.bottom
+
+    if (props.placement === 'below') {
+        resolvedPlacement.value = 'below'
+        return
+    }
+
+    if (spaceAbove >= popoverBounds.height + margin) {
+        resolvedPlacement.value = 'above'
+        return
+    }
+
+    if (spaceBelow >= popoverBounds.height + margin) {
+        resolvedPlacement.value = 'below'
+        return
+    }
+
+    resolvedPlacement.value = spaceAbove > spaceBelow ? 'above' : 'below'
+}
 const close = ({ restoreFocus = true } = {}) => {
     if (!isOpen.value) return
 
@@ -65,7 +103,9 @@ const toggle = () => {
     }
 
     viewDate.value = selectedDate.value || new Date()
+    resolvedPlacement.value = props.placement === 'prefer-above' ? 'above' : 'below'
     isOpen.value = true
+    nextTick(resolvePlacement)
 }
 const changeView = offset => {
     viewDate.value = props.mode === 'month'
@@ -103,11 +143,15 @@ const onDocumentKeydown = event => {
 onMounted(() => {
     document.addEventListener('pointerdown', onDocumentPointerDown)
     document.addEventListener('keydown', onDocumentKeydown)
+    window.addEventListener('resize', resolvePlacement)
+    document.addEventListener('scroll', resolvePlacement, true)
 })
 
 onBeforeUnmount(() => {
     document.removeEventListener('pointerdown', onDocumentPointerDown)
     document.removeEventListener('keydown', onDocumentKeydown)
+    window.removeEventListener('resize', resolvePlacement)
+    document.removeEventListener('scroll', resolvePlacement, true)
 })
 </script>
 
@@ -129,7 +173,7 @@ onBeforeUnmount(() => {
             <CalendarDays :size="18" aria-hidden="true" />
         </button>
 
-        <div v-if="isOpen" class="doctrack-date-picker-popover" role="dialog" :aria-label="`${ariaLabel} calendar`">
+        <div ref="popover" v-if="isOpen" class="doctrack-date-picker-popover" :class="{ 'is-above': resolvedPlacement === 'above' }" role="dialog" :aria-label="`${ariaLabel} calendar`">
             <div class="doctrack-date-picker-header">
                 <button type="button" class="doctrack-date-picker-nav" aria-label="Previous month" @click="changeView(-1)">
                     <ChevronLeft :size="18" aria-hidden="true" />

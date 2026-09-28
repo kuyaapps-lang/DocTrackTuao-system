@@ -28,7 +28,7 @@ test('date picker calendar has complete week rows including adjacent-month dates
     assert.equal(days.at(-1).getDay(), 6)
 })
 
-test('reusable picker supports selection, today, optional clearing, keyboard escape, and dark styling', async () => {
+test('reusable picker supports selection, today, optional clearing, keyboard escape, dark styling, and safe upward placement', async () => {
     const picker = await read('resources/js/components/DocTrackDatePicker.vue')
     const styles = await read('resources/css/app.css')
 
@@ -38,7 +38,12 @@ test('reusable picker supports selection, today, optional clearing, keyboard esc
     assert.match(picker, /event\.key !== 'Escape'/)
     assert.match(picker, /document\.addEventListener\('pointerdown'/)
     assert.match(picker, /document\.removeEventListener\('keydown'/)
+    assert.match(picker, /placement: \{[\s\S]*?'prefer-above'/)
+    assert.match(picker, /spaceAbove >= popoverBounds\.height \+ margin/)
+    assert.match(picker, /closest\('\.doctrack-date-picker-boundary'\)/)
+    assert.match(picker, /document\.addEventListener\('scroll', resolvePlacement, true\)/)
     assert.match(styles, /\.dark \.doctrack-date-picker-popover/)
+    assert.match(styles, /\.doctrack-date-picker-popover\.is-above/)
     assert.match(styles, /prefers-reduced-motion: reduce/)
 })
 
@@ -46,8 +51,9 @@ test('Document Date remains required, Due Date is optional and clearable, and Da
     const documents = await read('resources/js/pages/Documents.vue')
     const dashboard = await read('resources/js/pages/Dashboard.vue')
 
-    assert.match(documents, /<DocTrackDatePicker\s+v-model="form\.document_date"\s+required/)
-    assert.match(documents, /<DocTrackDatePicker\s+v-model="form\.due_date"\s+clearable/)
+    assert.match(documents, /<DocTrackDatePicker\s+v-model="form\.document_date"\s+required\s+placement="prefer-above"/)
+    assert.match(documents, /<DocTrackDatePicker\s+v-model="form\.due_date"\s+clearable\s+placement="prefer-above"/)
+    assert.match(documents, /class="doctrack-date-picker-boundary w-full max-w-3xl max-h-\[90vh\]/)
     assert.match(documents, /document_date: formatDateValue\(new Date\(\)\)/)
     assert.match(dashboard, /<DocTrackDatePicker v-model="selectedMonth" mode="month"/)
 })

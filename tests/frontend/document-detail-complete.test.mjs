@@ -246,3 +246,14 @@ test('document details component confirms archive and refreshes after success', 
     assert.match(archiveFunction, /await loadPage\(\)/)
     assert.match(source, /!documentIsTerminal\.value/)
 })
+
+test('document history rows have a scoped charcoal-slate dark hover and focus treatment', async () => {
+    const [source, styles] = await Promise.all([
+        readFile(new URL('../../resources/js/pages/DocumentDetails.vue', import.meta.url), 'utf8'),
+        readFile(new URL('../../resources/css/app.css', import.meta.url), 'utf8'),
+    ])
+
+    assert.match(source, /class="doctrack-document-history-row align-top hover:bg-gray-50"/)
+    assert.match(styles, /\.dark \.doctrack-document-history-row:hover,[\s\S]*?background-color: #2c3a4c !important/)
+    assert.match(styles, /\.dark \.doctrack-document-history-row:focus-within/)
+})

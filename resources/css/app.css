@@ -274,6 +274,7 @@
     padding: 0.875rem;
     box-shadow: 0 16px 36px rgb(15 41 70 / 0.20), inset 0 1px 0 rgb(255 255 255 / 0.9);
   }
+  .doctrack-date-picker-popover.is-above { top: auto; bottom: calc(100% + 0.5rem); }
   .doctrack-date-picker-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.75rem; }
   .doctrack-date-picker-heading { margin: 0; font-weight: 700; text-align: center; }
   .doctrack-date-picker-nav, .doctrack-date-picker-action {
@@ -381,6 +382,9 @@
   .dark .doctrack-date-picker-day.is-today, .dark .doctrack-date-picker-month.is-today { border-color: #7db6fa; }
   .dark .doctrack-date-picker-day.is-selected, .dark .doctrack-date-picker-month.is-selected { border-color: #bdd7ff; background: #2563eb; color: #fff; }
   .dark .doctrack-date-picker-actions { border-color: #4b5563; }
+  .dark .doctrack-document-history-row:hover,
+  .dark .doctrack-document-history-row:focus-within { background-color: #2c3a4c !important; color: #f8fafc; }
+  .dark .doctrack-document-history-row:focus-within { box-shadow: inset 3px 0 0 #7db6fa; }
   .dark :is(.text-red-500, .text-red-600) { color: #fca5a5 !important; }
   .dark input::placeholder,
   .dark textarea::placeholder { color: #9aaec8 !important; }

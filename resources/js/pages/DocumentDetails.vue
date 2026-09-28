@@ -2633,7 +2633,7 @@ onMounted(() => {
                                     <tr
                                         v-for="row in historyRows"
                                         :key="row.key"
-                                        class="align-top hover:bg-gray-50"
+                                        class="doctrack-document-history-row align-top hover:bg-gray-50"
                                     >
 
                                         <td

@@ -1527,8 +1527,8 @@ onBeforeUnmount(() => {
                    bg-black/50 px-4 py-6"
         >
 
-            <Card
-                class="w-full max-w-3xl max-h-[90vh]
+                <Card
+                class="doctrack-date-picker-boundary w-full max-w-3xl max-h-[90vh]
                        overflow-y-auto bg-white"
             >
 
@@ -1789,6 +1789,7 @@ onBeforeUnmount(() => {
                                 <DocTrackDatePicker
                                     v-model="form.document_date"
                                     required
+                                    placement="prefer-above"
                                     aria-label="Document date"
                                     :disabled="creating"
                                 />
@@ -1806,6 +1807,7 @@ onBeforeUnmount(() => {
                                 <DocTrackDatePicker
                                     v-model="form.due_date"
                                     clearable
+                                    placement="prefer-above"
                                     aria-label="Due date"
                                     :disabled="creating"
                                 />
