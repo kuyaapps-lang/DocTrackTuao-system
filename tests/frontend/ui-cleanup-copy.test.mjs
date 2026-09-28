@@ -124,7 +124,7 @@ test('process 23c dashboard and users polish keeps alignment scoped to frontend'
     assert.match(dashboard, /id="dashboard-heading" class="text-\[25px\] font-bold/)
     assert.match(dashboard, /bg-white px-5 pb-5 pt-3/)
     assert.match(dashboard, /class="flex w-full flex-col gap-2 sm:w-auto sm:min-w-\[18rem\]"/)
-    assert.match(dashboard, /class="mt-1 block h-11 w-full min-w-0 rounded-xl/)
+    assert.match(dashboard, /<DocTrackDatePicker v-model="selectedMonth" mode="month"/)
     assert.match(dashboard, /class="grid grid-cols-2 gap-2"/)
     assert.match(dashboard, /text-\[13pt\] font-bold text-blue-900/)
     assert.match(dashboard, /<CardTitle class="text-\[11pt\] font-semibold">Recent Documents<\/CardTitle>/)

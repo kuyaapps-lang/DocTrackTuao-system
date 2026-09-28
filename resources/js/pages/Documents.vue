@@ -28,6 +28,8 @@ import {
 import { Button } from '@/components/ui/button'
 import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 import { Input } from '@/components/ui/input'
+import DocTrackDatePicker from '@/components/DocTrackDatePicker.vue'
+import { formatDateValue } from '@/lib/date-picker'
 import { can } from '@/lib/auth'
 import { formatDocumentDateTime } from '@/lib/document-dates'
 import { normalizeRegistrationQrInput } from '@/lib/qr-registration'
@@ -497,8 +499,7 @@ const resetForm = () => {
         priority_id: '',
         confidentiality_level_id: '',
         origin_office_id: '',
-        document_date:
-            new Date().toISOString().slice(0, 10),
+        document_date: formatDateValue(new Date()),
         due_date: '',
     }
 
@@ -1785,10 +1786,10 @@ onBeforeUnmount(() => {
                                     Document Date <span class="text-red-600">*</span>
                                 </label>
 
-                                <Input
+                                <DocTrackDatePicker
                                     v-model="form.document_date"
-                                    type="date"
-                                    class="h-11 text-right"
+                                    required
+                                    aria-label="Document date"
                                     :disabled="creating"
                                 />
                             </div>
@@ -1802,10 +1803,10 @@ onBeforeUnmount(() => {
                                     Due Date
                                 </label>
 
-                                <Input
+                                <DocTrackDatePicker
                                     v-model="form.due_date"
-                                    type="date"
-                                    class="h-11 text-right"
+                                    clearable
+                                    aria-label="Due date"
                                     :disabled="creating"
                                 />
                             </div>

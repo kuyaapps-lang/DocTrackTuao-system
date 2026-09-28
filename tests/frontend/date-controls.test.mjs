@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 const read = path => readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
 
-test('shared date controls use accessible light and dark styling without changing page inputs', async () => {
+test('shared custom date controls use accessible light and dark styling while retaining native fallbacks', async () => {
     const [styles, dashboard, documents] = await Promise.all([
         read('resources/css/app.css'),
         read('resources/js/pages/Dashboard.vue'),
@@ -17,6 +17,8 @@ test('shared date controls use accessible light and dark styling without changin
     assert.match(styles, /\.dark #app input:is\(\[type='date'\], \[type='datetime-local'\], \[type='month'\]\)/)
     assert.match(styles, /color-scheme: dark/)
     assert.match(styles, /\.dark :is\(\.text-red-500, \.text-red-600\)/)
-    assert.match(dashboard, /type="month"/)
-    assert.match(documents, /type="date"/)
+    assert.match(styles, /\.doctrack-date-picker-popover/)
+    assert.match(styles, /\.dark \.doctrack-date-picker-trigger/)
+    assert.match(dashboard, /<DocTrackDatePicker v-model="selectedMonth" mode="month"/)
+    assert.match(documents, /<DocTrackDatePicker\s+v-model="form\.document_date"/)
 })

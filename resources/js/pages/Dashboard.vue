@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DashboardSkeleton from '@/components/loaders/DashboardSkeleton.vue'
+import DocTrackDatePicker from '@/components/DocTrackDatePicker.vue'
 import { useAuth } from '@/lib/auth'
 import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, normalizeDashboardMonth } from '@/lib/dashboard'
 
@@ -192,9 +193,8 @@ onBeforeUnmount(() => {
                         <p class="mt-1 text-[13pt] font-semibold text-slate-600">{{ scopeLabel || 'Loading report scope...' }}</p>
                     </div>
                     <form class="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[18rem]" @submit.prevent="updateMonth">
-                        <label class="block w-full text-center text-[13pt] font-semibold text-gray-700">Reporting month
-                            <input v-model="selectedMonth" type="month" class="mt-1 block h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" :disabled="loading">
-                        </label>
+                        <label class="block w-full text-center text-[13pt] font-semibold text-gray-700">Reporting month</label>
+                        <DocTrackDatePicker v-model="selectedMonth" mode="month" aria-label="Reporting month" :disabled="loading" />
                         <div class="grid grid-cols-2 gap-2">
                             <Button type="submit" class="border border-blue-900 bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="loading">Apply</Button>
                             <Button type="button" variant="outline" class="border border-black bg-black text-white hover:bg-black/90 hover:text-white" :disabled="loading || !selectedMonth" @click="clearMonth">Clear</Button>
