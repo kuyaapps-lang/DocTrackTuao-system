@@ -12,7 +12,6 @@ import {
     FileText,
     Files,
     LayoutDashboard,
-    Menu,
     QrCode,
     ScrollText,
     Users,
@@ -95,43 +94,32 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
         :class="desktopCollapsed ? 'w-20' : 'w-64'"
     >
         <div
-            class="flex min-h-24 items-center border-b border-white/80"
-            :class="desktopCollapsed ? 'justify-center px-3' : 'justify-between gap-3 px-5'"
+            class="flex min-h-24 items-center justify-center border-b border-white/80 pt-2"
+            :class="desktopCollapsed ? 'px-3' : 'px-5'"
         >
-            <div
-                v-if="!desktopCollapsed"
-                class="flex min-w-0 items-center gap-3"
-            >
-                <img
-                    :src="logo"
-                    alt="Tuao logo"
-                    class="h-11 w-11 shrink-0 rounded-xl bg-white object-cover p-1 shadow-sm"
-                >
-
-                <div class="min-w-0">
-                    <p class="text-[12pt] font-bold uppercase tracking-wide text-blue-950">
-                        LGU-Tuao
-                    </p>
-
-                    <p class="mt-1 text-xs text-slate-500">
-                        Document Management System
-                    </p>
-                </div>
-            </div>
-
-            <Button
+            <button
                 type="button"
-                variant="ghost"
-                size="icon"
-                class="bg-white text-blue-900 hover:bg-white hover:text-blue-950"
+                class="flex min-w-0 flex-col items-center rounded-xl text-center outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 aria-controls="desktop-navigation"
                 :aria-expanded="!desktopCollapsed"
                 :aria-label="desktopCollapsed ? 'Expand main navigation' : 'Collapse main navigation'"
                 :title="desktopCollapsed ? 'Expand main navigation' : 'Collapse main navigation'"
                 @click="$emit('toggle-desktop')"
             >
-                <Menu aria-hidden="true" />
-            </Button>
+                <img
+                    :src="logo"
+                    alt="Tuao logo"
+                    class="shrink-0 rounded-xl bg-white object-cover p-1 shadow-sm"
+                    :class="desktopCollapsed ? 'h-[40px] w-[40px]' : 'h-[61px] w-[61px]'"
+                >
+
+                <p
+                    v-if="!desktopCollapsed"
+                    class="mt-1 text-[12.5pt] text-slate-500"
+                >
+                    Document Management System
+                </p>
+            </button>
         </div>
 
         <nav
@@ -212,21 +200,16 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
             aria-modal="true"
             aria-label="Main navigation menu"
         >
-            <div class="flex min-h-20 items-center justify-between gap-3 border-b px-5">
-                <div class="flex min-w-0 items-center gap-3">
+            <div class="relative flex min-h-24 items-center justify-center border-b px-5 pt-2">
+                <div class="flex min-w-0 flex-col items-center text-center">
                     <img
                         :src="logo"
                         alt="Tuao logo"
-                    class="h-11 w-11 shrink-0 rounded-xl border bg-white object-cover p-1 shadow-sm"
+                        class="h-[61px] w-[61px] shrink-0 rounded-xl border bg-white object-cover p-1 shadow-sm"
                     >
-                    <div class="min-w-0">
-                        <p class="text-[12pt] font-bold uppercase tracking-wide text-gray-900">
-                            LGU-Tuao
-                        </p>
-                        <p class="mt-1 text-xs text-gray-500">
-                            Document Management System
-                        </p>
-                    </div>
+                    <p class="mt-1 text-[12.5pt] text-gray-500">
+                        Document Management System
+                    </p>
                 </div>
 
                 <Button
@@ -234,6 +217,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    class="absolute right-5"
                     aria-label="Close main navigation"
                     @click="$emit('close-mobile')"
                 >
