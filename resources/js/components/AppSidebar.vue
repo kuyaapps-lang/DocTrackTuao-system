@@ -94,7 +94,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
         :class="desktopCollapsed ? 'w-20' : 'w-64'"
     >
         <div
-            class="flex min-h-24 items-center justify-center border-b border-white/80 pt-2"
+            class="flex min-h-24 items-center justify-center border-b border-white/80 pt-[30px]"
             :class="desktopCollapsed ? 'px-3' : 'px-5'"
         >
             <button
@@ -110,12 +110,12 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     :src="logo"
                     alt="Tuao logo"
                     class="shrink-0 rounded-xl bg-white object-cover p-1 shadow-sm"
-                    :class="desktopCollapsed ? 'h-[40px] w-[40px]' : 'h-[61px] w-[61px]'"
+                    :class="desktopCollapsed ? 'h-[40px] w-[40px]' : 'h-[80px] w-[80px]'"
                 >
 
                 <p
                     v-if="!desktopCollapsed"
-                    class="mt-1 text-[12.5pt] text-slate-500"
+                    class="mt-1 pb-5 text-[12.5pt] text-slate-500"
                 >
                     Document Management System
                 </p>
@@ -200,14 +200,14 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
             aria-modal="true"
             aria-label="Main navigation menu"
         >
-            <div class="relative flex min-h-24 items-center justify-center border-b px-5 pt-2">
+            <div class="relative flex min-h-24 items-center justify-center border-b px-5 pt-[30px]">
                 <div class="flex min-w-0 flex-col items-center text-center">
                     <img
                         :src="logo"
                         alt="Tuao logo"
-                        class="h-[61px] w-[61px] shrink-0 rounded-xl border bg-white object-cover p-1 shadow-sm"
+                        class="h-[80px] w-[80px] shrink-0 rounded-xl border bg-white object-cover p-1 shadow-sm"
                     >
-                    <p class="mt-1 text-[12.5pt] text-gray-500">
+                    <p class="mt-1 pb-5 text-[12.5pt] text-gray-500">
                         Document Management System
                     </p>
                 </div>
