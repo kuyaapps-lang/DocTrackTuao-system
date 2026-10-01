@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Models\DocumentAttachment;
 use App\Models\DocumentStatus;
 use App\Services\AuditLogger;
+use App\Services\RealtimeBroadcaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -70,6 +71,7 @@ class DocumentAttachmentController extends Controller
     public function store(
         Request $request,
         AuditLogger $auditLogger,
+        RealtimeBroadcaster $realtime,
         $documentId
     )
     {
@@ -202,6 +204,7 @@ class DocumentAttachmentController extends Controller
             ),
             userId: $user->id
         );
+        $realtime->document($document, 'document.attachment-added', ['document-detail']);
 
         return response()->json([
             'message' =>
@@ -277,6 +280,7 @@ class DocumentAttachmentController extends Controller
     public function destroy(
         Request $request,
         AuditLogger $auditLogger,
+        RealtimeBroadcaster $realtime,
         $attachmentId
     )
     {
@@ -344,6 +348,7 @@ class DocumentAttachmentController extends Controller
             description: "Attachment deleted from document ID {$documentId}.",
             userId: $user->id
         );
+        $realtime->document($attachment->document, 'document.attachment-deleted', ['document-detail']);
 
         return response()->json([
             'message' =>

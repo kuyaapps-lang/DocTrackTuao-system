@@ -10,10 +10,7 @@ class DocumentReadScope
 {
     public function authorize(User $user, Document $document): void
     {
-        if (
-            $user->hasRole('Administrator') ||
-            $user->hasRole('Records Officer')
-        ) {
+        if ($document->confidentiality?->level_name === 'Public') {
             return;
         }
 
@@ -27,9 +24,12 @@ class DocumentReadScope
         }
 
         $officeId = (int) $officeId;
+        $creatorOfficeId = DB::table('users')->where('id', $document->created_by)->value('office_id');
         $inOfficeUniverse =
+            (int) $creatorOfficeId === $officeId ||
             (int) $document->origin_office_id === $officeId ||
             (int) $document->current_office_id === $officeId ||
+            DB::table('document_office_tags')->where('document_id', $document->id)->where('office_id', $officeId)->exists() ||
             DB::table('document_routes')
                 ->where('document_id', $document->id)
                 ->where(function ($query) use ($officeId): void {

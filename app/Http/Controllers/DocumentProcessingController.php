@@ -10,6 +10,7 @@ use App\Models\DocumentStatus;
 use App\Models\ProcessingAction;
 use App\Services\AuditLogger;
 use App\Services\DocumentReadScope;
+use App\Services\RealtimeBroadcaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -243,6 +244,7 @@ class DocumentProcessingController extends Controller
     public function update(
         Request $request,
         AuditLogger $auditLogger,
+        RealtimeBroadcaster $realtime,
         $documentId
     ) {
         $validated = $request->validate([
@@ -409,6 +411,7 @@ class DocumentProcessingController extends Controller
         );
 
         $document = Document::findOrFail($documentId);
+        if ($changed) $realtime->document($document, 'document.processing-updated', ['documents', 'dashboard', 'document-detail']);
 
         $document->load([
             'currentOffice',

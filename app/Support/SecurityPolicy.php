@@ -52,6 +52,9 @@ final class SecurityPolicy
             $image[] = $origin;
             $connect[] = $origin;
             $connect[] = preg_replace('/^http/', 'ws', $origin);
+            // Reverb is allowed only for a configured loopback development endpoint.
+            // Production remains limited to same-origin HTTPS/WSS through Apache.
+            array_push($connect, ...self::reverbClientOrigins());
         }
 
         return implode('; ', [
@@ -171,5 +174,22 @@ final class SecurityPolicy
         $port = isset($match[3]) ? ':'.$match[3] : '';
 
         return strtolower($match[1]).'://'.strtolower($match[2]).$port;
+    }
+
+    private static function reverbClientOrigins(): array
+    {
+        $host = config('security.reverb_client_host');
+        $port = config('security.reverb_client_port');
+
+        if (!is_string($host) || !in_array(strtolower($host), ['localhost', '127.0.0.1'], true)) {
+            return [];
+        }
+
+        $port = is_int($port) ? (string) $port : $port;
+        if (!is_string($port) || !self::validCanonicalPort($port)) {
+            return [];
+        }
+
+        return ["ws://{$host}:{$port}", "wss://{$host}:{$port}"];
     }
 }

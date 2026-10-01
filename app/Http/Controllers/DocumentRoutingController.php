@@ -13,6 +13,7 @@ use App\Models\RouteAction;
 use App\Services\AuditLogger;
 use App\Services\DocumentReadScope;
 use App\Services\InAppNotificationService;
+use App\Services\RealtimeBroadcaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -96,6 +97,7 @@ class DocumentRoutingController extends Controller
         Request $request,
         AuditLogger $auditLogger,
         InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime,
         $documentId
     ) {
         $validated = $request->validate([
@@ -315,6 +317,7 @@ class DocumentRoutingController extends Controller
         ]);
 
         $notifications->documentForwarded($route);
+        $realtime->document($route->document, 'document.forwarded', ['documents', 'dashboard', 'document-detail']);
 
         return response()->json([
             'message' => 'Document forwarded successfully.',
@@ -330,6 +333,7 @@ class DocumentRoutingController extends Controller
         Request $request,
         AuditLogger $auditLogger,
         InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime,
         $documentId
     ) {
         $user = $request->user();
@@ -465,6 +469,7 @@ class DocumentRoutingController extends Controller
         ]);
 
         $notifications->documentReceived($route);
+        $realtime->document($route->document, 'document.received', ['documents', 'dashboard', 'document-detail']);
 
         return response()->json([
             'message' => 'Document received successfully.',

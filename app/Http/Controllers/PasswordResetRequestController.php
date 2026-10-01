@@ -7,6 +7,7 @@ use App\Models\PasswordResetRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\InAppNotificationService;
+use App\Services\RealtimeBroadcaster;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -24,7 +25,8 @@ class PasswordResetRequestController extends Controller
     public function store(
         Request $request,
         AuditLogger $auditLogger,
-        InAppNotificationService $notifications
+        InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime
     ): JsonResponse {
         if (RateLimiter::tooManyAttempts($this->limiterKey($request), 5)) {
             return response()->json([
@@ -101,6 +103,7 @@ class PasswordResetRequestController extends Controller
         );
 
         $notifications->passwordResetSubmitted($resetRequest);
+        $realtime->passwordReset($resetRequest->id, $resetRequest->user_id, 'password-reset.submitted');
 
         return response()->json([
             'message' => self::GENERIC_PUBLIC_MESSAGE,
@@ -145,7 +148,8 @@ class PasswordResetRequestController extends Controller
         Request $request,
         PasswordResetRequest $passwordResetRequest,
         AuditLogger $auditLogger,
-        InAppNotificationService $notifications
+        InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime
     ): JsonResponse {
         $validated = $request->validate([
             'password' => [
@@ -212,6 +216,7 @@ class PasswordResetRequestController extends Controller
         );
 
         $notifications->passwordResetReviewed($updatedRequest);
+        $realtime->passwordReset($updatedRequest->id, $updatedRequest->user_id, 'password-reset.resolved');
 
         return response()->json([
             'message' => 'Password reset request resolved successfully.',
@@ -225,7 +230,8 @@ class PasswordResetRequestController extends Controller
         Request $request,
         PasswordResetRequest $passwordResetRequest,
         AuditLogger $auditLogger,
-        InAppNotificationService $notifications
+        InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime
     ): JsonResponse {
         $validated = $request->validate([
             'resolution_note' => [
@@ -270,6 +276,7 @@ class PasswordResetRequestController extends Controller
         );
 
         $notifications->passwordResetReviewed($updatedRequest);
+        $realtime->passwordReset($updatedRequest->id, $updatedRequest->user_id, 'password-reset.rejected');
 
         return response()->json([
             'message' => 'Password reset request rejected.',

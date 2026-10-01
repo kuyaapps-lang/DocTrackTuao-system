@@ -61,6 +61,7 @@ export const createQrSummaryManager = ({ fetchImpl, getToken, onUnauthorized, on
 
         try {
             const response = await fetchImpl('/api/qr-codes/summary', {
+                cache: 'no-store',
                 headers: { Accept: 'application/json', Authorization: `Bearer ${getToken()}` },
                 signal,
             })

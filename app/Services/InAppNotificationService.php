@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Schema;
 
 class InAppNotificationService
 {
+    public function __construct(private readonly RealtimeBroadcaster $realtime) {}
     public const TYPE_QR_REQUEST_SUBMITTED = 'qr_request_submitted';
 
     public const TYPE_QR_REQUEST_APPROVED = 'qr_request_approved';
@@ -172,6 +173,7 @@ class InAppNotificationService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+            $this->realtime->notification((int) $user->id);
         });
     }
 

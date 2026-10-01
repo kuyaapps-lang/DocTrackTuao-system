@@ -97,6 +97,7 @@ export const createInventoryManager = ({
     const requestPage = async (options, signal) => {
         const url = buildInventoryUrl(options)
         const response = await fetchImpl(url, {
+            cache: 'no-store',
             headers: {
                 Accept: 'application/json',
                 Authorization: `Bearer ${getToken()}`,

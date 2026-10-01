@@ -7,9 +7,31 @@ export const navigationItems = [
         group: null,
     },
     {
-        key: 'documents',
-        label: 'Documents',
+        key: 'outgoing-documents',
+        label: 'Outgoing Documents',
         path: '/documents',
+        to: {
+            path: '/documents',
+            query: { view: 'outgoing' },
+        },
+        permission: 'documents.view',
+        group: null,
+    },
+    {
+        key: 'incoming-documents',
+        label: 'Incoming Documents',
+        path: '/documents',
+        to: {
+            path: '/documents',
+            query: { view: 'incoming' },
+        },
+        permission: 'documents.view',
+        group: null,
+    },
+    {
+        key: 'document-inquiry',
+        label: 'Document Inquiry / Status',
+        path: '/document-inquiry',
         permission: 'documents.view',
         group: null,
     },
@@ -107,7 +129,17 @@ export const resolveActiveNavigationKey = (routePath) => {
         path.startsWith('/documents/') ||
         path.startsWith('/register-document/')
     ) {
-        return 'documents'
+        const query = routePath.split('?', 2)[1] || ''
+
+        if (/(?:^|&)view=incoming(?:&|$)/.test(query)) {
+            return 'incoming-documents'
+        }
+
+        if (/(?:^|&)view=outgoing(?:&|$)/.test(query)) {
+            return 'outgoing-documents'
+        }
+
+        return null
     }
 
     for (const item of navigationItems) {

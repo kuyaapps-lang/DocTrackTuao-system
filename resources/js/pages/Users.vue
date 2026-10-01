@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import {
     Card,
@@ -29,6 +29,7 @@ import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 import {
     useAuth,
 } from '@/lib/auth'
+import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import {
     canResetUserPassword,
     listPasswordResetRequests,
@@ -70,6 +71,7 @@ const pendingResetRequests = ref([])
 const resetRequestsLoading = ref(false)
 const resetRequestsError = ref('')
 const rejectingRequestId = ref(null)
+let leaveRealtime = null
 const rejectNote = ref('')
 
 const showPassword = ref(false)
@@ -547,7 +549,15 @@ const roleClass = (roleName) => {
 
 onMounted(() => {
     loadPage()
+    ensureCurrentUser().then(user => {
+        if (!user?.permissions?.includes('users.manage')) return
+        leaveRealtime = listenForRealtimeInvalidation(['doc-track.password-reset.admins'], () => {
+            if (!resetPasswordSaving.value && !resetTargetRequest.value && !rejectingRequestId.value) fetchPendingResetRequests()
+        })
+    }).catch(() => undefined)
 })
+
+onBeforeUnmount(() => leaveRealtime?.())
 </script>
 
 <template>

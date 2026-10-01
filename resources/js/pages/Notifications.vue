@@ -1,8 +1,10 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/lib/auth'
 import { listNotifications, markNotificationRead } from '@/lib/notifications'
+import { ensureCurrentUser } from '@/lib/auth'
+import { listenForRealtimeInvalidation } from '@/lib/realtime'
 
 const router = useRouter()
 const { getToken } = useAuth()
@@ -39,7 +41,13 @@ const openNotification = async (notification) => {
 }
 
 const formatTime = value => value ? new Date(value).toLocaleString() : ''
-onMounted(load)
+let leaveRealtime = null
+onMounted(async () => {
+    await load()
+    const user = await ensureCurrentUser().catch(() => null)
+    if (user) leaveRealtime = listenForRealtimeInvalidation([`doc-track.user.${user.id}`], load)
+})
+onBeforeUnmount(() => leaveRealtime?.())
 </script>
 
 <template>

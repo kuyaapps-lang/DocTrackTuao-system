@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -14,11 +14,15 @@ import { Input } from '@/components/ui/input'
 
 const route = useRoute()
 const router = useRouter()
+const isInquiry = computed(() => route.path === '/document-inquiry')
 
 const trackingNumber = ref('')
 const document = ref(null)
+const searchResults = ref([])
+const linkedQrCode = ref('')
 
 const loading = ref(false)
+const searchLoading = ref(false)
 const error = ref('')
 
 /*
@@ -66,6 +70,73 @@ const fetchTracking = async (trackingNo) => {
     }
 }
 
+const selectInquiryDocument = async (result) => {
+    const trackingNo = String(result?.tracking_no || '').trim()
+
+    if (!trackingNo) {
+        error.value = 'The selected document cannot be tracked.'
+        return
+    }
+
+    linkedQrCode.value = result.qr_code || ''
+    trackingNumber.value = result.qr_code || trackingNo
+    searchResults.value = []
+
+    await router.replace({
+        path: '/document-inquiry',
+        query: { tracking: trackingNo },
+    })
+
+    await fetchTracking(trackingNo)
+}
+
+const searchInquiryDocuments = async () => {
+    const value = trackingNumber.value.trim()
+
+    if (!value) {
+        error.value = 'Enter or scan a QR code, subject, or document description.'
+        return
+    }
+
+    searchLoading.value = true
+    error.value = ''
+    document.value = null
+    searchResults.value = []
+    linkedQrCode.value = ''
+
+    try {
+        const response = await fetch(
+            `/api/documents?search=${encodeURIComponent(value)}`,
+            {
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+                },
+            }
+        )
+        const data = await response.json().catch(() => ({}))
+
+        if (!response.ok || !Array.isArray(data.data)) {
+            throw new Error(data.message || 'Unable to search documents.')
+        }
+
+        searchResults.value = data.data
+
+        if (data.data.length === 1 && data.data[0]?.tracking_no) {
+            await selectInquiryDocument(data.data[0])
+            return
+        }
+
+        if (data.data.length === 0) {
+            error.value = 'No document matches that QR code, subject, or description.'
+        }
+    } catch (err) {
+        error.value = err.message || 'Unable to search documents.'
+    } finally {
+        searchLoading.value = false
+    }
+}
+
 /*
 |--------------------------------------------------------------------------
 | Manual Search
@@ -73,6 +144,11 @@ const fetchTracking = async (trackingNo) => {
 */
 
 const searchDocument = async () => {
+    if (isInquiry.value) {
+        await searchInquiryDocuments()
+        return
+    }
+
     const value =
         trackingNumber.value.trim()
 
@@ -169,6 +245,17 @@ const statusClass = (status) => {
 */
 
 onMounted(() => {
+    if (isInquiry.value) {
+        const trackingNo = String(route.query.tracking || '').trim()
+
+        if (trackingNo) {
+            trackingNumber.value = trackingNo
+            fetchTracking(trackingNo)
+        }
+
+        return
+    }
+
     const trackingNo =
         route.params.trackingNo
 
@@ -194,14 +281,17 @@ onMounted(() => {
                 <h1
                     class="text-2xl font-bold text-gray-900"
                 >
-                    Document Tracking
+                    {{ isInquiry ? 'Document Inquiry / Status' : 'Document Tracking' }}
                 </h1>
 
                 <p
                     class="mt-1 text-sm text-gray-500"
                 >
-                    Enter a tracking number to check the document's public
-                    status and routing movement.
+                    {{
+                        isInquiry
+                            ? 'Search by QR code, subject, or document description to view its tracking history.'
+                            : "Enter a tracking number to check the document's public status and routing movement."
+                    }}
                 </p>
 
             </div>
@@ -224,18 +314,18 @@ onMounted(() => {
                         <Input
                             v-model="trackingNumber"
                             type="text"
-                            placeholder="Tracking number"
+                            :placeholder="isInquiry ? 'Scan QR code or enter subject / description' : 'Tracking number'"
                             class="h-11 flex-1"
-                            :disabled="loading"
+                            :disabled="loading || searchLoading"
                         />
 
                         <Button
                             type="submit"
                             class="h-11 bg-blue-600 px-6 hover:bg-blue-700"
-                            :disabled="loading"
+                            :disabled="loading || searchLoading"
                         >
                             {{
-                                loading
+                                loading || searchLoading
                                     ? 'Searching...'
                                     : 'Track Document'
                             }}
@@ -245,6 +335,25 @@ onMounted(() => {
 
                 </CardContent>
 
+            </Card>
+
+            <Card v-if="isInquiry && searchResults.length > 0" class="mt-6">
+                <CardHeader>
+                    <CardTitle>Matching Documents</CardTitle>
+                    <p class="text-sm text-gray-500">Choose a document to view its tracking history.</p>
+                </CardHeader>
+                <CardContent class="space-y-2">
+                    <button
+                        v-for="result in searchResults"
+                        :key="result.id"
+                        type="button"
+                        class="w-full rounded-lg border border-slate-200 p-4 text-left transition-colors hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        @click="selectInquiryDocument(result)"
+                    >
+                        <p class="font-semibold text-slate-900">{{ result.title || 'Untitled document' }}</p>
+                        <p class="mt-1 font-mono text-sm text-blue-700">{{ result.qr_code || result.tracking_no }}</p>
+                    </button>
+                </CardContent>
             </Card>
 
             <!-- Loading -->
@@ -280,7 +389,11 @@ onMounted(() => {
                                 <p
                                     class="text-sm font-semibold text-blue-600"
                                 >
-                                    {{ document.tracking_no }}
+                                    {{
+                                        isInquiry
+                                            ? linkedQrCode || document.tracking_no
+                                            : document.tracking_no
+                                    }}
                                 </p>
 
                                 <CardTitle class="mt-2 text-2xl">
@@ -477,7 +590,7 @@ onMounted(() => {
                     <CardHeader>
 
                         <CardTitle>
-                            Movement History
+                            Tracking History
                         </CardTitle>
 
                         <p

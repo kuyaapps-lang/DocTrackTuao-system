@@ -21,6 +21,7 @@ use Illuminate\Validation\ValidationException;
 use App\Services\AuditLogger;
 use App\Services\DocumentReadScope;
 use App\Services\DocumentQrRegistration;
+use App\Services\RealtimeBroadcaster;
 use App\Support\QrTokenInput;
 
 class DocumentController extends Controller
@@ -36,7 +37,10 @@ class DocumentController extends Controller
             'status',
             'priority',
             'currentOffice',
+            'qrCodes:id,document_id,qr_token',
         ]);
+
+        $this->applyDocumentReadScope($query, $request->user());
 
         $this->applyAllDocumentSearch($query, $filters['search']);
 
@@ -71,6 +75,7 @@ class DocumentController extends Controller
 
         $query = Document::with([
             'type',
+            'qrCodes:id,document_id,qr_token',
 
             'routes' => function ($query) use ($user) {
                 $query
@@ -136,6 +141,7 @@ class DocumentController extends Controller
 
         $query = Document::with([
             'type',
+            'qrCodes:id,document_id,qr_token',
 
             'routes' => function ($query) use ($user) {
                 $query
@@ -226,6 +232,7 @@ class DocumentController extends Controller
             $query
                 ->whereRaw("documents.tracking_no LIKE ? ESCAPE '!'", [$pattern])
                 ->orWhereRaw("documents.title LIKE ? ESCAPE '!'", [$pattern])
+                ->orWhereRaw("documents.description LIKE ? ESCAPE '!'", [$pattern])
                 ->orWhereHas('type', fn ($query) =>
                     $query->whereRaw("document_types.type_name LIKE ? ESCAPE '!'", [$pattern]))
                 ->orWhereHas('status', fn ($query) =>
@@ -234,6 +241,25 @@ class DocumentController extends Controller
                     $query->whereRaw("priorities.priority_name LIKE ? ESCAPE '!'", [$pattern]))
                 ->orWhereHas('currentOffice', fn ($query) =>
                     $query->whereRaw("offices.office_name LIKE ? ESCAPE '!'", [$pattern]));
+        });
+    }
+
+    /** Public documents are system-visible; private documents require an involved office. */
+    private function applyDocumentReadScope($query, $user): void
+    {
+        // Isolated legacy tests/schemas do not include the classification tables.
+        if (!Schema::hasTable('confidentiality_levels')) return;
+        $officeId = $user->office_id ? (int) $user->office_id : null;
+        $query->where(function ($query) use ($officeId) {
+            $query->whereHas('confidentiality', fn ($levels) => $levels->where('level_name', 'Public'));
+            if ($officeId === null) return;
+            $query->orWhere('origin_office_id', $officeId)
+                ->orWhere('current_office_id', $officeId)
+                ->orWhereHas('creator', fn ($creator) => $creator->where('office_id', $officeId))
+                ->orWhereHas('routes', fn ($routes) => $routes->where('from_office_id', $officeId)->orWhere('to_office_id', $officeId));
+            if (Schema::hasTable('document_office_tags')) {
+                $query->orWhereHas('taggedOffices', fn ($offices) => $offices->where('offices.id', $officeId));
+            }
         });
     }
 
@@ -269,6 +295,7 @@ class DocumentController extends Controller
             $query
                 ->whereRaw("documents.tracking_no LIKE ? ESCAPE '!'", [$pattern])
                 ->orWhereRaw("documents.title LIKE ? ESCAPE '!'", [$pattern])
+                ->orWhereRaw("documents.description LIKE ? ESCAPE '!'", [$pattern])
                 ->orWhereHas('type', fn ($query) =>
                     $query->whereRaw("document_types.type_name LIKE ? ESCAPE '!'", [$pattern]))
                 ->orWhereHas('routes', function ($query) use (
@@ -400,6 +427,7 @@ class DocumentController extends Controller
         $data = [
             'id' => $document->id,
             'tracking_no' => $document->tracking_no,
+            'qr_code' => $document->qrCodes->first()?->qr_token,
             'title' => $document->title,
             'type' => $document->type
                 ? [
@@ -503,9 +531,14 @@ class DocumentController extends Controller
     public function store(
     Request $request,
     AuditLogger $auditLogger,
-    DocumentQrRegistration $qrRegistration)
+    DocumentQrRegistration $qrRegistration,
+    RealtimeBroadcaster $realtime)
 
     {
+        // Compatibility for existing API clients/tests while the UI uses recipient_office_id.
+        if (!$request->has('recipient_office_id') && $request->has('origin_office_id')) {
+            $request->merge(['recipient_office_id' => $request->input('origin_office_id')]);
+        }
         $validated = $request->validate([
             'title' =>
                 'required|string|max:255',
@@ -522,8 +555,10 @@ class DocumentController extends Controller
             'confidentiality_level_id' =>
                 'required|exists:confidentiality_levels,id',
 
-            'origin_office_id' =>
+            'recipient_office_id' =>
                 'required|exists:offices,id',
+            'tagged_office_ids' => ['nullable', 'array', 'max:10'],
+            'tagged_office_ids.*' => ['integer', 'distinct', 'exists:offices,id'],
 
             'document_date' =>
                 'required|date',
@@ -631,11 +666,10 @@ class DocumentController extends Controller
                     'confidentiality_level_id' =>
                         $validated['confidentiality_level_id'],
 
-                    'origin_office_id' =>
-                        $validated['origin_office_id'],
+                    // Existing column now means initial recipient; retained for routing history compatibility.
+                    'origin_office_id' => $validated['recipient_office_id'],
 
-                    'current_office_id' =>
-                        $validated['origin_office_id'],
+                    'current_office_id' => $validated['recipient_office_id'],
 
                     'current_action_id' =>
                         $registeredAction->id,
@@ -687,6 +721,8 @@ class DocumentController extends Controller
                     'event_note' =>
                         'Document registered.',
                 ]);
+                $isPrivate = ConfidentialityLevel::whereKey($validated['confidentiality_level_id'])->value('level_name') === 'Private';
+                if ($isPrivate) $document->taggedOffices()->sync($validated['tagged_office_ids'] ?? []);
 
                 /*
                 |--------------------------------------------------------------------------
@@ -738,6 +774,9 @@ class DocumentController extends Controller
             'currentActionUpdatedBy',
             'creator',
         ]);
+        $realtime->document($document, 'document.registered', ['documents', 'dashboard', 'document-detail']);
+        $qrCode = $document->qrCodes()->latest('id')->first();
+        if ($qrCode) $realtime->qr($qrCode, 'qr.used');
 
         return response()->json([
             'message' =>
@@ -858,6 +897,7 @@ class DocumentController extends Controller
     public function update(
     Request $request,
     AuditLogger $auditLogger,
+    RealtimeBroadcaster $realtime,
     $id
     )
 
@@ -911,7 +951,7 @@ class DocumentController extends Controller
             'status_id' => ['prohibited'],
         ]);
 
-        return DB::transaction(
+        $response = DB::transaction(
             function () use (
                 $id,
                 $user,
@@ -975,6 +1015,8 @@ class DocumentController extends Controller
                 ]);
             }
         );
+        $realtime->document(Document::findOrFail($id), 'document.updated', ['documents', 'document-detail']);
+        return $response;
     }
 
     private function namedRelation($model, string $nameField): ?array

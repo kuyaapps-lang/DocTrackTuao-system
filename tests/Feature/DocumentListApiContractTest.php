@@ -213,6 +213,7 @@ class DocumentListApiContractTest extends TestCase
             $status,
             $priority
         );
+        $this->createQrCode('QR-ALL-NEWER', 'registered', $newer->id);
         DB::table('documents')
             ->where('id', $newer->id)
             ->update(['status' => 'legacy-scalar-value']);
@@ -228,6 +229,7 @@ class DocumentListApiContractTest extends TestCase
         $this->assertSame([
             'id',
             'tracking_no',
+            'qr_code',
             'title',
             'type',
             'status',
@@ -235,6 +237,7 @@ class DocumentListApiContractTest extends TestCase
             'current_office',
             'created_at',
         ], array_keys($data[0]));
+        $this->assertSame('QR-ALL-NEWER', $data[0]['qr_code']);
         $this->assertSame(['id', 'type_name'], array_keys($data[0]['type']));
         $this->assertSame(['id', 'status_name'], array_keys($data[0]['status']));
         $this->assertSame([
@@ -268,6 +271,7 @@ class DocumentListApiContractTest extends TestCase
         $this->createRoute($received, $oldSender, $office, now()->subDays(2), now()->subDay());
         $this->createRoute($received, $newSender, $office, now()->subHours(2), now()->subHour());
         $this->createRoute($pending, $other, $office, now()->subMinute(), null);
+        $this->createQrCode('QR-INCOMING-PENDING', 'registered', $pending->id);
         Sanctum::actingAs($this->createUser('Records Officer', $office));
 
         $response = $this->getJson('/api/documents/incoming')->assertOk();
@@ -281,8 +285,9 @@ class DocumentListApiContractTest extends TestCase
         $this->assertNull($data[0]['routes'][0]['received_at']);
         $this->assertSame('NEW Office', $data[1]['routes'][0]['from_office']['office_name']);
         $this->assertSame([
-            'id', 'tracking_no', 'title', 'type', 'routes',
+            'id', 'tracking_no', 'qr_code', 'title', 'type', 'routes',
         ], array_keys($data[0]));
+        $this->assertSame('QR-INCOMING-PENDING', $data[0]['qr_code']);
         $this->assertSame([
             'from_office', 'received_at',
         ], array_keys($data[0]['routes'][0]));
@@ -305,6 +310,7 @@ class DocumentListApiContractTest extends TestCase
         $this->createRoute($received, $office, $oldDestination, now()->subDays(2), now()->subDay());
         $this->createRoute($received, $office, $newDestination, now()->subHours(2), now()->subHour());
         $this->createRoute($pending, $office, $oldDestination, now()->subMinute(), null);
+        $this->createQrCode('QR-OUTGOING-PENDING', 'registered', $pending->id);
         Sanctum::actingAs($this->createUser('Office User', $office));
 
         $response = $this->getJson('/api/documents/outgoing')->assertOk();
@@ -315,6 +321,7 @@ class DocumentListApiContractTest extends TestCase
         $this->assertSame([$pending->id, $received->id], array_column($data, 'id'));
         $this->assertNotContains($originOnly->id, array_column($data, 'id'));
         $this->assertSame('NEW Office', $data[1]['routes'][0]['to_office']['office_name']);
+        $this->assertSame('QR-OUTGOING-PENDING', $data[0]['qr_code']);
         $this->assertSame([
             'to_office', 'forwarded_at',
         ], array_keys($data[0]['routes'][0]));
@@ -417,6 +424,7 @@ class DocumentListApiContractTest extends TestCase
         foreach ([
             $document->tracking_no,
             'Search Title',
+            'Sensitive description',
             'Memo Type',
             'Unique Status',
             'Unique Priority',

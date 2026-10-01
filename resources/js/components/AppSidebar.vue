@@ -10,10 +10,12 @@ import {
 import {
     Building2,
     FileText,
-    Files,
+    FileSearch,
+    Inbox,
     LayoutDashboard,
     QrCode,
     ScrollText,
+    Send,
     Users,
     X,
 } from 'lucide-vue-next'
@@ -27,7 +29,7 @@ import {
 } from '@/lib/navigation'
 
 const route = useRoute()
-const { permissions } = useAuth()
+const { currentUser, permissions } = useAuth()
 const mobileCloseButton = ref(null)
 
 defineProps({
@@ -53,7 +55,9 @@ defineExpose({
 
 const navigationIcons = {
     dashboard: LayoutDashboard,
-    documents: Files,
+    'outgoing-documents': Send,
+    'incoming-documents': Inbox,
+    'document-inquiry': FileSearch,
     'qr-codes': QrCode,
     offices: Building2,
     'document-types': FileText,
@@ -66,8 +70,26 @@ const items = computed(() => {
 })
 
 const activeKey = computed(() => {
-    return route.meta?.navKey ||
-        resolveActiveNavigationKey(route.path)
+    return resolveActiveNavigationKey(route.fullPath) ||
+        route.meta?.navKey
+})
+
+const userName = computed(() => currentUser.value?.name || 'Signed-in user')
+
+const officeName = computed(() => {
+    return currentUser.value?.office?.office_name ||
+        currentUser.value?.office?.name ||
+        'No office assigned'
+})
+
+const userInitials = computed(() => {
+    return userName.value
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(name => name[0])
+        .join('')
+        .toUpperCase() || 'U'
 })
 
 const iconFor = (key) => navigationIcons[key]
@@ -125,7 +147,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
         <nav
             id="desktop-navigation"
             aria-label="Main navigation"
-            class="space-y-2 p-4"
+            class="flex-1 space-y-2 p-4"
         >
             <template
                 v-for="item in items"
@@ -164,7 +186,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
                 <RouterLink
                     v-else
-                    :to="item.path"
+                    :to="item.to || item.path"
                     :class="linkClasses(item.key, false, desktopCollapsed)"
                     :aria-current="activeKey === item.key ? 'page' : undefined"
                     :aria-label="desktopCollapsed ? item.label : undefined"
@@ -181,6 +203,22 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 </RouterLink>
             </template>
         </nav>
+
+        <div class="mt-auto border-t border-white/80 p-4">
+            <div
+                class="flex items-center gap-3 rounded-2xl bg-blue-50/80 p-3 text-left shadow-sm"
+                :class="desktopCollapsed ? 'justify-center px-2' : ''"
+                :title="desktopCollapsed ? `${userName} — ${officeName}` : undefined"
+            >
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-900 text-sm font-bold text-white shadow-sm" aria-hidden="true">
+                    {{ userInitials }}
+                </div>
+                <div v-if="!desktopCollapsed" class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-blue-950">{{ userName }}</p>
+                    <p class="truncate text-xs text-slate-600">{{ officeName }}</p>
+                </div>
+            </div>
+        </div>
     </aside>
 
     <div
@@ -227,7 +265,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
             <nav
                 aria-label="Main navigation"
-                class="space-y-2 p-4"
+                class="flex-1 space-y-2 p-4"
             >
                 <template
                     v-for="item in items"
@@ -260,7 +298,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
                     <RouterLink
                         v-else
-                        :to="item.path"
+                        :to="item.to || item.path"
                         :class="linkClasses(item.key)"
                         :aria-current="activeKey === item.key ? 'page' : undefined"
                         @click="$emit('navigate')"
@@ -274,6 +312,18 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     </RouterLink>
                 </template>
             </nav>
+
+            <div class="mt-auto border-t border-slate-200 p-4">
+                <div class="flex items-center gap-3 rounded-2xl bg-blue-50 p-3 text-left">
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-900 text-sm font-bold text-white shadow-sm" aria-hidden="true">
+                        {{ userInitials }}
+                    </div>
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-semibold text-blue-950">{{ userName }}</p>
+                        <p class="truncate text-xs text-slate-600">{{ officeName }}</p>
+                    </div>
+                </div>
+            </div>
         </aside>
     </div>
 </template>

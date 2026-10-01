@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
 
@@ -24,6 +24,7 @@ import {
 } from 'lucide-vue-next'
 
 import { can } from '@/lib/auth'
+import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import { publicQrUrl } from '@/lib/qr-registration'
 import {
     formatDocumentDateField,
@@ -61,6 +62,7 @@ const error = ref('')
 const successMessage = ref('')
 const completeError = ref('')
 const archiveError = ref('')
+const updatedElsewhere = ref(false)
 
 /*
 |--------------------------------------------------------------------------
@@ -126,6 +128,7 @@ const forwardError = ref('')
 */
 
 const showReceiveModal = ref(false)
+let leaveRealtime = null
 const receiveError = ref('')
 
 /*
@@ -1684,21 +1687,21 @@ const forwardDocument = async () => {
 
             throw new Error(
                 data.message ||
-                'Unable to forward document.'
+                'Unable to release document.'
             )
         }
 
         showForwardModal.value = false
 
         successMessage.value =
-            'Document forwarded successfully.'
+            'Document released successfully.'
 
         await loadPage()
 
     } catch (err) {
         forwardError.value =
             err.message ||
-            'Unable to forward document.'
+            'Unable to release document.'
 
     } finally {
         actionLoading.value = false
@@ -1820,11 +1823,19 @@ const formatSimpleDate = (date) => {
 
 onMounted(() => {
     loadPage()
+    leaveRealtime = listenForRealtimeInvalidation([`doc-track.document.${route.params.id}`], event => {
+        if (event.resource_id !== Number(route.params.id)) return
+        if (processingSaving.value || uploadingAttachment.value || actionLoading.value || showForwardModal.value || showReceiveModal.value || showDeleteAttachmentModal.value) { updatedElsewhere.value = true; return }
+        loadPage()
+    })
 })
+
+onBeforeUnmount(() => leaveRealtime?.())
 </script>
 
 <template>
     <div class="min-h-screen bg-slate-100">
+        <p v-if="updatedElsewhere" class="mx-6 mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800" role="status">This document changed elsewhere. Finish or close the active form to refresh safely.</p>
 
         <!-- Header -->
         <div class="border-b border-white/80 bg-white px-6 py-4 shadow-[0_4px_14px_rgb(92_113_138/0.07)]">
@@ -1930,7 +1941,7 @@ onMounted(() => {
                                     @click="openForwardModal"
                                 >
                                     <Send class="mr-2 h-4 w-4" />
-                                        Forward Document        
+                                        Release Document
                                 </Button>
 
                                 <Button
@@ -3051,13 +3062,13 @@ onMounted(() => {
                 <h2
                     class="text-xl font-bold text-gray-900"
                 >
-                    Forward Document
+                    Release Document
                 </h2>
 
                 <p
                     class="mt-1 text-sm text-gray-500"
                 >
-                    Select the office that will receive this document.
+                    Select the next office and describe the action it needs to take.
                 </p>
 
                 <!-- Destination -->
@@ -3097,13 +3108,13 @@ onMounted(() => {
                     <label
                         class="mb-2 block text-sm font-semibold text-gray-700"
                     >
-                        Remarks
+                        Action / Release Note
                     </label>
 
                     <textarea
                         v-model="forwardForm.remarks"
                         rows="4"
-                        placeholder="Optional routing remarks"
+                        placeholder="Example: Released to the next office for review and signature."
                         class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     ></textarea>
 
@@ -3139,8 +3150,8 @@ onMounted(() => {
                     >
                         {{
                             actionLoading
-                                ? 'Forwarding...'
-                                : 'Forward'
+                                ? 'Releasing...'
+                                : 'Release'
                         }}
                     </button>
 

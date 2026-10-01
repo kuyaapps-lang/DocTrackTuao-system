@@ -53,16 +53,15 @@ test('dashboard documents and public tracking show clearer helper copy', async (
     assert.match(tracking, /Limited public details are shown for this protected document/)
 })
 
-test('documents UI keeps process 23e color and date polish', async () => {
+test('focused document lists keep their table and date polish', async () => {
     const documents = await readSource('resources/js/pages/Documents.vue')
     const details = await readSource('resources/js/pages/DocumentDetails.vue')
 
-    assert.match(documents, /rounded-lg border border-blue-900 bg-blue-900 px-3 pt-3/)
-    assert.match(documents, /border-white bg-white text-blue-900 shadow-sm/)
+    assert.doesNotMatch(documents, /aria-label="Document views"/)
     assert.match(documents, /<Table class="min-w-\[46rem\] table-auto/)
     assert.match(documents, /<TableHeader class="bg-blue-900 text-white">/)
-    assert.match(documents, /<TableHead class="text-white font-semibold">\s+Tracking No\./)
-    assert.match(documents, /id="documents-per-page"\s+v-model\.number="perPage"\s+class="h-10 w-\[130px\] rounded-md/)
+    assert.match(documents, /<TableHead class="text-white font-semibold">\s+QR Code/)
+    assert.doesNotMatch(documents, /id="documents-per-page"/)
     assert.match(documents, /<CardContent\s+id="document-list-panel"\s+role="tabpanel"\s+:aria-busy="loading"\s+class="px-\[10px\] pb-\[10px\] pt-\[7px\] \[&_\*\]:!text-\[13pt\]"/)
     assert.match(documents, /formatDocumentDateTime/)
     assert.match(documents, /<TableCell\s+class="min-w-0 break-all whitespace-normal font-medium"\s*>/)

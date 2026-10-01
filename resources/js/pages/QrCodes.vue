@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import QRCode from 'qrcode'
 import { clearCurrentUser, useAuth } from '@/lib/auth'
+import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import { publicQrUrl } from '@/lib/qr-registration'
 import {
     printQrLabels,
@@ -155,6 +156,8 @@ const getToken = () => {
 }
 
 const { permissions } = useAuth()
+const { currentUser, ensureCurrentUser } = useAuth()
+let leaveRealtime = null
 const canRequestQr = computed(() => permissions.value.includes('qr.request'))
 const canViewQr = computed(() => permissions.value.includes('qr.view'))
 const canManageQr = computed(() => permissions.value.includes('qr.manage'))
@@ -829,11 +832,22 @@ onMounted(() => {
     } else {
         inventoryLoading.value = false
     }
+    ensureCurrentUser().then(user => {
+        if (!user) return
+        const channels = ['doc-track.user.' + user.id]
+        if (canApproveQr.value) channels.push('doc-track.qr.approvers')
+        else if (user.office_id) channels.push('doc-track.qr.office.' + user.office_id)
+        leaveRealtime = listenForRealtimeInvalidation(channels, () => {
+            if (requestSaving.value || reviewPendingId.value || voidingId.value) return
+            fetchRequests(); fetchSummary(); if (canManageQr.value) fetchInventory(inventoryMeta.value?.current_page || 1)
+        })
+    }).catch(() => undefined)
 })
 
 onBeforeUnmount(() => {
     summaryManager.dispose()
     inventoryManager.dispose()
+    leaveRealtime?.()
 })
 </script>
 

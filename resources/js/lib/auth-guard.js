@@ -29,6 +29,35 @@ export const resolveAuthenticationNavigation = async (
         to.meta?.passwordChange === true ||
         to.path === '/change-password'
 
+    const isLoginRoute = to.path === '/login'
+
+    // A valid session should never leave an already-authenticated user on the
+    // login screen. Public tracking/QR routes remain accessible anonymously.
+    if (isLoginRoute && getToken()) {
+        try {
+            const user = await ensureCurrentUser()
+
+            if (user?.must_change_password) {
+                return { path: '/change-password' }
+            }
+
+            const redirect = typeof to.query?.redirect === 'string'
+                ? to.query.redirect
+                : ''
+
+            if (redirect.startsWith('/') && !redirect.startsWith('//')) {
+                return { path: redirect }
+            }
+
+            return { path: '/dashboard' }
+        } catch {
+            // ensureCurrentUser clears an expired/401 token. Temporary
+            // verification failures stay on the login page so the user can
+            // retry without losing a still-present session.
+            return true
+        }
+    }
+
     if (!authenticated || to.meta?.public) {
         return true
     }

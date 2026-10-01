@@ -11,8 +11,7 @@ class ConfidentialityLevelSeeder extends Seeder
     {
         $levels = [
             'Public',
-            'Confidential',
-            'Restricted',
+            'Private',
         ];
 
         foreach ($levels as $level) {

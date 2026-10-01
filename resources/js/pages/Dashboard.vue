@@ -1,16 +1,17 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DashboardSkeleton from '@/components/loaders/DashboardSkeleton.vue'
 import DocTrackDatePicker from '@/components/DocTrackDatePicker.vue'
 import { useAuth } from '@/lib/auth'
+import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, normalizeDashboardMonth } from '@/lib/dashboard'
 
 const route = useRoute()
 const router = useRouter()
-const { clearCurrentUser, getToken } = useAuth()
+const { clearCurrentUser, getToken, ensureCurrentUser } = useAuth()
 const dashboard = ref(null)
 const selectedMonth = ref('')
 const loading = ref(true)
@@ -19,6 +20,7 @@ let activeController = null
 let requestSequence = 0
 let mounted = true
 let allTimeRequested = false
+let leaveRealtime = null
 
 const metrics = computed(() => dashboard.value ? [
     ['Total Documents', dashboard.value.summary.total_documents],
@@ -176,10 +178,21 @@ watch(() => route.query.month, async rawMonth => {
     loadDashboard(month)
 }, { immediate: true })
 
+onMounted(() => {
+    ensureCurrentUser().then(user => {
+        if (!user) return
+        const channel = ['Administrator', 'Records Officer'].includes(user.role?.role_name || user.role?.name)
+            ? 'doc-track.documents.system'
+            : `doc-track.documents.office.${user.office_id}`
+        leaveRealtime = listenForRealtimeInvalidation([channel], () => loadDashboard(selectedMonth.value || null))
+    }).catch(() => undefined)
+})
+
 onBeforeUnmount(() => {
     mounted = false
     requestSequence += 1
     activeController?.abort()
+    leaveRealtime?.()
 })
 </script>
 

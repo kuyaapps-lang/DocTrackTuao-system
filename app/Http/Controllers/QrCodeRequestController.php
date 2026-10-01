@@ -7,6 +7,7 @@ use App\Models\DocumentQrCode;
 use App\Models\QrCodeRequest;
 use App\Services\AuditLogger;
 use App\Services\InAppNotificationService;
+use App\Services\RealtimeBroadcaster;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -57,7 +58,8 @@ class QrCodeRequestController extends Controller
     public function store(
         Request $request,
         AuditLogger $auditLogger,
-        InAppNotificationService $notifications
+        InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime
     ) {
         $user = $request->user();
 
@@ -87,6 +89,7 @@ class QrCodeRequestController extends Controller
         );
 
         $notifications->qrRequestSubmitted($qrRequest);
+        $realtime->qrRequest($qrRequest, 'qr.request-submitted');
 
         return response()->json([
             'message' => 'QR code request submitted.',
@@ -98,6 +101,7 @@ class QrCodeRequestController extends Controller
         Request $request,
         AuditLogger $auditLogger,
         InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime,
         QrCodeRequest $qrCodeRequest
     ) {
         $validated = $request->validate([
@@ -162,6 +166,8 @@ class QrCodeRequestController extends Controller
         }
 
         $notifications->qrRequestReviewed($approvedRequest);
+        $realtime->qrRequest($approvedRequest, 'qr.request-approved');
+        foreach ($qrCodes as $qrCode) $realtime->qr($qrCode, 'qr.issued');
 
         return response()->json([
             'message' => 'QR code request approved.',
@@ -173,6 +179,7 @@ class QrCodeRequestController extends Controller
         Request $request,
         AuditLogger $auditLogger,
         InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime,
         QrCodeRequest $qrCodeRequest
     ) {
         $validated = $request->validate([
@@ -211,6 +218,7 @@ class QrCodeRequestController extends Controller
         );
 
         $notifications->qrRequestReviewed($rejectedRequest);
+        $realtime->qrRequest($rejectedRequest, 'qr.request-rejected');
 
         return response()->json([
             'message' => 'QR code request rejected.',

@@ -31,13 +31,14 @@ import { Input } from '@/components/ui/input'
 import DocTrackDatePicker from '@/components/DocTrackDatePicker.vue'
 import { formatDateValue } from '@/lib/date-picker'
 import { can } from '@/lib/auth'
+import { ensureCurrentUser } from '@/lib/auth'
+import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import { formatDocumentDateTime } from '@/lib/document-dates'
 import { normalizeRegistrationQrInput } from '@/lib/qr-registration'
 import {
     buildDocumentListQuery,
     buildDocumentListRequestQuery,
     DOCUMENT_LIST_DEFAULT_PER_PAGE,
-    DOCUMENT_LIST_PER_PAGE_OPTIONS,
     DOCUMENT_SEARCH_DEBOUNCE_MS,
     DOCUMENT_SEARCH_MAX_LENGTH,
     getDocumentPaginationState,
@@ -80,21 +81,7 @@ let lastRequestKey = ''
 let pageMounted = false
 let requestSequence = 0
 let searchDebounceTimer = null
-
-const tabs = [
-    {
-        key: 'all',
-        label: 'All Documents',
-    },
-    {
-        key: 'incoming',
-        label: 'Incoming',
-    },
-    {
-        key: 'outgoing',
-        label: 'Outgoing',
-    },
-]
+let leaveRealtime = null
 
 const paginationState = computed(() => {
     return getDocumentPaginationState(paginationMeta.value)
@@ -139,6 +126,47 @@ const documentTypes = ref([])
 const priorities = ref([])
 const confidentialityLevels = ref([])
 const offices = ref([])
+const officeTagSearch = ref('')
+
+const filteredTagOffices = computed(() => {
+    const query = officeTagSearch.value.trim().toLowerCase()
+
+    if (!query) {
+        return []
+    }
+
+    return offices.value.filter(office => {
+        const name = String(office.office_name || '').toLowerCase()
+        const code = String(office.office_code || '').toLowerCase()
+
+        return name.includes(query) || code.includes(query)
+    })
+})
+
+const selectedTagOfficeNames = computed(() => {
+    const selectedIds = new Set((form.value.tagged_office_ids || []).map(Number))
+
+    return offices.value
+        .filter(office => selectedIds.has(Number(office.id)))
+        .map(office => `${office.office_name} (${office.office_code})`)
+})
+
+const toggleTaggedOffice = officeId => {
+    const id = Number(officeId)
+    const selectedIds = new Set((form.value.tagged_office_ids || []).map(Number))
+
+    if (selectedIds.has(id)) {
+        selectedIds.delete(id)
+    } else {
+        selectedIds.add(id)
+    }
+
+    form.value.tagged_office_ids = Array.from(selectedIds)
+}
+
+const isTaggedOfficeSelected = officeId => {
+    return (form.value.tagged_office_ids || []).map(Number).includes(Number(officeId))
+}
 
 const optionsLoading = ref(false)
 
@@ -152,6 +180,7 @@ const showCreateForm = ref(false)
 const creating = ref(false)
 const createError = ref('')
 const createSuccess = ref('')
+const updatedElsewhere = ref(false)
 
 /*
 |--------------------------------------------------------------------------
@@ -172,7 +201,8 @@ const form = ref({
     document_type_id: '',
     priority_id: '',
     confidentiality_level_id: '',
-    origin_office_id: '',
+    recipient_office_id: '',
+    tagged_office_ids: [],
     document_date: '',
     due_date: '',
 })
@@ -304,12 +334,6 @@ const fetchDocuments = async (state = currentListState()) => {
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Change Document Tab
-|--------------------------------------------------------------------------
-*/
-
 const currentListQuery = () => {
     return buildDocumentListQuery(currentListState())
 }
@@ -338,26 +362,6 @@ const replaceListQuery = async () => {
             query,
         })
     }
-}
-
-const changeTab = async (tab) => {
-    if (activeTab.value === tab) {
-        return
-    }
-
-    clearTimeout(searchDebounceTimer)
-
-    const nextState = resetDocumentListPage(currentListState(), {
-        view: tab,
-        incomingState: tab === 'incoming'
-            ? incomingState.value
-            : 'all',
-    })
-
-    await router.push({
-        path: '/documents',
-        query: buildDocumentListQuery(nextState),
-    })
 }
 
 const changePage = async page => {
@@ -498,13 +502,15 @@ const resetForm = () => {
         document_type_id: '',
         priority_id: '',
         confidentiality_level_id: '',
-        origin_office_id: '',
+        recipient_office_id: '',
+        tagged_office_ids: [],
         document_date: formatDateValue(new Date()),
         due_date: '',
     }
 
     createError.value = ''
     createSuccess.value = ''
+    officeTagSearch.value = ''
 }
 
 const loadRegistrationOptions = async () => {
@@ -614,9 +620,9 @@ const createDocument = async () => {
         return
     }
 
-    if (!form.value.origin_office_id) {
+    if (!form.value.recipient_office_id) {
         createError.value =
-            'Origin office is required.'
+            'Recipient office is required.'
 
         return
     }
@@ -666,10 +672,11 @@ const createDocument = async () => {
                                 .confidentiality_level_id
                         ),
 
-                    origin_office_id:
+                    recipient_office_id:
                         Number(
-                            form.value.origin_office_id
+                            form.value.recipient_office_id
                         ),
+                    tagged_office_ids: form.value.tagged_office_ids.map(Number),
 
                     document_date:
                         form.value.document_date,
@@ -1024,6 +1031,16 @@ onMounted(async () => {
     pageMounted = true
 
     await fetchDocuments(currentListState())
+    const user = await ensureCurrentUser().catch(() => null)
+    if (user) {
+        const channel = ['Administrator', 'Records Officer'].includes(user.role?.role_name || user.role?.name)
+            ? 'doc-track.documents.system'
+            : `doc-track.documents.office.${user.office_id}`
+        leaveRealtime = listenForRealtimeInvalidation([channel], () => {
+            if (showCreateForm.value) { updatedElsewhere.value = true; return }
+            fetchDocuments(currentListState())
+        })
+    }
 
     const scannedToken =
         route.params.qrToken
@@ -1039,11 +1056,13 @@ onBeforeUnmount(() => {
     clearTimeout(searchDebounceTimer)
     activeRequestController?.abort()
     activeRequestController = null
+    leaveRealtime?.()
 })
 </script>
 
 <template>
     <div class="min-h-screen bg-slate-100 p-6">
+        <p v-if="updatedElsewhere" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800" role="status">Documents were updated elsewhere. Close or submit the registration form to refresh safely.</p>
 
             <Card>
 
@@ -1056,19 +1075,30 @@ onBeforeUnmount(() => {
                     >
                         <div>
                             <CardTitle>
-                                Document Management
+                                {{
+                                    activeTab === 'outgoing'
+                                        ? 'Outgoing Documents'
+                                        : activeTab === 'incoming'
+                                            ? 'Incoming Documents'
+                                            : 'Document Management'
+                                }}
                             </CardTitle>
 
                             <p
                                 class="text-[13pt] text-gray-500 mt-1"
                             >
-                                Review registered documents, incoming items,
-                                and outgoing routes in one place.
+                                {{
+                                    activeTab === 'outgoing'
+                                        ? 'Released documents sent to the next office for action.'
+                                        : activeTab === 'incoming'
+                                            ? 'Documents received or awaiting receipt by your office.'
+                                            : 'Review registered documents in one place.'
+                                }}
                             </p>
                         </div>
 
                         <Button
-                            v-if="canCreateDocuments"
+                            v-if="canCreateDocuments && activeTab !== 'incoming'"
                             @click="openCreateForm()"
                             class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                         >
@@ -1076,33 +1106,8 @@ onBeforeUnmount(() => {
                         </Button>
                     </div>
 
-                    <!-- Tabs -->
                     <div
-                        class="flex flex-wrap gap-2 rounded-lg border border-blue-900 bg-blue-900 px-3 pt-3 [&_*]:!text-[13pt]"
-                        role="tablist"
-                        aria-label="Document views"
-                    >
-                        <button
-                            v-for="tab in tabs"
-                            :key="tab.key"
-                            type="button"
-                            @click="changeTab(tab.key)"
-                            role="tab"
-                            :aria-selected="activeTab === tab.key"
-                            aria-controls="document-list-panel"
-                            class="rounded-t-md border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
-                            :class="
-                                activeTab === tab.key
-                                    ? 'border-white bg-white text-blue-900 shadow-sm'
-                                    : 'border-transparent text-blue-100 hover:border-blue-200 hover:bg-blue-800 hover:text-white'
-                            "
-                        >
-                            {{ tab.label }}
-                        </button>
-                    </div>
-
-                    <div
-                        class="grid gap-[26px] xl:gap-5 xl:grid-cols-[minmax(465px,1fr)_250px_130px] [&_*]:!text-[13pt]"
+                        class="grid gap-[26px] xl:gap-5 xl:grid-cols-[minmax(465px,1fr)_250px] [&_*]:!text-[13pt]"
                     >
                         <div class="order-1 min-w-[315px] xl:order-none">
                             <label
@@ -1148,31 +1153,6 @@ onBeforeUnmount(() => {
                             </select>
                         </div>
 
-                        <div
-                            class="order-2 flex items-center justify-start gap-5 xl:order-none xl:block xl:text-right"
-                            :class="activeTab === 'incoming' ? '' : 'xl:col-start-3'"
-                        >
-                            <label
-                                for="documents-per-page"
-                                class="w-[130px] shrink-0 whitespace-nowrap text-sm font-semibold text-gray-700 xl:mb-2 xl:ml-auto xl:block"
-                            >
-                                Results per page
-                            </label>
-
-                            <select
-                                id="documents-per-page"
-                                v-model.number="perPage"
-                                class="h-10 w-[130px] rounded-md border border-slate-600 bg-white px-[10px] text-right text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            >
-                                <option
-                                    v-for="option in DOCUMENT_LIST_PER_PAGE_OPTIONS"
-                                    :key="option"
-                                    :value="option"
-                                >
-                                    {{ option }}
-                                </option>
-                            </select>
-                        </div>
                     </div>
 
                 </CardHeader>
@@ -1229,7 +1209,7 @@ onBeforeUnmount(() => {
                                 <TableRow>
 
                                     <TableHead class="text-white font-semibold">
-                                        Tracking No.
+                                        QR Code
                                     </TableHead>
 
                                     <TableHead class="text-white font-semibold">
@@ -1281,7 +1261,7 @@ onBeforeUnmount(() => {
                                             activeTab === 'incoming'
                                                 ? 'Received'
                                                 : activeTab === 'outgoing'
-                                                    ? 'Forwarded'
+                                                    ? 'Released'
                                                     : 'Date'
                                         }}
                                     </TableHead>
@@ -1304,9 +1284,9 @@ onBeforeUnmount(() => {
                                         <RouterLink
                                             :to="`/documents/${document.id}`"
                                             class="rounded text-blue-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                                            :aria-label="`View document ${document.tracking_no || document.id}: ${document.title || 'Untitled document'}`"
+                                            :aria-label="`View document ${document.qr_code || document.id}: ${document.title || 'Untitled document'}`"
                                         >
-                                            {{ document.tracking_no || 'N/A' }}
+                                            {{ document.qr_code || 'No QR code' }}
                                         </RouterLink>
                                     </TableCell>
 
@@ -1471,12 +1451,8 @@ onBeforeUnmount(() => {
 
                     <div
                         v-if="!loading && !error"
-                        class="mt-4 flex flex-col items-center gap-3 border-t pt-4"
+                        class="mt-4 flex flex-col items-center border-t pt-4"
                     >
-                        <p class="text-center text-sm text-gray-600">
-                            {{ paginationMeta.total }} total results
-                        </p>
-
                         <nav class="max-w-full overflow-x-auto rounded-full bg-white p-1 shadow-[0_8px_18px_rgb(15_41_70/0.12)]" aria-label="Document list pagination">
                             <div class="flex min-w-max items-center gap-1">
                                 <button
@@ -1743,11 +1719,11 @@ onBeforeUnmount(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Origin Office <span class="text-red-600">*</span>
+                                    Recipient Office <span class="text-red-600">*</span>
                                 </label>
 
                                 <select
-                                    v-model="form.origin_office_id"
+                                    v-model="form.recipient_office_id"
                                     :disabled="creating"
                                     class="w-full h-11 rounded-md
                                            border border-gray-300
@@ -1758,7 +1734,7 @@ onBeforeUnmount(() => {
                                            focus:ring-blue-500"
                                 >
                                     <option value="">
-                                        Select Origin Office
+                                        Select Recipient Office
                                     </option>
 
                                     <option
@@ -1770,6 +1746,49 @@ onBeforeUnmount(() => {
                                         ({{ office.office_code }})
                                     </option>
                                 </select>
+                            </div>
+
+                            <div v-if="confidentialityLevels.find(level => level.id === Number(form.confidentiality_level_id))?.level_name === 'Private'">
+                                <label class="block mb-2 text-sm font-semibold text-gray-700">Tagged Offices</label>
+                                <textarea
+                                    readonly
+                                    :value="selectedTagOfficeNames.join('\n')"
+                                    rows="3"
+                                    placeholder="Checked offices will appear here"
+                                    class="mb-2 w-full resize-none rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none"
+                                    aria-label="Selected tagged offices"
+                                ></textarea>
+                                <input
+                                    v-model="officeTagSearch"
+                                    type="search"
+                                    :disabled="creating"
+                                    placeholder="Search office name or code"
+                                    class="w-full h-11 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    aria-label="Search offices to tag"
+                                />
+                                <div class="mt-2 max-h-40 overflow-y-auto rounded-md border border-gray-200 bg-white">
+                                    <p v-if="!officeTagSearch.trim()" class="px-3 py-2 text-xs text-gray-500">
+                                        Type an office name or code to search.
+                                    </p>
+                                    <p v-else-if="filteredTagOffices.length === 0" class="px-3 py-2 text-xs text-gray-500">
+                                        No matching offices.
+                                    </p>
+                                    <label
+                                        v-for="office in filteredTagOffices"
+                                        :key="office.id"
+                                        class="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            :checked="isTaggedOfficeSelected(office.id)"
+                                            :disabled="creating"
+                                            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            @change="toggleTaggedOffice(office.id)"
+                                        />
+                                        <span>{{ office.office_name }} ({{ office.office_code }})</span>
+                                    </label>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">Private documents are visible to the recipient, tagged offices, creator’s office, and routed offices.</p>
                             </div>
 
                         </div>

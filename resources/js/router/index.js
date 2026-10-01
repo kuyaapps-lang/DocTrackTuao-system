@@ -125,6 +125,15 @@ const routes = [
                 },
             },
             {
+                path: 'document-inquiry',
+                component: DocumentTracking,
+                meta: {
+                    permission: 'documents.view',
+                    title: 'Document Inquiry / Status',
+                    navKey: 'document-inquiry',
+                },
+            },
+            {
                 path: 'documents/:id',
                 component: DocumentDetails,
                 meta: {

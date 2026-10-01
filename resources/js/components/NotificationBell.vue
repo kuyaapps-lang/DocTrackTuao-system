@@ -10,9 +10,10 @@ import {
     markNotificationRead,
 } from '@/lib/notifications'
 import { createNotificationPoller } from '@/lib/notificationPoller'
+import { listenForRealtimeInvalidation } from '@/lib/realtime'
 
 const router = useRouter()
-const { getToken } = useAuth()
+const { getToken, ensureCurrentUser } = useAuth()
 const open = ref(false)
 const loading = ref(false)
 const updating = ref(false)
@@ -21,6 +22,7 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const root = ref(null)
 let poller = null
+let leaveRealtime = null
 
 const badgeLabel = computed(() => unreadCount.value > 99 ? '99+' : unreadCount.value)
 
@@ -93,11 +95,15 @@ onMounted(() => {
         documentRef: document,
     })
     poller.start()
+    ensureCurrentUser().then(user => {
+        if (user) leaveRealtime = listenForRealtimeInvalidation([`doc-track.user.${user.id}`], () => load({ quiet: true }))
+    }).catch(() => undefined)
     document.addEventListener('pointerdown', outsideClick)
 })
 
 onBeforeUnmount(() => {
     poller?.stop()
+    leaveRealtime?.()
     document.removeEventListener('pointerdown', outsideClick)
 })
 </script>

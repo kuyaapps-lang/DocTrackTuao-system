@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Document extends Model
 {
@@ -201,5 +202,9 @@ class Document extends Model
         return $this->hasMany(
             DocumentQrCode::class
         );
+    }
+    public function taggedOffices(): BelongsToMany
+    {
+        return $this->belongsToMany(Office::class, 'document_office_tags')->withTimestamps();
     }
 }

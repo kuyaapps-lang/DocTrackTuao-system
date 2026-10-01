@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\DocumentQrCode;
 use App\Services\AuditLogger;
 use App\Services\DocumentQrRegistration;
+use App\Services\RealtimeBroadcaster;
 use App\Support\PublicLookupSecurity;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -139,7 +140,7 @@ class DocumentQrCodeController extends Controller
     /**
      * Generate one or multiple QR codes.
      */
-    public function store(Request $request, AuditLogger $auditLogger)
+    public function store(Request $request, AuditLogger $auditLogger, RealtimeBroadcaster $realtime)
     {
         $validated = $request->validate([
             'quantity' => [
@@ -192,6 +193,7 @@ class DocumentQrCodeController extends Controller
                 userId: $user->id
             );
         }
+        foreach ($qrCodes as $qrCode) $realtime->qr($qrCode, 'qr.issued');
 
         return response()->json([
             'message' =>
@@ -234,6 +236,7 @@ class DocumentQrCodeController extends Controller
     public function void(
         Request $request,
         AuditLogger $auditLogger,
+        RealtimeBroadcaster $realtime,
         $id
     )
     {
@@ -279,6 +282,7 @@ class DocumentQrCodeController extends Controller
 
             return $qrCode;
         });
+        $realtime->qr($qrCode, 'qr.voided');
 
         return response()->json([
             'message' => 'QR code voided successfully.',

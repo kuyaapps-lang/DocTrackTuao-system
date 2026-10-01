@@ -56,6 +56,7 @@ export const fetchQrCodeRequests = async ({ fetchImpl, getToken, status = '' }) 
         ? `?status=${encodeURIComponent(status)}`
         : ''
     const response = await fetchImpl(`/api/qr-code-requests${query}`, {
+        cache: 'no-store',
         headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${getToken()}`,

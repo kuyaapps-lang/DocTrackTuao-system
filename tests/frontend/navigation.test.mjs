@@ -52,7 +52,9 @@ test('administrator sees every current sidebar destination', () => {
         flattenKeys(visibleNavigation(permissionSets.administrator)),
         [
             'dashboard',
-            'documents',
+            'outgoing-documents',
+            'incoming-documents',
+            'document-inquiry',
             'qr-codes',
             'master-data',
             'offices',
@@ -68,7 +70,9 @@ test('records officer sees every current link except users', () => {
         flattenKeys(visibleNavigation(permissionSets.recordsOfficer)),
         [
             'dashboard',
-            'documents',
+            'outgoing-documents',
+            'incoming-documents',
+            'document-inquiry',
             'qr-codes',
             'master-data',
             'offices',
@@ -83,7 +87,9 @@ test('office user sees QR requests but not master data links', () => {
         flattenKeys(visibleNavigation(permissionSets.officeUser)),
         [
             'dashboard',
-            'documents',
+            'outgoing-documents',
+            'incoming-documents',
+            'document-inquiry',
             'qr-codes',
         ]
     )
@@ -94,7 +100,9 @@ test('viewer does not see master data links', () => {
         flattenKeys(visibleNavigation(permissionSets.viewer)),
         [
             'dashboard',
-            'documents',
+            'outgoing-documents',
+            'incoming-documents',
+            'document-inquiry',
         ]
     )
 })
@@ -134,18 +142,27 @@ test('master data remains one group with stable child metadata', () => {
     )
 })
 
-test('document list detail and QR registration resolve to documents', () => {
-    assert.equal(resolveActiveNavigationKey('/documents'), 'documents')
-    assert.equal(resolveActiveNavigationKey('/documents/7'), 'documents')
+test('document list navigation resolves filtered lists to their sidebar links', () => {
+    assert.equal(
+        resolveActiveNavigationKey('/documents?view=incoming'),
+        'incoming-documents'
+    )
+    assert.equal(
+        resolveActiveNavigationKey('/documents?view=outgoing'),
+        'outgoing-documents'
+    )
+    assert.equal(resolveActiveNavigationKey('/documents'), null)
+    assert.equal(resolveActiveNavigationKey('/documents/7'), null)
     assert.equal(
         resolveActiveNavigationKey('/register-document/ABCDE-1234567'),
-        'documents'
+        null
     )
 })
 
 test('each other sidebar destination resolves to its own key', () => {
     for (const [path, key] of [
         ['/dashboard', 'dashboard'],
+        ['/document-inquiry', 'document-inquiry'],
         ['/qr-codes', 'qr-codes'],
         ['/offices', 'offices'],
         ['/document-types', 'document-types'],

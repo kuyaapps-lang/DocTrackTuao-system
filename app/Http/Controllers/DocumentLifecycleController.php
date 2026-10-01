@@ -9,6 +9,7 @@ use App\Models\DocumentRoute;
 use App\Models\DocumentStatus;
 use App\Models\Office;
 use App\Services\AuditLogger;
+use App\Services\RealtimeBroadcaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +18,7 @@ class DocumentLifecycleController extends Controller
     public function complete(
         Request $request,
         AuditLogger $auditLogger,
+        RealtimeBroadcaster $realtime,
         $documentId
     ) {
         $user = $request->user();
@@ -98,6 +100,7 @@ class DocumentLifecycleController extends Controller
             'currentAction',
             'completedBy',
         ]);
+        $realtime->document($document, 'document.completed', ['documents', 'dashboard', 'document-detail']);
         $status = $document->getRelation('status');
 
         return response()->json([
@@ -138,6 +141,7 @@ class DocumentLifecycleController extends Controller
     public function archive(
         Request $request,
         AuditLogger $auditLogger,
+        RealtimeBroadcaster $realtime,
         $documentId
     ) {
         $user = $request->user();
@@ -219,6 +223,7 @@ class DocumentLifecycleController extends Controller
             'currentAction',
             'archivedBy',
         ]);
+        $realtime->document($document, 'document.archived', ['documents', 'dashboard', 'document-detail']);
         $status = $document->getRelation('status');
 
         return response()->json([
