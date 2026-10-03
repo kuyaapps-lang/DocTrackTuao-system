@@ -285,9 +285,10 @@ class DocumentListApiContractTest extends TestCase
         $this->assertNull($data[0]['routes'][0]['received_at']);
         $this->assertSame('NEW Office', $data[1]['routes'][0]['from_office']['office_name']);
         $this->assertSame([
-            'id', 'tracking_no', 'qr_code', 'title', 'type', 'routes',
+            'id', 'tracking_no', 'qr_code', 'title', 'type', 'priority', 'routes',
         ], array_keys($data[0]));
         $this->assertSame('QR-INCOMING-PENDING', $data[0]['qr_code']);
+        $this->assertNull($data[0]['priority']);
         $this->assertSame([
             'from_office', 'received_at',
         ], array_keys($data[0]['routes'][0]));
@@ -295,6 +296,28 @@ class DocumentListApiContractTest extends TestCase
             ->assertJsonMissingPath('data.0.routes.0.remarks')
             ->assertJsonMissingPath('data.0.routes.0.forwarded_by')
             ->assertJsonMissingPath('data.0.description');
+    }
+
+    public function test_incoming_prioritizes_urgent_documents_before_newer_lower_priorities(): void
+    {
+        $office = $this->createOffice('USER');
+        $sender = $this->createOffice('SENDER');
+        $normalPriority = $this->createLookup('priorities', 'priority_name', 'Normal');
+        $urgentPriority = $this->createLookup('priorities', 'priority_name', 'Urgent');
+        $normal = $this->createDocument($sender, $office, now(), 'Newest normal', priorityId: $normalPriority);
+        $urgent = $this->createDocument($sender, $office, now()->subDay(), 'Older urgent', priorityId: $urgentPriority);
+        $this->createRoute($normal, $sender, $office, now(), null);
+        $this->createRoute($urgent, $sender, $office, now()->subDay(), null);
+
+        Sanctum::actingAs($this->createUser('Office User', $office));
+
+        $data = $this->getJson('/api/documents/incoming')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame([$urgent->id, $normal->id], array_column($data, 'id'));
+        $this->assertSame('Urgent', $data[0]['priority']['priority_name']);
+        $this->assertSame('Normal', $data[1]['priority']['priority_name']);
     }
 
     public function test_outgoing_uses_historical_senders_includes_pending_and_received_and_selects_newest_route(): void

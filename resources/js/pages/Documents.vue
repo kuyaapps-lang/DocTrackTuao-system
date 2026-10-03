@@ -1261,7 +1261,7 @@ onBeforeUnmount(() => {
 
                                     <!-- All -->
                                     <TableHead
-                                        v-if="activeTab === 'all'"
+                                        v-if="activeTab === 'all' || activeTab === 'incoming'"
                                         class="text-white font-semibold"
                                     >
                                         Priority
@@ -1298,6 +1298,7 @@ onBeforeUnmount(() => {
                                     v-for="document in documents"
                                     :key="document.id"
                                     class="border-b border-slate-200 hover:bg-gray-50 last:border-b-0"
+                                    :class="activeTab === 'incoming' && String(document.priority?.priority_name).toLowerCase() === 'urgent' ? 'bg-red-400/25 hover:bg-red-400/30' : ''"
                                 >
 
                                     <!-- Tracking -->
@@ -1351,7 +1352,7 @@ onBeforeUnmount(() => {
 
                                     <!-- Priority -->
                                     <TableCell
-                                        v-if="activeTab === 'all'"
+                                        v-if="activeTab === 'all' || activeTab === 'incoming'"
                                     >
                                         <span
                                             class="inline-flex rounded-full

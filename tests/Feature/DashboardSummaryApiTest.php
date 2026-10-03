@@ -49,6 +49,11 @@ class DashboardSummaryApiTest extends TestCase
             $table->string('status_name')->unique();
             $table->timestamps();
         });
+        Schema::create('priorities', function (Blueprint $table): void {
+            $table->id();
+            $table->string('priority_name')->unique();
+            $table->timestamps();
+        });
         Schema::create('documents', function (Blueprint $table): void {
             $table->id();
             $table->string('tracking_no')->unique();
@@ -136,6 +141,7 @@ class DashboardSummaryApiTest extends TestCase
             'document_processing_logs',
             'document_routes',
             'documents',
+            'priorities',
             'document_statuses',
             'users',
             'offices',
@@ -538,6 +544,30 @@ class DashboardSummaryApiTest extends TestCase
         $this->assertNotContains($after, $ids->all());
     }
 
+    public function test_recent_documents_prioritize_urgent_before_newer_lower_priorities(): void
+    {
+        $office = $this->office('PRIORITY');
+        $status = $this->documentStatus('Received');
+        $normalPriority = DB::table('priorities')->insertGetId([
+            'priority_name' => 'Normal', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $urgentPriority = DB::table('priorities')->insertGetId([
+            'priority_name' => 'Urgent', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $normal = $this->document($status, $office, $office, '2026-08-10 00:00:00', priorityId: $normalPriority);
+        $urgent = $this->document($status, $office, $office, '2026-08-09 00:00:00', priorityId: $urgentPriority);
+
+        Sanctum::actingAs($this->user('Administrator'));
+
+        $documents = $this->readOnlyRequest(
+            fn (): TestResponse => $this->getJson('/api/dashboard/summary')
+        )->assertOk()->json('recent_documents');
+
+        $this->assertSame([$urgent, $normal], array_column($documents, 'id'));
+        $this->assertSame('Urgent', $documents[0]['priority']['name']);
+        $this->assertSame('Normal', $documents[1]['priority']['name']);
+    }
+
     public function test_recent_results_are_safe_deterministic_and_limited(): void
     {
         $office = $this->office('SAFE');
@@ -578,7 +608,7 @@ class DashboardSummaryApiTest extends TestCase
         );
         $this->assertSame('received', $activity[0]['event_type']);
         $this->assertSame(
-            ['id', 'tracking_no', 'qr_code', 'document_details', 'status', 'created_at', 'latest_routing_activity'],
+            ['id', 'tracking_no', 'qr_code', 'document_details', 'priority', 'status', 'created_at', 'latest_routing_activity'],
             array_keys($documents[0])
         );
         $this->assertMatchesRegularExpression('/\AQR-DASH-\d+\z/', $documents[0]['qr_code']);
@@ -650,7 +680,8 @@ class DashboardSummaryApiTest extends TestCase
         ?int $currentOfficeId,
         string $createdAt = '2026-08-10 00:00:00',
         ?string $title = null,
-        ?string $description = null
+        ?string $description = null,
+        ?int $priorityId = null
     ): int {
         $this->sequence++;
 
@@ -659,6 +690,7 @@ class DashboardSummaryApiTest extends TestCase
             'title' => $title ?? 'Dashboard fixture',
             'description' => $description,
             'status_id' => $statusId,
+            'priority_id' => $priorityId,
             'origin_office_id' => $originOfficeId,
             'current_office_id' => $currentOfficeId,
             'processing_note' => 'Never serialize this note.',

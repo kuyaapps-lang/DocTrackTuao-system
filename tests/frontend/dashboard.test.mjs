@@ -11,7 +11,7 @@ const validResponse = {
     status_distribution: [{ status: { id: 1, name: 'Received' }, count: 2 }],
     current_office_distribution: [{ office: { id: 2, name: 'Mayor' }, count: 2 }],
     origin_office_distribution: [{ office: { id: null, name: 'Unassigned' }, count: 1 }],
-    recent_documents: [{ id: 8, tracking_no: 'DOC-008', qr_code: 'QR-008', document_details: 'Mayor endorsement', status: { id: null, name: 'Unassigned' }, created_at: '2026-08-20T01:00:00+00:00', latest_routing_activity: { event_type: 'forwarded', from_office: { id: 1, name: 'Records' }, to_office: { id: 2, name: 'Mayor' }, occurred_at: '2026-08-20T02:00:00+00:00' } }],
+    recent_documents: [{ id: 8, tracking_no: 'DOC-008', qr_code: 'QR-008', document_details: 'Mayor endorsement', priority: { id: 3, name: 'Normal' }, status: { id: null, name: 'Unassigned' }, created_at: '2026-08-20T01:00:00+00:00', latest_routing_activity: { event_type: 'forwarded', from_office: { id: 1, name: 'Records' }, to_office: { id: 2, name: 'Mayor' }, occurred_at: '2026-08-20T02:00:00+00:00' } }],
     recent_routing_activity: [{ document: { id: 8, tracking_no: 'DOC-008' }, event_type: 'forwarded', from_office: { id: 1, name: 'Records' }, to_office: { id: 2, name: 'Mayor' }, occurred_at: '2026-08-20T02:00:00+00:00' }],
 }
 

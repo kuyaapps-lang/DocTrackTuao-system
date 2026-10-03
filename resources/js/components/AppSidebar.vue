@@ -214,7 +214,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 </p>
 
                 <RouterLink
-                    v-else
+                    v-if="!item.children"
                     :to="item.to || item.path"
                     :class="linkClasses(item.key, false, desktopCollapsed)"
                     :aria-current="activeKey === item.key ? 'page' : undefined"
@@ -364,7 +364,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     </p>
 
                     <RouterLink
-                        v-else
+                        v-if="!item.children"
                         :to="item.to || item.path"
                         :class="linkClasses(item.key)"
                         :aria-current="activeKey === item.key ? 'page' : undefined"

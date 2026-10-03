@@ -376,6 +376,15 @@ class DashboardController extends Controller
             );
         }
 
+        if (Schema::hasTable('priorities')) {
+            $query->leftJoin(
+                'priorities as recent_priorities',
+                'recent_priorities.id',
+                '=',
+                'documents.priority_id'
+            );
+        }
+
         $recentDocuments = $query
             ->select([
                 'documents.id',
@@ -389,6 +398,19 @@ class DashboardController extends Controller
                 Schema::hasTable('document_qr_codes'),
                 fn (Builder $query): Builder => $query->addSelect('recent_qr_codes.qr_code')
             )
+            ->when(
+                Schema::hasTable('priorities'),
+                fn (Builder $query): Builder => $query->addSelect([
+                    'recent_priorities.id as priority_id',
+                    'recent_priorities.priority_name',
+                ])
+            )
+            ->when(
+                Schema::hasTable('priorities'),
+                fn (Builder $query): Builder => $query->orderByRaw(
+                    $this->priorityOrderSql('recent_priorities')
+                )
+            )
             ->orderByDesc('documents.created_at')
             ->orderByDesc('documents.id')
             ->limit(self::RECENT_DOCUMENT_LIMIT)
@@ -398,6 +420,12 @@ class DashboardController extends Controller
                 'tracking_no' => $row->tracking_no,
                 'qr_code' => $row->qr_code ?? null,
                 'document_details' => $row->title,
+                'priority' => ($row->priority_id ?? null) !== null
+                    ? [
+                        'id' => (int) $row->priority_id,
+                        'name' => $row->priority_name,
+                    ]
+                    : null,
                 'status' => [
                     'id' => $row->status_id !== null
                         ? (int) $row->status_id
@@ -582,6 +610,18 @@ class DashboardController extends Controller
         );
 
         return $query;
+    }
+
+    /** Use priority names, not environment-specific lookup IDs, for ranking. */
+    private function priorityOrderSql(string $priorityTable): string
+    {
+        return "CASE LOWER(COALESCE({$priorityTable}.priority_name, ''))
+            WHEN 'urgent' THEN 0
+            WHEN 'high' THEN 1
+            WHEN 'normal' THEN 2
+            WHEN 'low' THEN 3
+            ELSE 4
+        END";
     }
 
     private function applyBounds(

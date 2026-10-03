@@ -75,6 +75,7 @@ class DocumentController extends Controller
 
         $query = Document::with([
             'type',
+            'priority',
             'qrCodes:id,document_id,qr_token',
 
             'routes' => function ($query) use ($user) {
@@ -111,6 +112,14 @@ class DocumentController extends Controller
         );
 
         $documents = $query
+            ->leftJoin(
+                'priorities as incoming_priorities',
+                'incoming_priorities.id',
+                '=',
+                'documents.priority_id'
+            )
+            ->select('documents.*')
+            ->orderByRaw($this->priorityOrderSql('incoming_priorities'))
             ->orderByDesc('documents.created_at')
             ->orderByDesc('documents.id')
             ->paginate($filters['per_page']);
@@ -496,8 +505,29 @@ class DocumentController extends Controller
 
         return [
             ...$data,
+            'priority' => $view === 'incoming' && $document->priority
+                ? [
+                    'id' => $document->priority->id,
+                    'priority_name' => $document->priority->priority_name,
+                ]
+                : null,
             'routes' => [$routeData],
         ];
+    }
+
+    /**
+     * Master data has no rank column, so use the established priority names
+     * rather than development IDs. Unknown or unassigned values remain last.
+     */
+    private function priorityOrderSql(string $priorityTable): string
+    {
+        return "CASE LOWER(COALESCE({$priorityTable}.priority_name, ''))
+            WHEN 'urgent' THEN 0
+            WHEN 'high' THEN 1
+            WHEN 'normal' THEN 2
+            WHEN 'low' THEN 3
+            ELSE 4
+        END";
     }
 
     /**

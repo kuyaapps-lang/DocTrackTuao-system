@@ -112,6 +112,13 @@ const documentStatusClass = status => {
     }
 }
 const routingEventLabel = eventType => eventType === 'received' ? 'Received' : 'Forwarded'
+const priorityClass = priority => ({
+    urgent: 'bg-red-100 text-red-700 dark:bg-red-950/70 dark:text-red-200',
+    high: 'bg-orange-100 text-orange-700 dark:bg-orange-950/70 dark:text-orange-200',
+    normal: 'bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-200',
+    low: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+}[String(priority).toLowerCase()] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200')
+const isUrgent = document => String(document.priority?.name).toLowerCase() === 'urgent'
 
 const clearLocalAuthentication = async () => {
     localStorage.removeItem('auth_token')
@@ -293,12 +300,13 @@ onBeforeUnmount(() => {
                                         <th scope="col" class="px-3 py-2 text-left font-bold">QR Code</th>
                                         <th scope="col" class="px-3 py-2 text-left font-bold">Document Details</th>
                                         <th scope="col" class="px-3 py-2 text-left font-bold">Status</th>
+                                        <th scope="col" class="px-3 py-2 text-left font-bold">Priority</th>
                                         <th scope="col" class="px-3 py-2 text-center font-bold">Registered</th>
                                         <th scope="col" class="px-3 py-2 text-left font-bold">Latest Routing Activity</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 bg-white dark:divide-slate-700 dark:bg-slate-900">
-                                    <tr v-for="document in dashboard.recent_documents" :key="document.id" class="hover:bg-blue-50/50 dark:hover:bg-slate-800/80">
+                                    <tr v-for="document in dashboard.recent_documents" :key="document.id" class="hover:bg-blue-50/50 dark:hover:bg-slate-800/80" :class="isUrgent(document) ? 'bg-red-400/25 hover:bg-red-400/30 dark:bg-red-500/20 dark:hover:bg-red-500/30' : ''">
                                         <td class="px-3 py-1.5 font-semibold text-blue-800 dark:text-blue-300">
                                             <RouterLink :to="`/documents/${document.id}`" class="outline-none hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:ring-blue-500">
                                                 {{ document.qr_code || 'No QR code' }}
@@ -306,6 +314,7 @@ onBeforeUnmount(() => {
                                         </td>
                                         <td class="px-3 py-1.5 font-medium text-slate-800 dark:text-slate-100">{{ document.document_details }}</td>
                                         <td class="px-3 py-1.5"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="documentStatusClass(document.status.name)">{{ document.status.name }}</span></td>
+                                        <td class="px-3 py-1.5"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="priorityClass(document.priority?.name)">{{ document.priority?.name || 'Unassigned' }}</span></td>
                                         <td class="px-3 py-1.5 text-center text-slate-600 dark:text-slate-300">
                                             <time :datetime="document.created_at" class="block">
                                                 <span class="block">{{ formatDashboardDate(document.created_at) }}</span>
