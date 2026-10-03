@@ -304,6 +304,9 @@
   .doctrack-date-picker-day.is-outside { color: #94a3b8; }
   .doctrack-date-picker-day.is-today, .doctrack-date-picker-month.is-today { border-color: #60a5fa; }
   .doctrack-date-picker-day.is-selected, .doctrack-date-picker-month.is-selected { border-color: #1d4ed8; background: #2563eb; color: #fff; }
+  .doctrack-date-range-picker { width: auto; min-width: 17rem; }
+  .doctrack-date-range-picker .doctrack-date-picker-day.is-in-range { border-color: transparent; border-radius: 0; background: #dbeafe; color: #1d4ed8; }
+  .doctrack-date-range-picker .doctrack-date-picker-day.is-range-endpoint { border-color: #1d4ed8; border-radius: 9999px; background: #2563eb; color: #fff; }
   .doctrack-date-picker-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
   .doctrack-date-picker-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.875rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; }
 
@@ -381,6 +384,8 @@
   .dark .doctrack-date-picker-day:hover, .dark .doctrack-date-picker-month:hover { background: #314763; color: #dbeafe; }
   .dark .doctrack-date-picker-day.is-today, .dark .doctrack-date-picker-month.is-today { border-color: #7db6fa; }
   .dark .doctrack-date-picker-day.is-selected, .dark .doctrack-date-picker-month.is-selected { border-color: #bdd7ff; background: #2563eb; color: #fff; }
+  .dark .doctrack-date-range-picker .doctrack-date-picker-day.is-in-range { background: #314763; color: #dbeafe; }
+  .dark .doctrack-date-range-picker .doctrack-date-picker-day.is-range-endpoint { border-color: #bdd7ff; background: #2563eb; color: #fff; }
   .dark .doctrack-date-picker-actions { border-color: #4b5563; }
   .dark .doctrack-document-history-row:hover,
   .dark .doctrack-document-history-row:focus-within { background-color: #2c3a4c !important; color: #f8fafc; }

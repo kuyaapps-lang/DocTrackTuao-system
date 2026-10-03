@@ -13,7 +13,7 @@ const props = defineProps({
 <template>
   <tbody
     data-slot="table-body"
-    :class="cn('[&_tr:last-child]:border-0', props.class)"
+    :class="cn('divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900 [&_tr:last-child]:border-0', props.class)"
   >
     <slot />
   </tbody>

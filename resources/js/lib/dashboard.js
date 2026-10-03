@@ -4,6 +4,7 @@ const isRecord = value => value !== null && typeof value === 'object' && !Array.
 const hasExactKeys = (value, keys) => isRecord(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
 const isSafeId = value => value === null || (Number.isSafeInteger(value) && value > 0)
 const isSafeText = value => typeof value === 'string' && value.trim() !== ''
+const isNullableSafeText = value => value === null || isSafeText(value)
 const isCount = value => Number.isSafeInteger(value) && value >= 0
 const isNamedReference = value => hasExactKeys(value, ['id', 'name']) && isSafeId(value.id) && isSafeText(value.name)
 const isDistribution = (value, key) => Array.isArray(value) && value.every(item => hasExactKeys(item, [key, 'count']) && isNamedReference(item[key]) && isCount(item.count))
@@ -21,7 +22,8 @@ export const isValidDashboardTimestamp = value => {
     return day >= 1 && day <= days[month - 1]
 }
 
-const isRecentDocument = value => hasExactKeys(value, ['id', 'tracking_no', 'status', 'created_at']) && isPositiveSafeInteger(value.id) && isSafeText(value.tracking_no) && isNamedReference(value.status) && isValidDashboardTimestamp(value.created_at)
+const isDocumentRoutingActivity = value => hasExactKeys(value, ['event_type', 'from_office', 'to_office', 'occurred_at']) && ['forwarded', 'received'].includes(value.event_type) && isNamedReference(value.from_office) && value.from_office.id !== null && isNamedReference(value.to_office) && value.to_office.id !== null && isValidDashboardTimestamp(value.occurred_at)
+const isRecentDocument = value => hasExactKeys(value, ['id', 'tracking_no', 'qr_code', 'document_details', 'status', 'created_at', 'latest_routing_activity']) && isPositiveSafeInteger(value.id) && isSafeText(value.tracking_no) && isNullableSafeText(value.qr_code) && isSafeText(value.document_details) && isNamedReference(value.status) && isValidDashboardTimestamp(value.created_at) && (value.latest_routing_activity === null || isDocumentRoutingActivity(value.latest_routing_activity))
 const isRoutingActivity = value => hasExactKeys(value, ['document', 'event_type', 'from_office', 'to_office', 'occurred_at']) && hasExactKeys(value.document, ['id', 'tracking_no']) && isPositiveSafeInteger(value.document.id) && isSafeText(value.document.tracking_no) && ['forwarded', 'received'].includes(value.event_type) && isNamedReference(value.from_office) && value.from_office.id !== null && isNamedReference(value.to_office) && value.to_office.id !== null && isValidDashboardTimestamp(value.occurred_at)
 
 export const normalizeDashboardMonth = value => typeof value === 'string' && MONTH_PATTERN.test(value) ? value : null
@@ -51,7 +53,7 @@ export const calculateDashboardPercentage = (count, total) => {
 
 export const isValidDashboardResponse = value => {
     if (!hasExactKeys(value, ['filters', 'scope', 'summary', 'status_distribution', 'current_office_distribution', 'origin_office_distribution', 'recent_documents', 'recent_routing_activity'])) return false
-    const filtersValid = hasExactKeys(value.filters, ['month', 'timezone']) && (value.filters.month === null || normalizeDashboardMonth(value.filters.month) === value.filters.month) && isSafeText(value.filters.timezone)
+    const filtersValid = hasExactKeys(value.filters, ['month', 'date_from', 'date_to', 'timezone']) && (value.filters.month === null || normalizeDashboardMonth(value.filters.month) === value.filters.month) && [value.filters.date_from, value.filters.date_to].every(value => value === null || (/^\d{4}-\d{2}-\d{2}$/.test(value))) && isSafeText(value.filters.timezone)
     const scopeValid = hasExactKeys(value.scope, ['type', 'office']) && ((value.scope.type === 'system' && value.scope.office === null) || (value.scope.type === 'office' && isNamedReference(value.scope.office) && value.scope.office.id !== null))
     const summaryKeys = ['total_documents', 'incoming_movements', 'outgoing_movements', 'in_transit_documents', 'received_documents']
     const summaryValid = hasExactKeys(value.summary, summaryKeys) && summaryKeys.every(key => isCount(value.summary[key]))

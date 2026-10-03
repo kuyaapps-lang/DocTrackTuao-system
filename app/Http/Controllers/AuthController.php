@@ -47,11 +47,20 @@ class AuthController extends Controller
         );
 
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            // `email` remains accepted for existing clients while the SPA uses
+            // the neutral `login` identifier for either account name or email.
+            'login' => ['nullable', 'string', 'max:255', 'required_without:email'],
+            'email' => ['nullable', 'email', 'required_without:login'],
             'password' => ['required'],
         ]);
 
-        if (!Auth::attempt($credentials)) {
+        $identifier = trim((string) ($credentials['login'] ?? $credentials['email']));
+        $loginCredentials = [
+            filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'username' => $identifier,
+            'password' => $credentials['password'],
+        ];
+
+        if (!Auth::attempt($loginCredentials)) {
             return response()->json([
                 'message' => 'Invalid credentials',
             ], 401);
@@ -64,7 +73,7 @@ class AuthController extends Controller
 
         $token = DB::transaction(function () use (
             $user,
-            $credentials,
+            $loginCredentials,
             $expiresAt,
             $policy,
             $auditLogger
@@ -76,7 +85,7 @@ class AuthController extends Controller
 
             if (
                 !$lockedUser ||
-                !Hash::check($credentials['password'], $lockedUser->password)
+                !Hash::check($loginCredentials['password'], $lockedUser->password)
             ) {
                 return null;
             }
@@ -121,14 +130,14 @@ class AuthController extends Controller
 
     private function loginLimiterKey(Request $request): string
     {
-        $email = $request->input('email');
-        $normalizedEmail = is_string($email)
-            ? mb_strtolower(trim($email))
-            : '[invalid-email-input]';
+        $identifier = $request->input('login', $request->input('email'));
+        $normalizedIdentifier = is_string($identifier)
+            ? mb_strtolower(trim($identifier))
+            : '[invalid-login-input]';
 
         return 'login:'.hash(
             'sha256',
-            $normalizedEmail."\0".$request->ip()
+            $normalizedIdentifier."\0".$request->ip()
         );
     }
 

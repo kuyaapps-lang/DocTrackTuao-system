@@ -96,6 +96,13 @@ class DashboardSummaryApiTest extends TestCase
             $table->string('event_note', 1000)->nullable();
             $table->timestamps();
         });
+        Schema::create('document_qr_codes', function (Blueprint $table): void {
+            $table->id();
+            $table->string('qr_token')->unique();
+            $table->string('status')->default('registered');
+            $table->unsignedBigInteger('document_id')->nullable();
+            $table->timestamps();
+        });
         Schema::create('audit_logs', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
@@ -125,6 +132,7 @@ class DashboardSummaryApiTest extends TestCase
         foreach ([
             'personal_access_tokens',
             'audit_logs',
+            'document_qr_codes',
             'document_processing_logs',
             'document_routes',
             'documents',
@@ -160,19 +168,21 @@ class DashboardSummaryApiTest extends TestCase
         $office = $this->office('SYSTEM');
         $this->document($status, $office, $office);
 
-        foreach (['Administrator', 'Records Officer'] as $role) {
-            Sanctum::actingAs($this->user($role));
+        Sanctum::actingAs($this->user('Administrator'));
 
-            $this->readOnlyRequest(
-                fn (): TestResponse =>
-                    $this->getJson('/api/dashboard/summary')
-            )
-                ->assertOk()
-                ->assertJsonPath('scope.type', 'system')
-                ->assertJsonPath('scope.office', null)
-                ->assertJsonPath('summary.total_documents', 1)
-                ->assertJsonPath('filters.timezone', 'Asia/Manila');
-        }
+        $this->readOnlyRequest(
+            fn (): TestResponse => $this->getJson('/api/dashboard/summary')
+        )
+            ->assertOk()
+            ->assertJsonPath('scope.type', 'system')
+            ->assertJsonPath('scope.office', null)
+            ->assertJsonPath('summary.total_documents', 1)
+            ->assertJsonPath('filters.timezone', 'Asia/Manila');
+
+        Sanctum::actingAs($this->user('Records Officer', $office));
+        $this->readOnlyRequest(
+            fn (): TestResponse => $this->getJson('/api/dashboard/summary')
+        )->assertOk()->assertJsonPath('scope.type', 'office');
     }
 
     public function test_office_user_and_viewer_have_office_scope(): void
@@ -260,6 +270,8 @@ class DashboardSummaryApiTest extends TestCase
         )->assertExactJson([
             'filters' => [
                 'month' => null,
+                'date_from' => null,
+                'date_to' => null,
                 'timezone' => 'Asia/Manila',
             ],
             'scope' => [
@@ -532,13 +544,13 @@ class DashboardSummaryApiTest extends TestCase
         $status = $this->documentStatus('Received');
         $user = $this->user('Administrator');
 
-        foreach (range(1, 12) as $index) {
+        foreach (range(1, 52) as $index) {
             $document = $this->document(
                 $status,
                 $office,
                 $office,
                 '2026-08-10 00:00:00',
-                "Sensitive title {$index}",
+                "Dashboard document {$index}",
                 "Sensitive description {$index}"
             );
             $this->route(
@@ -558,16 +570,22 @@ class DashboardSummaryApiTest extends TestCase
 
         $documents = $response->json('recent_documents');
         $activity = $response->json('recent_routing_activity');
-        $this->assertCount(10, $documents);
-        $this->assertCount(10, $activity);
+        $this->assertCount(50, $documents);
+        $this->assertCount(50, $activity);
         $this->assertSame(
             collect($documents)->pluck('id')->sortDesc()->values()->all(),
             collect($documents)->pluck('id')->all()
         );
         $this->assertSame('received', $activity[0]['event_type']);
         $this->assertSame(
-            ['id', 'tracking_no', 'status', 'created_at'],
+            ['id', 'tracking_no', 'qr_code', 'document_details', 'status', 'created_at', 'latest_routing_activity'],
             array_keys($documents[0])
+        );
+        $this->assertMatchesRegularExpression('/\AQR-DASH-\d+\z/', $documents[0]['qr_code']);
+        $this->assertSame('Dashboard document 52', $documents[0]['document_details']);
+        $this->assertSame(
+            ['event_type', 'from_office', 'to_office', 'occurred_at'],
+            array_keys($documents[0]['latest_routing_activity'])
         );
         $this->assertSame(
             ['document', 'event_type', 'from_office', 'to_office', 'occurred_at'],
@@ -636,7 +654,7 @@ class DashboardSummaryApiTest extends TestCase
     ): int {
         $this->sequence++;
 
-        return (int) DB::table('documents')->insertGetId([
+        $documentId = (int) DB::table('documents')->insertGetId([
             'tracking_no' => 'DOC-TEST-'.$this->sequence,
             'title' => $title ?? 'Dashboard fixture',
             'description' => $description,
@@ -647,6 +665,16 @@ class DashboardSummaryApiTest extends TestCase
             'created_at' => $createdAt,
             'updated_at' => $createdAt,
         ]);
+
+        DB::table('document_qr_codes')->insert([
+            'qr_token' => 'QR-DASH-'.$this->sequence,
+            'status' => 'registered',
+            'document_id' => $documentId,
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ]);
+
+        return $documentId;
     }
 
     private function route(

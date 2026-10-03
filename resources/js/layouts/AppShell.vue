@@ -19,7 +19,6 @@ import ThemeToggle from '@/components/ThemeToggle.vue'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth'
 import {
-    CircleUserRound,
     Menu,
 } from 'lucide-vue-next'
 
@@ -27,7 +26,6 @@ const route = useRoute()
 const router = useRouter()
 
 const {
-    currentUser,
     getToken,
     clearCurrentUser,
 } = useAuth()
@@ -36,9 +34,7 @@ const logoutPending = ref(false)
 const logoutError = ref('')
 const desktopSidebarCollapsed = ref(false)
 const mobileNavigationOpen = ref(false)
-const accountMenuOpen = ref(false)
 const menuTrigger = ref(null)
-const accountMenu = ref(null)
 const sidebar = ref(null)
 
 let desktopMediaQuery = null
@@ -46,20 +42,6 @@ let previousBodyOverflow = ''
 
 const pageTitle = computed(() => {
     return route.meta?.title || 'DocTrack Tuao'
-})
-
-const userName = computed(() => {
-    return currentUser.value?.name || ''
-})
-
-const roleLabel = computed(() => {
-    return currentUser.value?.role?.name || ''
-})
-
-const officeLabel = computed(() => {
-    return currentUser.value?.office?.office_name ||
-        currentUser.value?.office?.name ||
-        ''
 })
 
 const openMobileNavigation = async () => {
@@ -83,10 +65,6 @@ const closeMobileNavigation = async (restoreFocus = true) => {
 }
 
 const handleDocumentKeydown = (event) => {
-    if (event.key === 'Escape' && accountMenuOpen.value) {
-        accountMenuOpen.value = false
-    }
-
     if (!mobileNavigationOpen.value) {
         return
     }
@@ -126,18 +104,6 @@ const handleDocumentKeydown = (event) => {
     }
 }
 
-const handleAccountOutsideClick = (event) => {
-    if (!accountMenuOpen.value) {
-        return
-    }
-
-    if (accountMenu.value?.contains(event.target)) {
-        return
-    }
-
-    accountMenuOpen.value = false
-}
-
 const handleDesktopBreakpoint = (event) => {
     if (event.matches) {
         closeMobileNavigation(false)
@@ -160,7 +126,6 @@ watch(() => route.fullPath, () => {
 
 onMounted(() => {
     document.addEventListener('keydown', handleDocumentKeydown)
-    document.addEventListener('pointerdown', handleAccountOutsideClick)
 
     desktopMediaQuery = window.matchMedia('(min-width: 768px)')
     desktopMediaQuery.addEventListener(
@@ -171,7 +136,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     document.removeEventListener('keydown', handleDocumentKeydown)
-    document.removeEventListener('pointerdown', handleAccountOutsideClick)
     desktopMediaQuery?.removeEventListener(
         'change',
         handleDesktopBreakpoint
@@ -183,7 +147,6 @@ onBeforeUnmount(() => {
 })
 
 const clearLocalAuthentication = async () => {
-    accountMenuOpen.value = false
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
     clearCurrentUser()
@@ -231,9 +194,6 @@ const logout = async () => {
     }
 }
 
-const toggleAccountMenu = () => {
-    accountMenuOpen.value = !accountMenuOpen.value
-}
 </script>
 
 <template>
@@ -242,9 +202,12 @@ const toggleAccountMenu = () => {
             ref="sidebar"
             :desktop-collapsed="desktopSidebarCollapsed"
             :mobile-open="mobileNavigationOpen"
+            :logout-pending="logoutPending"
+            :logout-error="logoutError"
             @toggle-desktop="desktopSidebarCollapsed = !desktopSidebarCollapsed"
             @close-mobile="closeMobileNavigation()"
             @navigate="closeMobileNavigation()"
+            @logout="logout"
         />
 
         <div class="min-w-0 flex-1 bg-slate-100 bg-white/35 pt-20 transition-[margin,background-color] duration-200" :class="desktopSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
@@ -277,63 +240,6 @@ const toggleAccountMenu = () => {
                 <div class="flex shrink-0 items-center gap-2">
                     <ThemeToggle />
                     <NotificationBell />
-                    <div ref="accountMenu" class="relative">
-                        <Button
-                            type="button"
-                            size="icon"
-                            class="rounded-full"
-                            aria-label="Open account menu"
-                            aria-haspopup="menu"
-                            :aria-expanded="accountMenuOpen"
-                            @click="toggleAccountMenu"
-                        >
-                            <CircleUserRound aria-hidden="true" class="h-6 w-6" />
-                        </Button>
-
-                        <div
-                            v-if="accountMenuOpen"
-                            class="absolute right-0 z-40 mt-3 w-72 rounded-2xl border border-white/80 bg-white/90 p-4 text-sm shadow-[0_18px_42px_rgb(67_86_119/0.16),inset_0_1px_0_rgb(255_255_255/0.92)] backdrop-blur-xl"
-                            role="menu"
-                            aria-label="Account menu"
-                        >
-                            <div class="space-y-1 border-b border-slate-200 pb-3">
-                                <p class="truncate text-sm font-semibold text-blue-950">
-                                    {{ userName || 'Signed-in user' }}
-                                </p>
-                                <p
-                                    v-if="roleLabel"
-                                    class="text-xs font-medium uppercase tracking-wide text-blue-700"
-                                >
-                                    {{ roleLabel }}
-                                </p>
-                                <p
-                                    v-if="officeLabel"
-                                    class="truncate text-xs text-gray-600"
-                                >
-                                    {{ officeLabel }}
-                                </p>
-                            </div>
-
-                            <Button
-                                type="button"
-                                :disabled="logoutPending"
-                                size="sm"
-                                class="mt-3 w-full"
-                                role="menuitem"
-                                @click="logout"
-                            >
-                                {{ logoutPending ? 'Logging out...' : 'Logout' }}
-                            </Button>
-
-                            <p
-                                v-if="logoutError"
-                                class="mt-2 text-sm text-red-600"
-                                role="alert"
-                            >
-                                {{ logoutError }}
-                            </p>
-                        </div>
-                    </div>
                 </div>
             </header>
 

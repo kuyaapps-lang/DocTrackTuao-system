@@ -1028,8 +1028,8 @@ onBeforeUnmount(() => {
                         No QR requests found.
                     </div>
 
-                    <div v-else-if="canApproveQr" class="overflow-hidden rounded-t-lg border-t border-blue-900">
-                        <table class="min-w-full divide-y divide-slate-200 text-left">
+                    <div v-else-if="canApproveQr" class="overflow-hidden rounded-t-lg border border-blue-900 dark:border-slate-700">
+                        <table class="min-w-full divide-y divide-slate-200 text-left text-slate-800 dark:divide-slate-700 dark:bg-slate-900 dark:text-slate-100">
                             <thead class="bg-blue-900 text-xs font-semibold tracking-wide text-white">
                                 <tr>
                                     <th scope="col" class="px-3 py-1">Requesting Office</th>
@@ -1038,14 +1038,14 @@ onBeforeUnmount(() => {
                                     <th scope="col" class="px-3 py-1 text-right"><span class="sr-only">QR code actions</span></th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200 bg-white">
+                            <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
                                 <template v-for="request in requests" :key="request.id">
-                                    <tr class="align-top">
+                                    <tr class="align-top hover:bg-blue-50/70 dark:hover:bg-slate-800/80">
                                         <td class="px-3 py-1">
-                                            <p class="font-semibold text-slate-900">{{ request.requested_office?.office_name || 'Unassigned office' }}</p>
+                                            <p class="font-semibold text-slate-900 dark:text-slate-100">{{ request.requested_office?.office_name || 'Unassigned office' }}</p>
                                         </td>
-                                        <td class="whitespace-nowrap px-3 py-1 text-sm text-slate-700">{{ formatDateTime(request.created_at) }}</td>
-                                        <td class="px-3 py-1 text-sm font-semibold text-slate-900">{{ request.qr_codes.length > 0 ? `${request.qr_codes.length} assigned` : 'Not assigned yet' }}</td>
+                                        <td class="whitespace-nowrap px-3 py-1 text-sm text-slate-700 dark:text-slate-300">{{ formatDateTime(request.created_at) }}</td>
+                                        <td class="px-3 py-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{{ request.qr_codes.length > 0 ? `${request.qr_codes.length} assigned` : 'Not assigned yet' }}</td>
                                         <td class="px-3 py-1 text-right">
                                             <Button type="button" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :aria-expanded="expandedRequestId === request.id" @click="toggleRequestQrCodes(request.id)">
                                                 {{ expandedRequestId === request.id ? 'Hide QR Codes' : 'Show QR Codes' }}
@@ -1053,12 +1053,12 @@ onBeforeUnmount(() => {
                                         </td>
                                     </tr>
                                     <tr v-if="expandedRequestId === request.id">
-                                        <td colspan="4" class="bg-slate-50 px-3 py-4">
+                                        <td colspan="4" class="bg-slate-50 px-3 py-4 dark:bg-slate-800">
                                             <div class="space-y-3">
                                                 <div v-if="request.qr_codes.length > 0" class="flex flex-wrap gap-2">
-                                                    <span v-for="qr in request.qr_codes" :key="qr.id" class="rounded-md border bg-white px-3 py-1.5 font-mono text-xs font-semibold text-gray-700">{{ qr.qr_token }}</span>
+                                                    <span v-for="qr in request.qr_codes" :key="qr.id" class="rounded-md border bg-white px-3 py-1.5 font-mono text-xs font-semibold text-gray-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">{{ qr.qr_token }}</span>
                                                 </div>
-                                                <p v-else class="text-sm text-slate-500">No QR codes have been assigned yet.</p>
+                                                <p v-else class="text-sm text-slate-500 dark:text-slate-400">No QR codes have been assigned yet.</p>
                                                 <div v-if="request.status === 'pending'" class="flex gap-2">
                                                     <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'approve')">{{ reviewPendingId === request.id ? 'Reviewing...' : 'Approve' }}</Button>
                                                     <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'reject')">Reject</Button>
@@ -1319,8 +1319,8 @@ onBeforeUnmount(() => {
                             : 'No persisted QR records are available.' }}
                     </div>
 
-                    <div v-else-if="!inventoryError" class="overflow-hidden rounded-t-lg border-t border-blue-900">
-                        <table class="min-w-full divide-y text-left text-sm">
+                    <div v-else-if="!inventoryError" class="overflow-hidden rounded-t-lg border border-blue-900 dark:border-slate-700">
+                        <table class="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-800 dark:divide-slate-700 dark:bg-slate-900 dark:text-slate-100">
                             <caption class="sr-only">
                                 Persisted QR records with lifecycle status and void eligibility
                             </caption>
@@ -1333,8 +1333,8 @@ onBeforeUnmount(() => {
                                     <th scope="col" class="px-3 py-1 font-semibold">Action</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y">
-                                <tr v-for="item in inventory" :key="item.id">
+                            <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                                <tr v-for="item in inventory" :key="item.id" class="hover:bg-blue-50/70 dark:hover:bg-slate-800/80">
                                     <td class="whitespace-nowrap px-3 py-1 font-mono">#{{ item.id }}</td>
                                     <td class="whitespace-nowrap px-3 py-1">{{ formatDateTime(item.issued_at) }}</td>
                                     <td class="whitespace-nowrap px-3 py-1 capitalize">{{ item.status }}</td>

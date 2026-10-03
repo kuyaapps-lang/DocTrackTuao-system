@@ -8,13 +8,15 @@ use DateTimeZone;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class DashboardController extends Controller
 {
-    private const RECENT_LIMIT = 10;
+    private const RECENT_DOCUMENT_LIMIT = 50;
+    private const RECENT_ROUTING_ACTIVITY_LIMIT = 50;
     private const UNAVAILABLE_MESSAGE =
         'Dashboard summary is temporarily unavailable.';
 
@@ -28,6 +30,8 @@ class DashboardController extends Controller
                 'string',
                 'regex:/\A(?!0000)\d{4}-(0[1-9]|1[0-2])\z/',
             ],
+            'date_from' => ['sometimes', 'date_format:Y-m-d'],
+            'date_to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:date_from'],
         ]);
 
         $reportingTimezone = $this->reportingTimezone();
@@ -39,7 +43,9 @@ class DashboardController extends Controller
         }
 
         $timezone = $reportingTimezone->getName();
-        $bounds = $this->monthBounds(
+        $bounds = isset($validated['date_from'])
+            ? $this->dateRangeBounds($validated['date_from'], $validated['date_to'] ?? $validated['date_from'], $reportingTimezone)
+            : $this->monthBounds(
             $validated['month'] ?? null,
             $reportingTimezone
         );
@@ -108,6 +114,8 @@ class DashboardController extends Controller
         return response()->json([
             'filters' => [
                 'month' => $validated['month'] ?? null,
+                'date_from' => $validated['date_from'] ?? null,
+                'date_to' => $validated['date_to'] ?? null,
                 'timezone' => $timezone,
             ],
             'scope' => [
@@ -129,7 +137,11 @@ class DashboardController extends Controller
                 $documents,
                 'origin_office_id'
             ),
-            'recent_documents' => $this->recentDocuments($documents),
+            'recent_documents' => $this->recentDocuments(
+                $documents,
+                $officeId,
+                $bounds
+            ),
             'recent_routing_activity' => $this->recentRoutingActivity(
                 $officeId,
                 $bounds
@@ -141,7 +153,7 @@ class DashboardController extends Controller
     {
         $unknown = array_values(array_diff(
             array_keys($request->query()),
-            ['month']
+            ['month', 'date_from', 'date_to']
         ));
 
         if ($unknown === []) {
@@ -189,10 +201,16 @@ class DashboardController extends Controller
         ];
     }
 
+    private function dateRangeBounds(string $from, string $to, DateTimeZone $timezone): array
+    {
+        $start = CarbonImmutable::createFromFormat('!Y-m-d', $from, $timezone)->startOfDay();
+        $end = CarbonImmutable::createFromFormat('!Y-m-d', $to, $timezone)->addDay()->startOfDay();
+        return [$start->utc()->format('Y-m-d H:i:s'), $end->utc()->format('Y-m-d H:i:s')];
+    }
+
     private function hasSystemScope(User $user): bool
     {
-        return $user->hasRole('Administrator')
-            || $user->hasRole('Records Officer');
+        return $user->hasRole('Administrator');
     }
 
     private function resolveOfficeScope(User $user, bool $systemWide): ?object
@@ -330,29 +348,56 @@ class DashboardController extends Controller
             ->all();
     }
 
-    private function recentDocuments(Builder $documents): array
+    private function recentDocuments(
+        Builder $documents,
+        ?int $officeId,
+        ?array $bounds
+    ): array
     {
-        return (clone $documents)
+        $query = (clone $documents)
             ->leftJoin(
                 'document_statuses as recent_statuses',
                 'recent_statuses.id',
                 '=',
                 'documents.status_id'
-            )
+            );
+
+        if (Schema::hasTable('document_qr_codes')) {
+            $query->leftJoinSub(
+                DB::table('document_qr_codes')
+                    ->select('document_id')
+                    ->selectRaw('MIN(qr_token) as qr_code')
+                    ->whereNotNull('document_id')
+                    ->groupBy('document_id'),
+                'recent_qr_codes',
+                'recent_qr_codes.document_id',
+                '=',
+                'documents.id'
+            );
+        }
+
+        $recentDocuments = $query
             ->select([
                 'documents.id',
                 'documents.tracking_no',
+                'documents.title',
                 'documents.created_at',
                 'recent_statuses.id as status_id',
                 'recent_statuses.status_name',
             ])
+            ->when(
+                Schema::hasTable('document_qr_codes'),
+                fn (Builder $query): Builder => $query->addSelect('recent_qr_codes.qr_code')
+            )
             ->orderByDesc('documents.created_at')
             ->orderByDesc('documents.id')
-            ->limit(self::RECENT_LIMIT)
+            ->limit(self::RECENT_DOCUMENT_LIMIT)
             ->get()
             ->map(fn (object $row): array => [
                 'id' => (int) $row->id,
                 'tracking_no' => $row->tracking_no,
+                'qr_code' => $row->qr_code ?? null,
+                'document_details' => $row->title,
                 'status' => [
                     'id' => $row->status_id !== null
                         ? (int) $row->status_id
@@ -360,6 +405,20 @@ class DashboardController extends Controller
                     'name' => $row->status_name ?? 'Unassigned',
                 ],
                 'created_at' => $this->serializeTimestamp($row->created_at),
+            ]);
+
+        $activityByDocument = $this->latestRoutingActivityForDocuments(
+            $recentDocuments->pluck('id')->all(),
+            $officeId,
+            $bounds
+        );
+
+        return $recentDocuments
+            ->map(fn (array $document): array => [
+                ...$document,
+                'latest_routing_activity' => $activityByDocument[
+                    $document['id']
+                ] ?? null,
             ])
             ->all();
     }
@@ -388,7 +447,7 @@ class DashboardController extends Controller
             ->orderByDesc('occurred_at')
             ->orderByDesc('route_id')
             ->orderByDesc('event_precedence')
-            ->limit(self::RECENT_LIMIT)
+            ->limit(self::RECENT_ROUTING_ACTIVITY_LIMIT)
             ->get();
 
         return $activity
@@ -407,6 +466,61 @@ class DashboardController extends Controller
                     'name' => $row->to_office_name,
                 ],
                 'occurred_at' => $this->serializeTimestamp($row->occurred_at),
+            ])
+            ->all();
+    }
+
+    private function latestRoutingActivityForDocuments(
+        array $documentIds,
+        ?int $officeId,
+        ?array $bounds
+    ): array {
+        if ($documentIds === []) {
+            return [];
+        }
+
+        $forwarded = $this->activityQuery(
+            'forwarded',
+            'forwarded_at',
+            1,
+            $officeId,
+            $bounds
+        )->whereIn('activity_routes.document_id', $documentIds);
+        $received = $this->activityQuery(
+            'received',
+            'received_at',
+            2,
+            $officeId,
+            $bounds
+        )->whereIn('activity_routes.document_id', $documentIds);
+
+        return DB::query()
+            ->fromSub($forwarded->unionAll($received), 'routing_activity')
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('route_id')
+            ->orderByDesc('event_precedence')
+            ->get()
+            ->map(fn (object $row): array => [
+                'document_id' => (int) $row->document_id,
+                'event_type' => $row->event_type,
+                'from_office' => [
+                    'id' => (int) $row->from_office_id,
+                    'name' => $row->from_office_name,
+                ],
+                'to_office' => [
+                    'id' => (int) $row->to_office_id,
+                    'name' => $row->to_office_name,
+                ],
+                'occurred_at' => $this->serializeTimestamp($row->occurred_at),
+            ])
+            ->unique('document_id')
+            ->mapWithKeys(fn (array $activity): array => [
+                $activity['document_id'] => [
+                    'event_type' => $activity['event_type'],
+                    'from_office' => $activity['from_office'],
+                    'to_office' => $activity['to_office'],
+                    'occurred_at' => $activity['occurred_at'],
+                ],
             ])
             ->all();
     }

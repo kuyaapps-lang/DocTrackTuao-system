@@ -25,6 +25,7 @@ class UserManagementController extends Controller
 
     private const MUTATION_FIELDS = [
         'name',
+        'username',
         'email',
         'role_id',
         'office_id',
@@ -91,6 +92,14 @@ class UserManagementController extends Controller
                 'string',
                 'max:255',
             ],
+            'username' => [
+                'nullable',
+                'string',
+                'min:3',
+                'max:50',
+                'regex:/\A[a-zA-Z0-9][a-zA-Z0-9._-]*\z/',
+                'unique:users,username',
+            ],
             'email' => [
                 'required',
                 'email',
@@ -121,7 +130,7 @@ class UserManagementController extends Controller
             $validated['office_id']
         );
 
-        $user = User::query()->create([
+        $userValues = [
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make(
@@ -130,13 +139,21 @@ class UserManagementController extends Controller
             'role_id' => $validated['role_id'],
             'department_id' => $office->department_id,
             'office_id' => $office->id,
-        ]);
+        ];
+
+        if (array_key_exists('username', $validated)) {
+            $userValues['username'] = $this->normalizeUsername(
+                $validated['username']
+            );
+        }
+
+        $user = User::query()->create($userValues);
 
         $auditLogger->log(
             module: AuditLog::MODULE_USERS,
             action: AuditLog::ACTION_CREATED,
             recordId: $user->id,
-            description: 'Changed fields: name, email, role_id, office_id, department_id; password changed: yes.',
+            description: 'Changed fields: name, username, email, role_id, office_id, department_id; password changed: yes.',
             userId: $request->user()->id
         );
 
@@ -161,6 +178,15 @@ class UserManagementController extends Controller
                 'required',
                 'string',
                 'max:255',
+            ],
+            'username' => [
+                'nullable',
+                'string',
+                'min:3',
+                'max:50',
+                'regex:/\A[a-zA-Z0-9][a-zA-Z0-9._-]*\z/',
+                Rule::unique('users', 'username')
+                    ->ignore($user->id),
             ],
             'email' => [
                 'required',
@@ -204,6 +230,7 @@ class UserManagementController extends Controller
         );
 
         $changedFields = [];
+        $usernameProvided = array_key_exists('username', $validated);
         $newValues = [
             'name' => $validated['name'],
             'email' => $validated['email'],
@@ -214,12 +241,19 @@ class UserManagementController extends Controller
                 : (int) $office->department_id,
         ];
 
+        if ($usernameProvided) {
+            $newValues['username'] = $this->normalizeUsername(
+                $validated['username']
+            );
+        }
+
         $passwordChanged = !empty($validated['password']);
 
         DB::transaction(function () use (
             $user,
             $validated,
             $office,
+            $usernameProvided,
             $passwordChanged,
             $newValues,
             &$changedFields,
@@ -246,6 +280,11 @@ class UserManagementController extends Controller
             }
 
             $lockedUser->name = $validated['name'];
+            if ($usernameProvided) {
+                $lockedUser->username = $this->normalizeUsername(
+                    $validated['username']
+                );
+            }
             $lockedUser->email = $validated['email'];
             $lockedUser->role_id = $validated['role_id'];
             $lockedUser->department_id = $office->department_id;
@@ -262,7 +301,7 @@ class UserManagementController extends Controller
             $securitySensitiveChange = $passwordChanged ||
                 array_intersect(
                     $changedFields,
-                    ['email', 'role_id', 'office_id']
+                    ['username', 'email', 'role_id', 'office_id']
                 ) !== [];
 
             if ($securitySensitiveChange) {
@@ -379,6 +418,7 @@ class UserManagementController extends Controller
         return [
             'id' => (int) $user->id,
             'name' => (string) $user->name,
+            'username' => $user->username === null ? null : (string) $user->username,
             'email' => (string) $user->email,
             'role_id' => $user->role_id === null ? null : (int) $user->role_id,
             'must_change_password' => (bool) $user->must_change_password,
@@ -389,6 +429,17 @@ class UserManagementController extends Controller
             'role' => $user->role ? $this->roleShape($user->role) : null,
             'office' => $user->office ? $this->officeShape($user->office) : null,
         ];
+    }
+
+    private function normalizeUsername(?string $username): ?string
+    {
+        if ($username === null) {
+            return null;
+        }
+
+        $username = trim($username);
+
+        return $username === '' ? null : $username;
     }
 
     private function roleShape(Role $role): array

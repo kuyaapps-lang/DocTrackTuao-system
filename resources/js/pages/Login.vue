@@ -24,7 +24,7 @@ import {
     submitPasswordResetRequest,
 } from '@/lib/password-reset'
 
-const email = ref('')
+const loginIdentifier = ref('')
 const password = ref('')
 const showPassword = ref(false)
 
@@ -94,9 +94,9 @@ const login = async () => {
     error.value = ''
     success.value = ''
 
-    if (!email.value || !password.value) {
+    if (!loginIdentifier.value || !password.value) {
         error.value =
-            'Please enter your email and password.'
+            'Please enter your username or email and password.'
 
         return
     }
@@ -118,8 +118,8 @@ const login = async () => {
                 },
 
                 body: JSON.stringify({
-                    email:
-                        email.value,
+                    login:
+                        loginIdentifier.value,
 
                     password:
                         password.value,
@@ -194,7 +194,9 @@ const openResetRequest = () => {
     resetRequestError.value = ''
     resetRequestSuccess.value = ''
     resetRequestForm.value = {
-        email: email.value || '',
+        email: loginIdentifier.value.includes('@')
+            ? loginIdentifier.value
+            : '',
         name: '',
         message: '',
     }
@@ -367,7 +369,7 @@ const submitResetRequest = async () => {
                 @submit.prevent="login"
             >
 
-                <!-- Email -->
+                <!-- Username or Email -->
                 <div>
 
                     <label
@@ -375,13 +377,14 @@ const submitResetRequest = async () => {
                                text-sm font-semibold
                                text-gray-700"
                     >
-                        Email Address
+                        Username or Email
                     </label>
 
                     <Input
-                        v-model="email"
-                        type="email"
-                        placeholder="Enter your email"
+                        v-model="loginIdentifier"
+                        type="text"
+                        autocomplete="username"
+                        placeholder="Enter your username or email"
                         class="h-12 rounded-xl"
                     />
 

@@ -294,10 +294,6 @@ onMounted(() => {
                                 </TableHead>
 
                                 <TableHead class="text-white font-semibold">
-                                    Department
-                                </TableHead>
-
-                                <TableHead class="text-white font-semibold">
                                     Description
                                 </TableHead>
 
@@ -324,10 +320,6 @@ onMounted(() => {
 
                                 <TableCell>
                                     {{ office.office_name }}
-                                </TableCell>
-
-                                <TableCell>
-                                    {{ office.department?.department_name || 'N/A' }}
                                 </TableCell>
 
                                 <TableCell>

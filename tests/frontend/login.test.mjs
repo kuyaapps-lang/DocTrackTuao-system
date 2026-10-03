@@ -80,7 +80,7 @@ test('login reset request modal submits public request fields and shows generic 
             }
         },
     }, [
-        'email',
+        'loginIdentifier',
         'resetRequestOpen',
         'resetRequestForm',
         'resetRequestSuccess',
@@ -89,7 +89,7 @@ test('login reset request modal submits public request fields and shows generic 
         'submitResetRequest',
     ])
 
-    page.email.value = 'person@example.test'
+    page.loginIdentifier.value = 'person@example.test'
     page.openResetRequest()
     page.resetRequestForm.value.name = 'Requester Name'
     page.resetRequestForm.value.message = 'I cannot sign in.'
@@ -126,8 +126,8 @@ for (const [redirect, destination] of [
                 ok: true, status: 200,
                 json: async () => ({ token: 'new-test-token', user: { id: 42, name: 'Private Profile' } }),
             }),
-        }, ['login', 'email', 'password', 'error', 'loading'])
-        page.email.value = 'login@example.test'
+        }, ['login', 'loginIdentifier', 'password', 'error', 'loading'])
+        page.loginIdentifier.value = 'login@example.test'
         page.password.value = 'test-only-password'
         await page.login()
         assert.deepEqual(storage.writes, ['auth_token'])

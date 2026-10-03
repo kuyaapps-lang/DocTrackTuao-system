@@ -6,12 +6,12 @@ import { computed, ref } from 'vue'
 import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, isValidDashboardTimestamp, normalizeDashboardMonth } from '../../resources/js/lib/dashboard.js'
 
 const validResponse = {
-    filters: { month: null, timezone: 'Asia/Manila' }, scope: { type: 'system', office: null },
+    filters: { month: null, date_from: null, date_to: null, timezone: 'Asia/Manila' }, scope: { type: 'system', office: null },
     summary: { total_documents: 2, incoming_movements: 3, outgoing_movements: 4, in_transit_documents: 1, received_documents: 1 },
     status_distribution: [{ status: { id: 1, name: 'Received' }, count: 2 }],
     current_office_distribution: [{ office: { id: 2, name: 'Mayor' }, count: 2 }],
     origin_office_distribution: [{ office: { id: null, name: 'Unassigned' }, count: 1 }],
-    recent_documents: [{ id: 8, tracking_no: 'DOC-008', status: { id: null, name: 'Unassigned' }, created_at: '2026-08-20T01:00:00+00:00' }],
+    recent_documents: [{ id: 8, tracking_no: 'DOC-008', qr_code: 'QR-008', document_details: 'Mayor endorsement', status: { id: null, name: 'Unassigned' }, created_at: '2026-08-20T01:00:00+00:00', latest_routing_activity: { event_type: 'forwarded', from_office: { id: 1, name: 'Records' }, to_office: { id: 2, name: 'Mayor' }, occurred_at: '2026-08-20T02:00:00+00:00' } }],
     recent_routing_activity: [{ document: { id: 8, tracking_no: 'DOC-008' }, event_type: 'forwarded', from_office: { id: 1, name: 'Records' }, to_office: { id: 2, name: 'Mayor' }, occurred_at: '2026-08-20T02:00:00+00:00' }],
 }
 
@@ -27,8 +27,9 @@ test('calculates the current dashboard month in the reporting timezone', () => {
     assert.equal(currentDashboardMonth(new Date('2026-09-30T16:01:00Z')), '2026-10')
     assert.equal(currentDashboardMonth(new Date('2026-09-30T15:59:00Z')), '2026-09')
 })
-test('dashboard redirects an empty initial filter to the current reporting month', async () => {
+test('dashboard loads all dates when no date range is selected', async () => {
     const replacements = []
+    const requests = []
     let watcher = null
     await loadDashboardSetup({
         route: { path: '/dashboard', query: {} },
@@ -37,35 +38,34 @@ test('dashboard redirects an empty initial filter to the current reporting month
             watcher = { getter, callback }
             if (options?.immediate) return callback(getter())
         },
-        currentDashboardMonth: () => '2026-09',
-    })
-
-    assert.ok(watcher)
-    assert.deepEqual(JSON.parse(JSON.stringify(replacements)), [{ path: '/dashboard', query: { month: '2026-09' } }])
-})
-test('dashboard clear keeps the all-time query instead of reapplying the default month', async () => {
-    const pushes = []
-    const requests = []
-    let watcher = null
-    const page = await loadDashboardSetup({
-        route: { path: '/dashboard', query: { month: '2026-09' } },
-        router: { replace: () => {}, push: value => pushes.push(value) },
-        watch: (getter, callback, options) => {
-            watcher = { getter, callback }
-            if (options?.immediate) return callback(getter())
-        },
         fetch: async url => {
             requests.push(url)
             return { ok: true, status: 200, json: async () => validResponse }
         },
-        currentDashboardMonth: () => '2026-09',
     })
 
-    await page.clearMonth()
-    await watcher.callback(undefined)
-
-    assert.deepEqual(JSON.parse(JSON.stringify(pushes)), [{ path: '/dashboard', query: {} }])
+    assert.ok(watcher)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.deepEqual(JSON.parse(JSON.stringify(replacements)), [])
     assert.equal(requests.at(-1), '/api/dashboard/summary')
+})
+test('dashboard applies and clears a complete date range through the URL', async () => {
+    const pushes = []
+    const page = await loadDashboardSetup({
+        route: { path: '/dashboard', query: { date_from: '2026-09-01', date_to: '2026-09-30' } },
+        router: { replace: () => {}, push: value => pushes.push(value) },
+        watch: () => {},
+    })
+
+    page.dateFrom.value = '2026-09-10'
+    page.dateTo.value = '2026-09-20'
+    await page.updateDateRange()
+    await page.clearDateRange()
+
+    assert.deepEqual(JSON.parse(JSON.stringify(pushes)), [
+        { path: '/dashboard', query: { date_from: '2026-09-10', date_to: '2026-09-20' } },
+        { path: '/dashboard', query: {} },
+    ])
 })
 test('formats dashboard timestamps in the reporting timezone', async () => {
     const page = await loadDashboardSetup({
@@ -82,7 +82,7 @@ test('uses stable request keys', () => { assert.equal(dashboardRequestKey(null),
 test('accepts complete response without mutation', () => { const payload = structuredClone(validResponse); const before = structuredClone(payload); assert.equal(isValidDashboardResponse(payload), true); assert.deepEqual(payload, before) })
 test('accepts office scope and empty arrays', () => { const payload = structuredClone(validResponse); payload.scope = { type: 'office', office: { id: 4, name: 'Treasury' } }; for (const key of ['status_distribution', 'current_office_distribution', 'origin_office_distribution', 'recent_documents', 'recent_routing_activity']) payload[key] = []; assert.equal(isValidDashboardResponse(payload), true) })
 test('rejects unsafe filters scopes and metrics', () => {
-    const invalid = [{ ...validResponse, extra: true }, { ...validResponse, filters: { month: '2026-13', timezone: 'Asia/Manila' } }, { ...validResponse, scope: { type: 'system', office: { id: 1, name: 'Hidden' } } }, { ...validResponse, scope: { type: 'office', office: null } }, { ...validResponse, summary: { ...validResponse.summary, total_documents: -1 } }, { ...validResponse, summary: { ...validResponse.summary, total_documents: Infinity } }, { ...validResponse, summary: { ...validResponse.summary, incoming_movements: 1.5 } }]
+    const invalid = [{ ...validResponse, extra: true }, { ...validResponse, filters: { month: '2026-13', date_from: null, date_to: null, timezone: 'Asia/Manila' } }, { ...validResponse, scope: { type: 'system', office: { id: 1, name: 'Hidden' } } }, { ...validResponse, scope: { type: 'office', office: null } }, { ...validResponse, summary: { ...validResponse.summary, total_documents: -1 } }, { ...validResponse, summary: { ...validResponse.summary, total_documents: Infinity } }, { ...validResponse, summary: { ...validResponse.summary, incoming_movements: 1.5 } }]
     for (const payload of invalid) assert.equal(isValidDashboardResponse(payload), false)
 })
 test('validates distributions', () => {
@@ -90,7 +90,7 @@ test('validates distributions', () => {
     for (const change of changes) assert.equal(isValidDashboardResponse({ ...validResponse, ...change }), false)
 })
 test('validates recent documents', () => {
-    const items = [{ ...validResponse.recent_documents[0], id: 0 }, { ...validResponse.recent_documents[0], tracking_no: '' }, { ...validResponse.recent_documents[0], status: { id: 1, name: '' } }, { ...validResponse.recent_documents[0], created_at: null }, { ...validResponse.recent_documents[0], created_at: 'not-a-timestamp' }, { ...validResponse.recent_documents[0], title: 'Excluded' }]
+    const items = [{ ...validResponse.recent_documents[0], id: 0 }, { ...validResponse.recent_documents[0], tracking_no: '' }, { ...validResponse.recent_documents[0], qr_code: '' }, { ...validResponse.recent_documents[0], document_details: '' }, { ...validResponse.recent_documents[0], status: { id: 1, name: '' } }, { ...validResponse.recent_documents[0], created_at: null }, { ...validResponse.recent_documents[0], created_at: 'not-a-timestamp' }, { ...validResponse.recent_documents[0], title: 'Excluded' }]
     for (const item of items) assert.equal(isValidDashboardResponse({ ...validResponse, recent_documents: [item] }), false)
 })
 test('validates recent routing activity', () => {
@@ -316,13 +316,13 @@ const loadDashboardSetup = async ({
     const setup = source.match(/<script setup>([\s\S]*?)<\/script>/)[1]
         .replace(/^import\s[\s\S]*?from\s+['"][^'"]+['"];?\r?$/gm, '')
 
-    return runInNewContext(`${setup}\n;({ clearMonth, formatDashboardDateTime, selectedMonth })`, {
+    return runInNewContext(`${setup}\n;({ clearDateRange, dateFrom, dateTo, formatDashboardDateTime, updateDateRange })`, {
         ref, computed,
-        onBeforeUnmount: () => {},
+        onBeforeUnmount: () => {}, onMounted: () => {},
         watch,
         useRoute: () => route,
         useRouter: () => router,
-        useAuth: () => ({ clearCurrentUser: () => {}, getToken: () => 'test-token' }),
+        useAuth: () => ({ clearCurrentUser: () => {}, getToken: () => 'test-token', ensureCurrentUser: async () => null }),
         buildDashboardQuery,
         buildDashboardRequestUrl,
         calculateDashboardPercentage,
@@ -332,6 +332,7 @@ const loadDashboardSetup = async ({
         normalizeDashboardMonth,
         fetch,
         AbortController,
+        URLSearchParams,
         localStorage: { removeItem: () => {} },
         Button: {}, Card: {}, CardContent: {}, CardHeader: {}, CardTitle: {},
         Table: {}, TableBody: {}, TableCell: {}, TableHead: {}, TableHeader: {}, TableRow: {},

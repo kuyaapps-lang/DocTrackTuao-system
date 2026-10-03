@@ -79,6 +79,7 @@ const showPasswordConfirmation = ref(false)
 
 const form = ref({
     name: '',
+    username: '',
     email: '',
     role_id: '',
     office_id: '',
@@ -211,6 +212,7 @@ const loadPage = async () => {
 const resetForm = () => {
     form.value = {
         name: '',
+        username: '',
         email: '',
         role_id: '',
         office_id: '',
@@ -236,6 +238,7 @@ const openEditForm = (user) => {
 
     form.value = {
         name: user.name || '',
+        username: user.username || '',
         email: user.email || '',
         role_id: user.role_id || '',
         office_id: user.office_id || '',
@@ -330,6 +333,11 @@ const saveUser = async () => {
         return
     }
 
+    if (!form.value.username.trim()) {
+        formError.value = 'Username is required.'
+        return
+    }
+
     if (!form.value.email.trim()) {
         formError.value = 'Email is required.'
         return
@@ -379,6 +387,7 @@ const saveUser = async () => {
             headers: requestHeaders(true),
             body: JSON.stringify({
                 name: form.value.name.trim(),
+                username: form.value.username.trim(),
                 email: form.value.email.trim(),
                 role_id: Number(form.value.role_id),
                 office_id: Number(form.value.office_id),
@@ -778,7 +787,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                             <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
                                     <TableHead class="text-white font-semibold">
-                                        User
+                                        Full Name
                                     </TableHead>
 
                                     <TableHead class="text-center text-white font-semibold">
@@ -810,6 +819,10 @@ onBeforeUnmount(() => leaveRealtime?.())
                                             >
                                                 You
                                             </span>
+                                        </div>
+
+                                        <div class="mt-1 text-sm text-gray-500">
+                                            Username: {{ user.username || 'Not assigned' }}
                                         </div>
 
                                         <div class="mt-1 text-sm text-gray-500">
@@ -880,7 +893,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                         class="space-y-5"
                         @submit.prevent="saveUser"
                     >
-                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <div>
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
                                     Full Name *
@@ -890,6 +903,19 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     v-model="form.name"
                                     :disabled="saving"
                                     placeholder="Enter full name"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                    Username *
+                                </label>
+
+                                <Input
+                                    v-model="form.username"
+                                    :disabled="saving"
+                                    autocomplete="username"
+                                    placeholder="Enter username"
                                 />
                             </div>
 

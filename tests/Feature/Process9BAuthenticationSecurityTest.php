@@ -38,6 +38,7 @@ class Process9BAuthenticationSecurityTest extends TestCase
         Schema::create('users', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
+            $table->string('username', 50)->nullable()->unique();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
@@ -230,6 +231,21 @@ class Process9BAuthenticationSecurityTest extends TestCase
             'action' => AuditLog::ACTION_LOGIN,
             'description' => 'User logged in successfully.',
         ]);
+    }
+
+    public function test_username_login_authenticates_the_same_as_email_login(): void
+    {
+        $user = $this->createUser(
+            'Administrator',
+            'username-login@example.test',
+            null,
+            'records.officer'
+        );
+
+        $this->postJson('/api/login', [
+            'login' => 'records.officer',
+            'password' => 'test-password',
+        ])->assertOk()->assertJsonPath('user.id', $user->id);
     }
 
     public function test_locked_password_revalidation_rejects_a_concurrent_password_change_without_touching_its_token(): void
@@ -555,12 +571,14 @@ class Process9BAuthenticationSecurityTest extends TestCase
     private function createUser(
         string $roleName,
         string $email,
-        ?Office $office = null
+        ?Office $office = null,
+        ?string $username = null
     ): User {
         $role = Role::query()->firstOrCreate(['name' => $roleName]);
 
         return User::query()->create([
             'name' => $roleName,
+            'username' => $username,
             'email' => $email,
             'password' => Hash::make('test-password'),
             'role_id' => $role->id,

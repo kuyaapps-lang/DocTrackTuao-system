@@ -2193,12 +2193,64 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                                 </div>
 
+                                <form
+                                    v-if="canUpdateProcessing"
+                                    class="mt-6 border-t pt-5"
+                                    @submit.prevent="saveProcessing"
+                                >
+                                    <div class="max-w-xl space-y-5">
+                                        <div>
+                                            <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                                Current Action
+                                            </label>
+                                            <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+                                                <select
+                                                    v-model="processingForm.current_action_id"
+                                                    class="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-[10pt] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                                    :disabled="processingSaving"
+                                                >
+                                                    <option value="">Select current action</option>
+                                                    <option
+                                                        v-for="action in processingInfo?.available_actions || []"
+                                                        :key="action.id"
+                                                        :value="String(action.id)"
+                                                    >
+                                                        {{ action.action_name }}
+                                                    </option>
+                                                </select>
+                                                <Button type="submit" :disabled="processingSaving" class="shrink-0 bg-blue-900 text-white hover:bg-blue-950">
+                                                    {{ processingSaving ? 'Saving...' : 'Save Current Process' }}
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                                Processing Note <span class="font-normal text-gray-400">(Internal)</span>
+                                            </label>
+                                            <textarea
+                                                v-model="processingForm.processing_note"
+                                                rows="2"
+                                                maxlength="2000"
+                                                placeholder="Example: For signature of the Municipal Mayor."
+                                                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                                :disabled="processingSaving"
+                                            ></textarea>
+                                        </div>
+                                    </div>
+
+                                    <div v-if="processingError" class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                                        {{ processingError }}
+                                    </div>
+
+                                </form>
+
                             </div>
 
                             <!-- Canonical Issued QR Card -->
-                            <div
-                                class="rounded-xl border bg-gray-50 p-5 text-center"
-                            >
+                            <div class="self-start space-y-4">
+
+                                <div class="rounded-xl border bg-gray-50 p-4 text-center">
 
                                 <h3
                                     class="font-bold text-gray-900"
@@ -2220,7 +2272,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     <img
                                         :src="qrDataUrl"
                                         alt="Issued Document QR Code"
-                                        class="mx-auto h-48 w-48 rounded-md bg-white p-2"
+                                        class="mx-auto h-32 w-32 rounded-md bg-white p-2"
                                     >
 
                                     <p
@@ -2252,6 +2304,20 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     This may be a legacy or manually registered record.
                                 </div>
 
+                                </div>
+
+                                <div
+                                    v-if="processingInfo?.processing_note"
+                                    class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-left"
+                                >
+                                    <p class="text-[10pt] font-semibold uppercase text-amber-700">
+                                        Internal Processing Note
+                                    </p>
+                                    <p class="mt-2 whitespace-pre-line text-[11.5pt] text-amber-900">
+                                        {{ processingInfo.processing_note }}
+                                    </p>
+                                </div>
+
                             </div>
 
                         </div>
@@ -2261,7 +2327,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                 </Card>
 
                 <!-- Current Processing -->
-                <Card class="mt-6">
+                <Card class="mt-6 hidden">
 
                     <CardHeader>
 
@@ -2432,7 +2498,7 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                             <!-- Processing Form -->
                             <form
-                                v-if="canUpdateProcessing"
+                                v-if="false"
                                 class="rounded-xl border bg-white p-5"
                                 @submit.prevent="saveProcessing"
                             >
@@ -2770,7 +2836,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                 </Card>
 
                 <!-- Attachments -->
-                <Card class="mt-6">
+                <Card class="mt-6 hidden">
 
                     <CardHeader>
 

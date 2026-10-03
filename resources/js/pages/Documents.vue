@@ -221,6 +221,19 @@ const canCreateDocuments = computed(() => {
     return can('documents.create')
 })
 
+const canSubmitRegistration = computed(() => {
+    return Boolean(
+        qrVerified.value &&
+        qrToken.value &&
+        form.value.title.trim() &&
+        form.value.document_type_id &&
+        form.value.priority_id &&
+        form.value.confidentiality_level_id &&
+        form.value.recipient_office_id &&
+        form.value.document_date
+    )
+})
+
 /*
 |--------------------------------------------------------------------------
 | Document List API
@@ -436,6 +449,16 @@ const verifyQrForRegistration = async () => {
     } finally {
         qrVerifying.value = false
     }
+}
+
+const clearQrVerificationWhenChanged = () => {
+    if (normalizeRegistrationQrInput(qrInput.value) === qrToken.value) {
+        return
+    }
+
+    qrToken.value = ''
+    qrVerified.value = false
+    qrVerificationError.value = ''
 }
 
 /*
@@ -1332,8 +1355,8 @@ onBeforeUnmount(() => {
                                     >
                                         <span
                                             class="inline-flex rounded-full
-                                                   px-2.5 py-1 !text-[15.5px]
-                                                   font-semibold"
+                                                   px-1.5 py-0.5 !text-[5pt]
+                                                   font-semibold leading-tight"
                                             :class="
                                                 priorityClass(
                                                     document.priority
@@ -1353,8 +1376,8 @@ onBeforeUnmount(() => {
                                     <TableCell>
                                         <span
                                             class="inline-flex rounded-full
-                                                   px-2.5 py-1 !text-[15.5px]
-                                                   font-semibold"
+                                                   px-1.5 py-0.5 !text-[5pt]
+                                                   font-semibold leading-tight"
                                             :class="
                                                 statusClass(
                                                     activeTab === 'all'
@@ -1510,32 +1533,41 @@ onBeforeUnmount(() => {
 
                 <CardHeader>
 
-                    <CardTitle>{{ qrVerified ? 'Register New Document' : 'Verify QR Code' }}</CardTitle>
+                    <CardTitle>Register New Document</CardTitle>
 
-                    <p v-if="!qrVerified" class="text-sm text-gray-500">
-                        Scan or enter an issued QR code before registering a document.
+                    <p class="text-sm text-gray-500">
+                        Scan or enter an issued QR code before registering the document.
                     </p>
 
                 </CardHeader>
 
                 <CardContent>
 
-                    <form v-if="!qrVerified" class="space-y-4" @submit.prevent="verifyQrForRegistration">
-                        <div>
-                            <label for="registration-qr-token" class="mb-2 block text-sm font-semibold text-gray-700">QR Code <span class="text-red-600">*</span></label>
-                            <Input ref="qrInputElement" id="registration-qr-token" v-model="qrInput" type="text" autocomplete="off" autofocus placeholder="Scan or enter QR code" :disabled="qrVerifying" class="h-11 font-mono" />
+                    <form
+                        @submit.prevent="createDocument"
+                        class="space-y-5"
+                    >
+                        <div class="mx-auto max-w-md text-center">
+                            <label for="registration-qr-token" class="mb-2 block text-sm font-semibold text-gray-700">
+                                QR Code <span class="text-red-600">*</span>
+                            </label>
+                            <Input
+                                ref="qrInputElement"
+                                id="registration-qr-token"
+                                v-model="qrInput"
+                                type="text"
+                                autocomplete="off"
+                                autofocus
+                                placeholder="Scan QR here"
+                                :disabled="qrVerifying || creating"
+                                class="h-11 text-center font-mono"
+                                @input="clearQrVerificationWhenChanged"
+                                @keydown.enter.prevent="verifyQrForRegistration"
+                            />
+                            <p v-if="qrVerifying" class="mt-2 text-sm text-gray-500">Verifying QR code...</p>
+                            <p v-else-if="qrVerified" class="mt-2 text-sm font-medium text-green-700" role="status">QR code verified.</p>
+                            <p v-if="qrVerificationError" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-left text-sm text-red-700" role="alert">{{ qrVerificationError }}</p>
                         </div>
-                        <p v-if="qrVerificationError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ qrVerificationError }}</p>
-                        <div class="flex justify-end gap-3">
-                            <Button type="button" variant="outline" class="border-black bg-black text-white hover:bg-black/90 hover:text-white" :disabled="qrVerifying" @click="closeCreateForm">Cancel</Button>
-                            <Button type="submit" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="qrVerifying">{{ qrVerifying ? 'Verifying...' : 'Verify QR' }}</Button>
-                        </div>
-                    </form>
-
-                    <template v-else>
-                    <output aria-label="Verified QR code" class="mb-4 inline-flex max-w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-sm font-semibold text-slate-800">
-                        {{ qrToken }}
-                    </output>
 
                     <div
                         v-if="optionsLoading"
@@ -1544,13 +1576,11 @@ onBeforeUnmount(() => {
                         Loading form options...
                     </div>
 
-                    <!-- Registration Form -->
-                    <form
+                    <fieldset
                         v-else
-                        @submit.prevent="createDocument"
-                        class="space-y-5"
+                        :disabled="creating || qrVerifying || !qrVerified"
+                        class="contents"
                     >
-
                         <!-- Type + Priority -->
                         <div
                             class="grid grid-cols-1
@@ -1810,7 +1840,7 @@ onBeforeUnmount(() => {
                                     required
                                     placement="prefer-above"
                                     aria-label="Document date"
-                                    :disabled="creating"
+                                    :disabled="creating || qrVerifying || !qrVerified"
                                 />
                             </div>
 
@@ -1828,7 +1858,7 @@ onBeforeUnmount(() => {
                                     clearable
                                     placement="prefer-above"
                                     aria-label="Due date"
-                                    :disabled="creating"
+                                    :disabled="creating || qrVerifying || !qrVerified"
                                 />
                             </div>
 
@@ -1855,6 +1885,8 @@ onBeforeUnmount(() => {
                             {{ createSuccess }}
                         </div>
 
+                    </fieldset>
+
                         <!-- Buttons -->
                         <div
                             class="flex justify-end gap-3 pt-2"
@@ -1872,7 +1904,7 @@ onBeforeUnmount(() => {
                             <Button
                                 type="submit"
                                 class="h-12 px-5 text-[18px] leading-none bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
-                                :disabled="creating"
+                                :disabled="creating || qrVerifying || !canSubmitRegistration"
                             >
                                 {{
                                     creating
@@ -1883,7 +1915,6 @@ onBeforeUnmount(() => {
                         </div>
 
                     </form>
-                    </template>
 
                 </CardContent>
 

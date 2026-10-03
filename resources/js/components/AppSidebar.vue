@@ -15,7 +15,9 @@ import {
     LayoutDashboard,
     QrCode,
     ScrollText,
+    Settings,
     Send,
+    UserRound,
     Users,
     X,
 } from 'lucide-vue-next'
@@ -31,6 +33,7 @@ import {
 const route = useRoute()
 const { currentUser, permissions } = useAuth()
 const mobileCloseButton = ref(null)
+const profileMenuOpen = ref(false)
 
 defineProps({
     desktopCollapsed: {
@@ -41,11 +44,20 @@ defineProps({
         type: Boolean,
         default: false,
     },
+    logoutPending: {
+        type: Boolean,
+        default: false,
+    },
+    logoutError: {
+        type: String,
+        default: '',
+    },
 })
 
 defineEmits([
     'close-mobile',
     'navigate',
+    'logout',
     'toggle-desktop',
 ])
 
@@ -93,6 +105,10 @@ const userInitials = computed(() => {
 })
 
 const iconFor = (key) => navigationIcons[key]
+
+const closeProfileMenu = () => {
+    profileMenuOpen.value = false
+}
 
 const linkClasses = (key, grouped = false, collapsed = false) => {
     const base = grouped
@@ -147,7 +163,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
         <nav
             id="desktop-navigation"
             aria-label="Main navigation"
-            class="flex-1 space-y-2 p-4"
+            class="flex-1 space-y-2 px-4 pb-4 pt-[10pt]"
         >
             <template
                 v-for="item in items"
@@ -156,12 +172,15 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 <div
                     v-if="item.children"
                     class="space-y-1"
+                    :class="item.key === 'master-data' ? 'mt-[5pt] border-t border-slate-300/80 pt-2' : ''"
                 >
                     <p
-                        class="pt-3 text-xs font-bold uppercase tracking-wide text-slate-400"
+                        class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400"
                         :class="desktopCollapsed ? 'sr-only' : 'px-3'"
                     >
-                        {{ item.label }}
+                        <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
+                        <span>{{ item.label }}</span>
+                        <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
                     </p>
 
                     <RouterLink
@@ -184,6 +203,16 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     </RouterLink>
                 </div>
 
+                <p
+                    v-if="item.key === 'outgoing-documents'"
+                    class="mt-[5pt] flex items-center gap-2 border-t border-slate-300/80 pt-2 text-xs font-bold uppercase tracking-wide text-slate-400"
+                    :class="desktopCollapsed ? 'sr-only' : 'px-3'"
+                >
+                    <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
+                    <span>Documents</span>
+                    <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
+                </p>
+
                 <RouterLink
                     v-else
                     :to="item.to || item.path"
@@ -204,9 +233,35 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
             </template>
         </nav>
 
-        <div class="mt-auto border-t border-white/80 p-4">
+        <div class="relative mt-auto border-t border-white/80 p-4">
             <div
-                class="flex items-center gap-3 rounded-2xl bg-blue-50/80 p-3 text-left shadow-sm"
+                v-if="profileMenuOpen"
+                class="absolute bottom-full left-4 z-40 mb-3 w-56 rounded-2xl border border-white/80 bg-white/95 p-3 text-sm shadow-[0_18px_42px_rgb(67_86_119/0.16),inset_0_1px_0_rgb(255_255_255/0.92)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-black/30"
+                :class="desktopCollapsed ? 'left-full ml-3' : 'right-4'"
+                role="menu"
+                aria-label="Profile menu"
+                @keydown.esc="closeProfileMenu"
+            >
+                <Button type="button" variant="ghost" class="w-full justify-start dark:hover:bg-slate-800 dark:hover:text-white" disabled role="menuitem">
+                    <UserRound class="mr-2 size-4" aria-hidden="true" />
+                    Profile
+                </Button>
+                <Button type="button" variant="ghost" class="w-full justify-start dark:hover:bg-slate-800 dark:hover:text-white" disabled role="menuitem">
+                    <Settings class="mr-2 size-4" aria-hidden="true" />
+                    Settings
+                </Button>
+                <Button type="button" variant="ghost" class="mt-1 w-full justify-start text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
+                    {{ logoutPending ? 'Logging out...' : 'Logout' }}
+                </Button>
+                <p v-if="logoutError" class="mt-2 text-sm text-red-600 dark:text-red-300" role="alert">{{ logoutError }}</p>
+            </div>
+            <button
+                type="button"
+                class="flex w-full items-center gap-3 rounded-2xl bg-blue-50/80 p-3 text-left shadow-sm outline-none transition-colors hover:bg-blue-100/80 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 dark:focus-visible:ring-offset-slate-900"
+                aria-label="Open profile menu"
+                aria-haspopup="menu"
+                :aria-expanded="profileMenuOpen"
+                @click="profileMenuOpen = !profileMenuOpen"
                 :class="desktopCollapsed ? 'justify-center px-2' : ''"
                 :title="desktopCollapsed ? `${userName} — ${officeName}` : undefined"
             >
@@ -214,10 +269,10 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     {{ userInitials }}
                 </div>
                 <div v-if="!desktopCollapsed" class="min-w-0">
-                    <p class="truncate text-sm font-semibold text-blue-950">{{ userName }}</p>
-                    <p class="truncate text-xs text-slate-600">{{ officeName }}</p>
+                    <p class="truncate text-sm font-semibold text-blue-950 dark:text-slate-100">{{ userName }}</p>
+                    <p class="truncate text-xs text-slate-600 dark:text-slate-300">{{ officeName }}</p>
                 </div>
-            </div>
+            </button>
         </div>
     </aside>
 
@@ -265,7 +320,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
             <nav
                 aria-label="Main navigation"
-                class="flex-1 space-y-2 p-4"
+                class="flex-1 space-y-2 px-4 pb-4 pt-[10pt]"
             >
                 <template
                     v-for="item in items"
@@ -274,9 +329,12 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     <div
                         v-if="item.children"
                         class="space-y-1"
+                        :class="item.key === 'master-data' ? 'mt-[5pt] border-t border-slate-300/80 pt-2' : ''"
                     >
-                        <p class="px-3 pt-3 text-xs font-bold uppercase tracking-wide text-gray-400">
-                            {{ item.label }}
+                        <p class="flex items-center gap-2 px-3 text-xs font-bold uppercase tracking-wide text-gray-400">
+                            <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
+                            <span>{{ item.label }}</span>
+                            <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
                         </p>
 
                         <RouterLink
@@ -296,6 +354,15 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                         </RouterLink>
                     </div>
 
+                    <p
+                        v-if="item.key === 'outgoing-documents'"
+                        class="mt-[5pt] flex items-center gap-2 border-t border-slate-300/80 px-3 pt-2 text-xs font-bold uppercase tracking-wide text-gray-400"
+                    >
+                        <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
+                        <span>Documents</span>
+                        <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
+                    </p>
+
                     <RouterLink
                         v-else
                         :to="item.to || item.path"
@@ -313,16 +380,43 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 </template>
             </nav>
 
-            <div class="mt-auto border-t border-slate-200 p-4">
-                <div class="flex items-center gap-3 rounded-2xl bg-blue-50 p-3 text-left">
+            <div class="relative mt-auto border-t border-slate-200 p-4">
+                <div
+                    v-if="profileMenuOpen"
+                    class="absolute bottom-full left-4 right-4 z-10 mb-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:shadow-black/30"
+                    role="menu"
+                    aria-label="Profile menu"
+                    @keydown.esc="closeProfileMenu"
+                >
+                    <Button type="button" variant="ghost" class="w-full justify-start dark:hover:bg-slate-800 dark:hover:text-white" disabled role="menuitem">
+                        <UserRound class="mr-2 size-4" aria-hidden="true" />
+                        Profile
+                    </Button>
+                    <Button type="button" variant="ghost" class="w-full justify-start dark:hover:bg-slate-800 dark:hover:text-white" disabled role="menuitem">
+                        <Settings class="mr-2 size-4" aria-hidden="true" />
+                        Settings
+                    </Button>
+                    <Button type="button" variant="ghost" class="mt-1 w-full justify-start text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
+                        {{ logoutPending ? 'Logging out...' : 'Logout' }}
+                    </Button>
+                    <p v-if="logoutError" class="mt-2 text-sm text-red-600 dark:text-red-300" role="alert">{{ logoutError }}</p>
+                </div>
+                <button
+                    type="button"
+                    class="flex w-full items-center gap-3 rounded-2xl bg-blue-50 p-3 text-left outline-none transition-colors hover:bg-blue-100 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-slate-800 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900"
+                    aria-label="Open profile menu"
+                    aria-haspopup="menu"
+                    :aria-expanded="profileMenuOpen"
+                    @click="profileMenuOpen = !profileMenuOpen"
+                >
                     <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-900 text-sm font-bold text-white shadow-sm" aria-hidden="true">
                         {{ userInitials }}
                     </div>
                     <div class="min-w-0">
-                        <p class="truncate text-sm font-semibold text-blue-950">{{ userName }}</p>
-                        <p class="truncate text-xs text-slate-600">{{ officeName }}</p>
+                        <p class="truncate text-sm font-semibold text-blue-950 dark:text-slate-100">{{ userName }}</p>
+                        <p class="truncate text-xs text-slate-600 dark:text-slate-300">{{ officeName }}</p>
                     </div>
-                </div>
+                </button>
             </div>
         </aside>
     </div>
