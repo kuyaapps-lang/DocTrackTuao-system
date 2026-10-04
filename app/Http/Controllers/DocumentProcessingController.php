@@ -42,9 +42,7 @@ class DocumentProcessingController extends Controller
                 'document_id',
                 $document->id
             )
-                ->whereNull(
-                    'received_at'
-                )
+                ->pending()
                 ->latest('id')
                 ->first();
 
@@ -232,6 +230,8 @@ class DocumentProcessingController extends Controller
             'to_office_id' => $route->to_office_id,
             'forwarded_at' => $route->forwarded_at,
             'received_at' => $route->received_at,
+            'cancelled_at' => $route->cancelled_at,
+            'cancelled_at' => $route->cancelled_at,
             'remarks' => $route->remarks,
             'from_office' => $this->officeShape($route->fromOffice),
             'to_office' => $this->officeShape($route->toOffice),
@@ -311,7 +311,7 @@ class DocumentProcessingController extends Controller
 
                 if (
                     DocumentRoute::where('document_id', $document->id)
-                        ->whereNull('received_at')
+                        ->pending()
                         ->lockForUpdate()
                         ->exists()
                 ) {

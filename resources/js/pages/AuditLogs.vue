@@ -1,5 +1,14 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import {
+    ChevronLeft,
+    ChevronRight,
+    Activity,
+    Filter,
+    Layers,
+    ScrollText,
+    X,
+} from 'lucide-vue-next'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -190,7 +199,12 @@ onMounted(() => {
 
         <div class="space-y-4 p-6">
             <Card class="relative overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900">
-                <CardHeader class="bg-blue-900 text-white"><CardTitle>Filters</CardTitle></CardHeader>
+                <CardHeader class="bg-blue-900 text-white">
+                    <CardTitle class="flex items-center gap-2">
+                        <Filter class="h-5 w-5" />
+                        Filters
+                    </CardTitle>
+                </CardHeader>
                 <CardContent class="bg-white">
                     <form
                         class="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end"
@@ -198,42 +212,55 @@ onMounted(() => {
                     >
                         <label class="block text-sm font-semibold text-gray-700">
                             Module
-                            <select
-                                v-model="filters.module"
-                                class="mt-2 h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm"
-                                :disabled="loading"
-                            >
-                                <option value="">All modules</option>
-                                <option
-                                    v-for="option in modules"
-                                    :key="option[0]"
-                                    :value="option[0]"
+                            <span class="relative mt-2 block">
+                                <span class="pointer-events-none absolute left-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-blue-100 text-blue-800">
+                                    <Layers class="h-4 w-4" />
+                                </span>
+                                <select
+                                    v-model="filters.module"
+                                    class="h-11 w-full rounded-md border border-gray-300 bg-white pl-12 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    :disabled="loading"
                                 >
-                                    {{ option[1] }}
-                                </option>
-                            </select>
+                                    <option value="">All modules</option>
+                                    <option
+                                        v-for="option in modules"
+                                        :key="option[0]"
+                                        :value="option[0]"
+                                    >
+                                        {{ option[1] }}
+                                    </option>
+                                </select>
+                            </span>
                         </label>
 
                         <label class="block text-sm font-semibold text-gray-700">
                             Action
-                            <select
-                                v-model="filters.action"
-                                class="mt-2 h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm"
-                                :disabled="loading"
-                            >
-                                <option value="">All actions</option>
-                                <option
-                                    v-for="option in actions"
-                                    :key="option[0]"
-                                    :value="option[0]"
+                            <span class="relative mt-2 block">
+                                <span class="pointer-events-none absolute left-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+                                    <Activity class="h-4 w-4" />
+                                </span>
+                                <select
+                                    v-model="filters.action"
+                                    class="h-11 w-full rounded-md border border-gray-300 bg-white pl-12 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    :disabled="loading"
                                 >
-                                    {{ option[1] }}
-                                </option>
-                            </select>
+                                    <option value="">All actions</option>
+                                    <option
+                                        v-for="option in actions"
+                                        :key="option[0]"
+                                        :value="option[0]"
+                                    >
+                                        {{ option[1] }}
+                                    </option>
+                                </select>
+                            </span>
                         </label>
 
                         <div class="flex gap-2">
-                            <Button type="submit" class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white" :disabled="loading">Apply</Button>
+                            <Button type="submit" class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white" :disabled="loading">
+                                <Filter class="mr-2 h-4 w-4" />
+                                Apply
+                            </Button>
                             <Button
                                 type="button"
                                 variant="outline"
@@ -241,6 +268,7 @@ onMounted(() => {
                                 :disabled="loading"
                                 @click="clearFilters"
                             >
+                                <X class="mr-2 h-4 w-4" />
                                 Clear
                             </Button>
                         </div>
@@ -250,7 +278,10 @@ onMounted(() => {
 
             <Card class="relative overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900">
                 <CardHeader class="bg-blue-900 text-white">
-                    <CardTitle>System Activity</CardTitle>
+                    <CardTitle class="flex items-center gap-2">
+                        <ScrollText class="h-5 w-5" />
+                        System Activity
+                    </CardTitle>
                     <p class="text-sm text-blue-100">
                         {{ total }} recorded event{{ total === 1 ? '' : 's' }}
                     </p>
@@ -317,12 +348,18 @@ onMounted(() => {
                         <p class="text-center text-sm text-gray-600">{{ total }} total results</p>
                         <nav class="max-w-full overflow-x-auto rounded-full bg-white p-1 shadow-[0_8px_18px_rgb(15_41_70/0.12)]" aria-label="Audit log pagination">
                             <div class="flex min-w-max items-center gap-1">
-                                <button type="button" class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="loading || !paginationState.canGoPrevious" @click="changePage(paginationState.previousPage)">‹ Prev</button>
+                                <button type="button" class="inline-flex h-10 items-center gap-1 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="loading || !paginationState.canGoPrevious" @click="changePage(paginationState.previousPage)">
+                                    <ChevronLeft class="h-4 w-4" />
+                                    Prev
+                                </button>
                                 <template v-for="item in paginationItems" :key="item.type === 'page' ? item.page : item.key">
                                     <span v-if="item.type === 'ellipsis'" class="flex size-10 items-center justify-center font-bold text-blue-900" aria-hidden="true">…</span>
                                     <button v-else type="button" class="size-10 rounded-full font-semibold transition-colors" :class="item.page === page ? 'bg-blue-900 text-white shadow-[inset_0_1px_2px_rgb(15_41_70/0.18)]' : 'text-blue-900 hover:bg-blue-50'" :aria-current="item.page === page ? 'page' : undefined" :disabled="loading" @click="changePage(item.page)">{{ item.page }}</button>
                                 </template>
-                                <button type="button" class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="loading || !paginationState.canGoNext" @click="changePage(paginationState.nextPage)">Next ›</button>
+                                <button type="button" class="inline-flex h-10 items-center gap-1 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="loading || !paginationState.canGoNext" @click="changePage(paginationState.nextPage)">
+                                    Next
+                                    <ChevronRight class="h-4 w-4" />
+                                </button>
                             </div>
                         </nav>
                     </div>

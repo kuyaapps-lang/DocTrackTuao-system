@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 class DocumentRoute extends Model
 {
@@ -15,6 +17,9 @@ class DocumentRoute extends Model
         'received_by',
         'forwarded_at',
         'received_at',
+        'cancelled_by',
+        'cancelled_at',
+        'cancellation_reason',
         'status_id',
         'remarks',
         'action_id',
@@ -34,7 +39,25 @@ class DocumentRoute extends Model
 
             'received_at' =>
                 'datetime',
+
+            'cancelled_at' =>
+                'datetime',
         ];
+    }
+
+    /**
+     * Routes awaiting receipt. The column check keeps older test fixtures and
+     * pre-migration installations readable while the migration is deployed.
+     */
+    public function scopePending(Builder $query): Builder
+    {
+        $query->whereNull('received_at');
+
+        if (Schema::hasColumn($this->getTable(), 'cancelled_at')) {
+            $query->whereNull('cancelled_at');
+        }
+
+        return $query;
     }
 
     /*
@@ -91,6 +114,14 @@ class DocumentRoute extends Model
         return $this->belongsTo(
             User::class,
             'received_by'
+        );
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'cancelled_by'
         );
     }
 

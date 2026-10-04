@@ -17,6 +17,7 @@ export const qrPrintFailureMessage = error =>
 
 export const QR_PRINT_STYLES = `
 @page {
+    size: A4;
     margin: 0.30in;
 }
 
@@ -44,16 +45,19 @@ body {
     color: #4b5563;
 }
 
-.sheet {
+.print-page {
     display: grid;
-    grid-template-columns: repeat(auto-fit, 1in);
+    grid-template-columns: repeat(6, 1in);
     gap: 0.12in;
-    max-width: 8in;
     margin: 0 auto;
-    padding: 0.15in;
     justify-content: center;
     align-items: start;
     background: white;
+}
+
+.print-page:not(:last-child) {
+    break-after: page;
+    page-break-after: always;
 }
 
 .qr-pair {
@@ -136,16 +140,18 @@ body {
         display: none;
     }
 
-    .sheet {
-        grid-template-columns: repeat(4, 1in);
+    .print-page {
+        grid-template-columns: repeat(6, 1in);
         column-gap: 0.12in;
         row-gap: 0.12in;
-        max-width: none;
         margin: 0;
         padding: 0;
     }
 }
 `
+
+// A4 with 0.30in margins fits six 1in-wide pairs and five 2in-high pairs.
+const QR_PAIRS_PER_A4_PAGE = 30
 
 const safeImageSource = value =>
     typeof value === 'string' &&
@@ -240,52 +246,54 @@ export const printQrLabels = ({
     )
     screenNote.setAttribute('role', 'note')
 
-    const sheet = documentRef.createElement('div')
-    sheet.className = 'sheet'
-    documentRef.body.appendChild(sheet)
-
     const images = []
 
-    for (const snapshot of snapshots) {
-        const pair = documentRef.createElement('div')
-        pair.className = 'qr-pair'
-        sheet.appendChild(pair)
+    for (let index = 0; index < snapshots.length; index += QR_PAIRS_PER_A4_PAGE) {
+        const sheet = documentRef.createElement('div')
+        sheet.className = 'print-page'
+        documentRef.body.appendChild(sheet)
 
-        for (const [copyName, extraClass] of [
-            ['ORIGINAL', ''],
-            ['RECORD COPY', ' record-copy'],
-        ]) {
-            const label = documentRef.createElement('div')
-            label.className = `label${extraClass}`
-            pair.appendChild(label)
+        for (const snapshot of snapshots.slice(index, index + QR_PAIRS_PER_A4_PAGE)) {
+            const pair = documentRef.createElement('div')
+            pair.className = 'qr-pair'
+            sheet.appendChild(pair)
 
-            appendTextElement(
-                documentRef,
-                label,
-                'div',
-                'copy-name',
-                copyName
-            )
+            for (const [copyName, extraClass] of [
+                ['ORIGINAL', ''],
+                ['RECORD COPY', ' record-copy'],
+            ]) {
+                const label = documentRef.createElement('div')
+                label.className = `label${extraClass}`
+                pair.appendChild(label)
 
-            const image = documentRef.createElement('img')
-            image.alt = 'QR Code'
-            label.appendChild(image)
-            images.push({ image, snapshot })
-
-            const identifier = documentRef.createElement('div')
-            identifier.className = snapshot.identifierClass
-
-            for (const line of snapshot.identifierLines) {
                 appendTextElement(
                     documentRef,
-                    identifier,
-                    'span',
-                    '',
-                    line
+                    label,
+                    'div',
+                    'copy-name',
+                    copyName
                 )
-            }
 
-            label.appendChild(identifier)
+                const image = documentRef.createElement('img')
+                image.alt = 'QR Code'
+                label.appendChild(image)
+                images.push({ image, snapshot })
+
+                const identifier = documentRef.createElement('div')
+                identifier.className = snapshot.identifierClass
+
+                for (const line of snapshot.identifierLines) {
+                    appendTextElement(
+                        documentRef,
+                        identifier,
+                        'span',
+                        '',
+                        line
+                    )
+                }
+
+                label.appendChild(identifier)
+            }
         }
     }
 

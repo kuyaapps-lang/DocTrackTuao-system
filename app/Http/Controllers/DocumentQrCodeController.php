@@ -83,6 +83,28 @@ class DocumentQrCodeController extends Controller
         return $this->paginatedTokenFreeRecords($request);
     }
 
+    /**
+     * Return every printable QR token that has not yet been registered.
+     *
+     * This endpoint is deliberately separate from the inventory endpoint:
+     * routine inventory screens never need to expose QR tokens.
+     */
+    public function printableUnused()
+    {
+        return response()->json([
+            'data' => DocumentQrCode::query()
+                ->where('status', 'unused')
+                ->whereNull('document_id')
+                ->orderBy('id')
+                ->get(['id', 'qr_token'])
+                ->map(fn (DocumentQrCode $qrCode): array => [
+                    'id' => (int) $qrCode->id,
+                    'qr_token' => (string) $qrCode->qr_token,
+                ])
+                ->values(),
+        ]);
+    }
+
     private function paginatedTokenFreeRecords(Request $request)
     {
         $supported = ['page', 'per_page', 'status'];

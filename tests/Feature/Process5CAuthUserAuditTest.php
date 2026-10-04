@@ -50,6 +50,7 @@ class Process5CAuthUserAuditTest extends TestCase
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->timestamp('deactivated_at')->nullable();
             $table->rememberToken();
             $table->unsignedBigInteger('role_id')->nullable();
             $table->unsignedBigInteger('department_id')->nullable();
@@ -199,7 +200,7 @@ class Process5CAuthUserAuditTest extends TestCase
             'module' => AuditLog::MODULE_USERS,
             'action' => AuditLog::ACTION_CREATED,
             'record_id' => $targetId,
-            'description' => 'Changed fields: name, email, role_id, office_id, department_id; password changed: yes.',
+            'description' => 'Changed fields: name, username, email, role_id, office_id, department_id; password changed: yes.',
         ]);
     }
 
@@ -361,6 +362,8 @@ class Process5CAuthUserAuditTest extends TestCase
             ['GET', '/api/users/form-options', null],
             ['POST', '/api/users', $payload],
             ['PUT', "/api/users/{$target->id}", [...$payload, 'email' => $target->email]],
+            ['POST', "/api/users/{$target->id}/deactivate", null],
+            ['DELETE', "/api/users/{$target->id}", null],
         ] as [$method, $uri, $body]) {
             $before = $this->securitySnapshot();
             $this->json($method, $uri, $body ?? [])->assertUnauthorized();
@@ -378,6 +381,8 @@ class Process5CAuthUserAuditTest extends TestCase
                 ['GET', '/api/users/form-options', null],
                 ['POST', '/api/users', $payload],
                 ['PUT', "/api/users/{$target->id}", [...$payload, 'email' => $target->email]],
+                ['POST', "/api/users/{$target->id}/deactivate", null],
+                ['DELETE', "/api/users/{$target->id}", null],
             ] as [$method, $uri, $body]) {
                 $before = $this->securitySnapshot();
                 $this->json($method, $uri, $body ?? [])->assertForbidden();
@@ -388,6 +393,74 @@ class Process5CAuthUserAuditTest extends TestCase
         Sanctum::actingAs($administrator);
         $this->getJson('/api/users')->assertOk();
         $this->getJson('/api/users/form-options')->assertOk();
+    }
+
+    public function test_administrator_can_deactivate_user_and_block_future_login(): void
+    {
+        [$administrator, $office] = $this->createAdministratorAndOffice();
+        $target = $this->createUser('Office User', 'deactivate-target@example.test', $office);
+        $target->createToken('target-session');
+        Sanctum::actingAs($administrator);
+
+        $response = $this->postJson("/api/users/{$target->id}/deactivate");
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'User deactivated successfully.')
+            ->assertJsonPath('user.id', $target->id)
+            ->assertJsonPath('user.deactivated_at', fn ($value) => is_string($value) && $value !== '');
+
+        $this->assertNotNull($target->fresh()->deactivated_at);
+        $this->assertSame(0, $target->tokens()->count());
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $administrator->id,
+            'module' => AuditLog::MODULE_USERS,
+            'action' => AuditLog::ACTION_UPDATED,
+            'record_id' => $target->id,
+            'description' => 'Account deactivated.',
+        ]);
+
+        $this->postJson('/api/login', [
+            'login' => $target->email,
+            'password' => 'test-password',
+        ])->assertForbidden()->assertExactJson([
+            'message' => 'This account has been deactivated.',
+        ]);
+    }
+
+    public function test_user_delete_requires_admin_and_preserves_self_and_last_admin(): void
+    {
+        [$administrator, $office] = $this->createAdministratorAndOffice();
+        $target = $this->createUser('Viewer', 'delete-target@example.test', $office);
+        Sanctum::actingAs($administrator);
+
+        $this->deleteJson("/api/users/{$administrator->id}")
+            ->assertUnprocessable()
+            ->assertExactJson([
+                'message' => 'You cannot delete your own account.',
+            ]);
+
+        $this->postJson("/api/users/{$administrator->id}/deactivate")
+            ->assertUnprocessable()
+            ->assertExactJson([
+                'message' => 'You cannot deactivate your own account.',
+            ]);
+
+        $this->deleteJson("/api/users/{$target->id}")
+            ->assertOk()
+            ->assertExactJson([
+                'message' => 'User deleted successfully.',
+            ]);
+
+        $this->assertDatabaseMissing('users', [
+            'id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $administrator->id,
+            'module' => AuditLog::MODULE_USERS,
+            'action' => AuditLog::ACTION_DELETED,
+            'record_id' => $target->id,
+            'description' => 'User account deleted.',
+        ]);
     }
 
     public function test_each_supported_database_role_is_assignable_without_hard_coded_ids(): void
@@ -571,9 +644,11 @@ class Process5CAuthUserAuditTest extends TestCase
         $this->assertSame([
             'id',
             'name',
+            'username',
             'email',
             'role_id',
             'must_change_password',
+            'deactivated_at',
             'department_id',
             'office_id',
             'role',
@@ -595,7 +670,7 @@ class Process5CAuthUserAuditTest extends TestCase
         return [
             'users' => DB::table('users')->orderBy('id')->get([
                 'id', 'name', 'email', 'role_id', 'department_id', 'office_id',
-                'email_verified_at', 'created_at', 'updated_at',
+                'deactivated_at', 'email_verified_at', 'created_at', 'updated_at',
             ])->map(fn ($row): array => [
                 'id' => (int) $row->id,
                 'name' => (string) $row->name,
@@ -603,6 +678,7 @@ class Process5CAuthUserAuditTest extends TestCase
                 'role_id' => $row->role_id === null ? null : (int) $row->role_id,
                 'department_id' => $row->department_id === null ? null : (int) $row->department_id,
                 'office_id' => $row->office_id === null ? null : (int) $row->office_id,
+                'deactivated_at' => $row->deactivated_at === null ? null : (string) $row->deactivated_at,
                 'email_verified_at' => $row->email_verified_at === null ? null : (string) $row->email_verified_at,
                 'created_at' => $row->created_at === null ? null : (string) $row->created_at,
                 'updated_at' => $row->updated_at === null ? null : (string) $row->updated_at,

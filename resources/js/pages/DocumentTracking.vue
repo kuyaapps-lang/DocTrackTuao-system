@@ -1,6 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import {
+    Search,
+} from 'lucide-vue-next'
 
 import {
     Card,
@@ -276,7 +279,7 @@ onMounted(() => {
         <!-- Header -->
         <div class="border-b border-white/80 bg-white px-6 py-5 shadow-[0_4px_14px_rgb(92_113_138/0.07)]">
 
-            <div class="mx-auto max-w-5xl">
+            <div class="w-full">
 
                 <h1
                     class="text-2xl font-bold text-gray-900"
@@ -299,7 +302,7 @@ onMounted(() => {
         </div>
 
         <!-- Content -->
-        <div class="mx-auto max-w-5xl p-6">
+        <div class="w-full p-6">
 
             <!-- Search -->
             <Card>
@@ -311,19 +314,23 @@ onMounted(() => {
                         @submit.prevent="searchDocument"
                     >
 
-                        <Input
-                            v-model="trackingNumber"
-                            type="text"
-                            :placeholder="isInquiry ? 'Scan QR code or enter subject / description' : 'Tracking number'"
-                            class="h-11 flex-1"
-                            :disabled="loading || searchLoading"
-                        />
+                        <div class="relative flex-1">
+                            <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                            <Input
+                                v-model="trackingNumber"
+                                type="text"
+                                :placeholder="isInquiry ? 'Scan QR code or enter subject / description' : 'Tracking number'"
+                                class="h-11 pl-10"
+                                :disabled="loading || searchLoading"
+                            />
+                        </div>
 
                         <Button
                             type="submit"
                             class="h-11 bg-blue-600 px-6 hover:bg-blue-700"
                             :disabled="loading || searchLoading"
                         >
+                            <Search class="mr-2 h-4 w-4" />
                             {{
                                 loading || searchLoading
                                     ? 'Searching...'

@@ -1,6 +1,15 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import {
+    Building2,
+    FilePlus2,
+    FileText,
+    Flag,
+    LockKeyhole,
+    Save,
+    X,
+} from 'lucide-vue-next'
 
 import {
     Card,
@@ -706,7 +715,8 @@ onMounted(() => {
                 @click="openCreateForm"
                 class="bg-blue-600 hover:bg-blue-700"
             >
-                + Register Document
+                <FilePlus2 class="mr-2 h-4 w-4" />
+                Register Document
             </Button>
         </div>
 
@@ -1089,32 +1099,35 @@ onMounted(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Document Type *
+                                    Document Type <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="form.document_type_id"
-                                    :disabled="creating"
-                                    class="w-full h-11 rounded-md
-                                           border border-gray-300
-                                           bg-white px-3 text-sm
-                                           outline-none
-                                           focus:border-blue-500
-                                           focus:ring-1
-                                           focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Document Type
-                                    </option>
-
-                                    <option
-                                        v-for="type in documentTypes"
-                                        :key="type.id"
-                                        :value="type.id"
+                                <div class="relative">
+                                    <FileText class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="form.document_type_id"
+                                        :disabled="creating"
+                                        class="w-full h-11 rounded-md
+                                               border border-gray-300
+                                               bg-white pl-10 pr-3 text-sm
+                                               outline-none
+                                               focus:border-blue-500
+                                               focus:ring-1
+                                               focus:ring-blue-500"
                                     >
-                                        {{ type.type_name }}
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Document Type
+                                        </option>
+
+                                        <option
+                                            v-for="type in documentTypes"
+                                            :key="type.id"
+                                            :value="type.id"
+                                        >
+                                            {{ type.type_name }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div>
@@ -1123,32 +1136,35 @@ onMounted(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Priority *
+                                    Priority <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="form.priority_id"
-                                    :disabled="creating"
-                                    class="w-full h-11 rounded-md
-                                           border border-gray-300
-                                           bg-white px-3 text-sm
-                                           outline-none
-                                           focus:border-blue-500
-                                           focus:ring-1
-                                           focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Priority
-                                    </option>
-
-                                    <option
-                                        v-for="priority in priorities"
-                                        :key="priority.id"
-                                        :value="priority.id"
+                                <div class="relative">
+                                    <Flag class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="form.priority_id"
+                                        :disabled="creating"
+                                        class="w-full h-11 rounded-md
+                                               border border-gray-300
+                                               bg-white pl-10 pr-3 text-sm
+                                               outline-none
+                                               focus:border-blue-500
+                                               focus:ring-1
+                                               focus:ring-blue-500"
                                     >
-                                        {{ priority.priority_name }}
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Priority
+                                        </option>
+
+                                        <option
+                                            v-for="priority in priorities"
+                                            :key="priority.id"
+                                            :value="priority.id"
+                                        >
+                                            {{ priority.priority_name }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
 
                         </div>
@@ -1159,7 +1175,7 @@ onMounted(() => {
                                 class="block mb-2 text-sm
                                        font-semibold text-gray-700"
                             >
-                                Title / Subject *
+                                Title / Subject <span class="text-red-600">*</span>
                             </label>
 
                             <Input
@@ -1206,37 +1222,40 @@ onMounted(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Confidentiality *
+                                    Confidentiality <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="
-                                        form.confidentiality_level_id
-                                    "
-                                    :disabled="creating"
-                                    class="w-full h-11 rounded-md
-                                           border border-gray-300
-                                           bg-white px-3 text-sm
-                                           outline-none
-                                           focus:border-blue-500
-                                           focus:ring-1
-                                           focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Confidentiality
-                                    </option>
-
-                                    <option
-                                        v-for="
-                                            level in
-                                            confidentialityLevels
+                                <div class="relative">
+                                    <LockKeyhole class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="
+                                            form.confidentiality_level_id
                                         "
-                                        :key="level.id"
-                                        :value="level.id"
+                                        :disabled="creating"
+                                        class="w-full h-11 rounded-md
+                                               border border-gray-300
+                                               bg-white pl-10 pr-3 text-sm
+                                               outline-none
+                                               focus:border-blue-500
+                                               focus:ring-1
+                                               focus:ring-blue-500"
                                     >
-                                        {{ level.level_name }}
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Confidentiality
+                                        </option>
+
+                                        <option
+                                            v-for="
+                                                level in
+                                                confidentialityLevels
+                                            "
+                                            :key="level.id"
+                                            :value="level.id"
+                                        >
+                                            {{ level.level_name }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div>
@@ -1245,33 +1264,36 @@ onMounted(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Origin Office *
+                                    Origin Office <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="form.origin_office_id"
-                                    :disabled="creating"
-                                    class="w-full h-11 rounded-md
-                                           border border-gray-300
-                                           bg-white px-3 text-sm
-                                           outline-none
-                                           focus:border-blue-500
-                                           focus:ring-1
-                                           focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Origin Office
-                                    </option>
-
-                                    <option
-                                        v-for="office in offices"
-                                        :key="office.id"
-                                        :value="office.id"
+                                <div class="relative">
+                                    <Building2 class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="form.origin_office_id"
+                                        :disabled="creating"
+                                        class="w-full h-11 rounded-md
+                                               border border-gray-300
+                                               bg-white pl-10 pr-3 text-sm
+                                               outline-none
+                                               focus:border-blue-500
+                                               focus:ring-1
+                                               focus:ring-blue-500"
                                     >
-                                        {{ office.office_name }}
-                                        ({{ office.office_code }})
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Origin Office
+                                        </option>
+
+                                        <option
+                                            v-for="office in offices"
+                                            :key="office.id"
+                                            :value="office.id"
+                                        >
+                                            {{ office.office_name }}
+                                            ({{ office.office_code }})
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
 
                         </div>
@@ -1288,7 +1310,7 @@ onMounted(() => {
                                            font-semibold
                                            text-gray-700"
                                 >
-                                    Document Date *
+                                    Document Date <span class="text-red-600">*</span>
                                 </label>
 
                                 <Input
@@ -1349,6 +1371,7 @@ onMounted(() => {
                                 @click="closeCreateForm"
                                 :disabled="creating"
                             >
+                                <X class="mr-2 h-4 w-4" />
                                 Cancel
                             </Button>
 
@@ -1357,6 +1380,7 @@ onMounted(() => {
                                 class="bg-blue-600 hover:bg-blue-700"
                                 :disabled="creating"
                             >
+                                <Save class="mr-2 h-4 w-4" />
                                 {{
                                     creating
                                         ? 'Registering...'

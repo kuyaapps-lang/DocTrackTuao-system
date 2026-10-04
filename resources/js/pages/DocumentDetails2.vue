@@ -1778,7 +1778,7 @@ onMounted(() => {
         <div class="bg-white border-b px-6 py-4">
 
             <div
-                class="max-w-6xl mx-auto flex items-center justify-between"
+                class="flex w-full items-center justify-between"
             >
 
                 <div>
@@ -1810,7 +1810,7 @@ onMounted(() => {
         </div>
 
         <!-- Main Content -->
-        <div class="max-w-6xl mx-auto p-6">
+        <div class="w-full p-6">
 
             <!-- Loading -->
             <div
@@ -2969,7 +2969,7 @@ onMounted(() => {
                     <label
                         class="mb-2 block text-sm font-semibold text-gray-700"
                     >
-                        Destination Office *
+                        Destination Office <span class="text-red-600">*</span>
                     </label>
 
                     <select

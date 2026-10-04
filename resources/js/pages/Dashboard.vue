@@ -3,10 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
     CheckCircle2,
+    Filter,
     FileText,
     Inbox,
+    RotateCcw,
     Send,
     Truck,
+    X,
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -225,7 +228,7 @@ onBeforeUnmount(() => {
 
 <template>
     <section class="min-h-screen bg-[#f4f7fb] p-4 text-slate-900 dark:bg-[#111827] dark:text-slate-100 sm:p-6" :aria-busy="loading" aria-labelledby="dashboard-heading">
-        <div class="mx-auto max-w-7xl space-y-5">
+        <div class="w-full space-y-5">
             <div class="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-[0_10px_30px_rgb(15_41_70/0.07)] dark:border-slate-700 dark:bg-slate-900/95 dark:shadow-[0_18px_42px_rgb(0_0_0/0.35)] sm:px-7">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div class="flex flex-wrap items-center gap-[15pt]">
@@ -234,8 +237,14 @@ onBeforeUnmount(() => {
                     </div>
                     <form class="flex w-full flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/90 sm:w-auto" @submit.prevent="updateDateRange">
                         <DashboardDateRangePicker :from="dateFrom" :to="dateTo" aria-label="Dashboard date range" :disabled="loading" @update:from="dateFrom = $event" @update:to="dateTo = $event" />
-                        <Button type="submit" class="border border-blue-900 bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="loading || !dateFrom || !dateTo">Apply</Button>
-                        <Button type="button" variant="outline" class="dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" :disabled="loading || (!dateFrom && !dateTo)" @click="clearDateRange">Clear</Button>
+                        <Button type="submit" class="border border-blue-900 bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="loading || !dateFrom || !dateTo">
+                            <Filter class="mr-2 h-4 w-4" />
+                            Apply
+                        </Button>
+                        <Button type="button" variant="outline" class="dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" :disabled="loading || (!dateFrom && !dateTo)" @click="clearDateRange">
+                            <X class="mr-2 h-4 w-4" />
+                            Clear
+                        </Button>
                     </form>
                 </div>
             </div>
@@ -246,7 +255,10 @@ onBeforeUnmount(() => {
                 <p v-if="state === 'permission-denied'">You do not have permission to view dashboard reports.</p>
                 <p v-else-if="state === 'office-denied'">Dashboard reporting is unavailable because your account has no valid office assignment.</p>
                 <p v-else>Dashboard summary is temporarily unavailable.</p>
-                <Button v-if="state === 'failure'" type="button" class="mt-4" @click="retry">Retry</Button>
+                <Button v-if="state === 'failure'" type="button" class="mt-4" @click="retry">
+                    <RotateCcw class="mr-2 h-4 w-4" />
+                    Retry
+                </Button>
             </div>
 
             <template v-else>
@@ -294,34 +306,34 @@ onBeforeUnmount(() => {
                     <CardContent class="p-0">
                         <p v-if="dashboard.recent_documents.length === 0" class="py-8 text-center text-[10.4pt] text-gray-500 dark:text-slate-400">No documents were registered in this period.</p>
                         <div v-else class="max-h-[38rem] overflow-auto" aria-label="Recent documents in the selected reporting period">
-                            <table class="w-full min-w-[52rem] text-left text-[11.5pt]">
+                            <table class="w-full min-w-[58rem] border-separate border-spacing-0 text-left text-[11.5pt]">
                                 <thead class="sticky top-0 bg-blue-900 text-[10.5pt] tracking-wide text-white dark:bg-blue-900 dark:text-white">
                                     <tr>
-                                        <th scope="col" class="px-3 py-2 text-left font-bold">QR Code</th>
-                                        <th scope="col" class="px-3 py-2 text-left font-bold">Document Details</th>
-                                        <th scope="col" class="px-3 py-2 text-left font-bold">Status</th>
-                                        <th scope="col" class="px-3 py-2 text-left font-bold">Priority</th>
-                                        <th scope="col" class="px-3 py-2 text-center font-bold">Registered</th>
-                                        <th scope="col" class="px-3 py-2 text-left font-bold">Latest Routing Activity</th>
+                                        <th scope="col" class="px-5 py-3 text-left font-bold">QR Code</th>
+                                        <th scope="col" class="px-5 py-3 text-left font-bold">Document Details</th>
+                                        <th scope="col" class="px-5 py-3 text-left font-bold">Status</th>
+                                        <th scope="col" class="px-5 py-3 text-left font-bold">Priority</th>
+                                        <th scope="col" class="px-5 py-3 text-center font-bold">Registered</th>
+                                        <th scope="col" class="px-5 py-3 text-left font-bold">Latest Routing Activity</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 bg-white dark:divide-slate-700 dark:bg-slate-900">
                                     <tr v-for="document in dashboard.recent_documents" :key="document.id" class="hover:bg-blue-50/50 dark:hover:bg-slate-800/80" :class="isUrgent(document) ? 'bg-red-400/25 hover:bg-red-400/30 dark:bg-red-500/20 dark:hover:bg-red-500/30' : ''">
-                                        <td class="px-3 py-1.5 font-semibold text-blue-800 dark:text-blue-300">
+                                        <td class="px-5 py-3 align-top font-semibold text-blue-800 dark:text-blue-300">
                                             <RouterLink :to="`/documents/${document.id}`" class="outline-none hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:ring-blue-500">
                                                 {{ document.qr_code || 'No QR code' }}
                                             </RouterLink>
                                         </td>
-                                        <td class="px-3 py-1.5 font-medium text-slate-800 dark:text-slate-100">{{ document.document_details }}</td>
-                                        <td class="px-3 py-1.5"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="documentStatusClass(document.status.name)">{{ document.status.name }}</span></td>
-                                        <td class="px-3 py-1.5"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="priorityClass(document.priority?.name)">{{ document.priority?.name || 'Unassigned' }}</span></td>
-                                        <td class="px-3 py-1.5 text-center text-slate-600 dark:text-slate-300">
+                                        <td class="px-5 py-3 align-top font-medium text-slate-800 dark:text-slate-100">{{ document.document_details }}</td>
+                                        <td class="px-5 py-3 align-top"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="documentStatusClass(document.status.name)">{{ document.status.name }}</span></td>
+                                        <td class="px-5 py-3 align-top"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="priorityClass(document.priority?.name)">{{ document.priority?.name || 'Unassigned' }}</span></td>
+                                        <td class="px-5 py-3 text-center align-top text-slate-600 dark:text-slate-300">
                                             <time :datetime="document.created_at" class="block">
                                                 <span class="block">{{ formatDashboardDate(document.created_at) }}</span>
                                                 <span class="block text-[10.5pt] text-slate-500 dark:text-slate-400">{{ formatDashboardTime(document.created_at) }}</span>
                                             </time>
                                         </td>
-                                        <td class="px-3 py-1.5">
+                                        <td class="px-5 py-3 align-top">
                                             <template v-if="document.latest_routing_activity">
                                                 <div class="flex flex-wrap items-center gap-2">
                                                     <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10.5pt] font-semibold text-slate-800 dark:bg-slate-800 dark:text-slate-100">{{ routingEventLabel(document.latest_routing_activity.event_type) }}</span>

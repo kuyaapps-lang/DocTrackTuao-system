@@ -80,6 +80,10 @@ class DashboardController extends Controller
                             'documents.id'
                         )
                         ->whereNull('pending_routes.received_at');
+
+                    if (Schema::hasColumn('document_routes', 'cancelled_at')) {
+                        $query->whereNull('pending_routes.cancelled_at');
+                    }
                 })
                 ->distinct()
                 ->count('documents.id'),
@@ -106,6 +110,10 @@ class DashboardController extends Controller
                             'documents.id'
                         )
                         ->whereNull('pending_routes.received_at');
+
+                    if (Schema::hasColumn('document_routes', 'cancelled_at')) {
+                        $query->whereNull('pending_routes.cancelled_at');
+                    }
                 })
                 ->distinct()
                 ->count('documents.id'),

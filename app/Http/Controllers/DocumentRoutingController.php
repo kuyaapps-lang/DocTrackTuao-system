@@ -135,7 +135,7 @@ class DocumentRoutingController extends Controller
 
                 if (
                     DocumentRoute::where('document_id', $document->id)
-                        ->whereNull('received_at')
+                        ->pending()
                         ->lockForUpdate()
                         ->exists()
                 ) {
@@ -352,7 +352,7 @@ class DocumentRoutingController extends Controller
                 }
 
                 $pendingRoutes = DocumentRoute::where('document_id', $document->id)
-                    ->whereNull('received_at')
+                    ->pending()
                     ->orderBy('id')
                     ->lockForUpdate()
                     ->get();
@@ -479,6 +479,96 @@ class DocumentRoutingController extends Controller
     }
 
     /**
+     * Cancel a pending forward before the destination office receives it.
+     */
+    public function undoForward(
+        Request $request,
+        AuditLogger $auditLogger,
+        RealtimeBroadcaster $realtime,
+        $documentId
+    ) {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $user = $request->user();
+
+        $route = DB::transaction(function () use ($documentId, $user, $validated, $auditLogger) {
+            $document = Document::whereKey($documentId)->lockForUpdate()->firstOrFail();
+
+            if (! $user->office_id || ! Office::whereKey($user->office_id)->exists()) {
+                abort(403, 'Your user account is not assigned to a valid office.');
+            }
+
+            $route = DocumentRoute::where('document_id', $document->id)
+                ->pending()
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
+
+            if (! $route) {
+                abort(409, 'This document has no pending forward to undo.');
+            }
+
+            if ((int) $route->from_office_id !== (int) $user->office_id) {
+                abort(403, 'Only the office that forwarded this document may undo the pending forward.');
+            }
+
+            $currentStatus = DocumentStatus::whereKey($document->status_id)->first();
+            if ($currentStatus && in_array($currentStatus->status_name, ['Completed', 'Archived'], true)) {
+                abort(409, 'Completed or archived documents cannot have a forward undone.');
+            }
+
+            $receivedStatus = DocumentStatus::where('status_name', 'Received')->firstOrFail();
+            $forAction = ProcessingAction::where('action_code', 'FOR_ACTION')
+                ->where('is_active', true)
+                ->firstOrFail();
+
+            $route->update([
+                'cancelled_by' => $user->id,
+                'cancelled_at' => now(),
+                'cancellation_reason' => $validated['reason'] ?? null,
+            ]);
+
+            $document->update([
+                'current_office_id' => $route->from_office_id,
+                'status_id' => $receivedStatus->id,
+                'current_action_id' => $forAction->id,
+                'processing_note' => null,
+                'current_action_updated_by' => $user->id,
+                'current_action_updated_at' => now(),
+            ]);
+
+            DocumentProcessingLog::create([
+                'document_id' => $document->id,
+                'office_id' => $route->from_office_id,
+                'user_id' => $user->id,
+                'processing_action_id' => $forAction->id,
+                'document_route_id' => $route->id,
+                'event_type' => 'forwarding_undone',
+                'event_note' => 'Pending forward undone; document returned to the forwarding office.',
+            ]);
+
+            $auditLogger->log(
+                module: AuditLog::MODULE_DOCUMENT_ROUTING,
+                action: AuditLog::ACTION_FORWARDING_UNDONE,
+                recordId: $document->id,
+                description: 'Pending forward undone; document returned to '.$route->fromOffice?->office_name.'.',
+                userId: $user->id
+            );
+
+            return $route;
+        });
+
+        $route->load(['fromOffice', 'toOffice', 'forwardedBy', 'receivedBy', 'cancelledBy', 'status', 'action']);
+        $realtime->document($route->document, 'document.forwarding_undone', ['documents', 'dashboard', 'document-detail']);
+
+        return response()->json([
+            'message' => 'Forwarding undone. The document has returned to the forwarding office.',
+            'route' => $this->routeShape($route),
+        ]);
+    }
+
+    /**
      * Display complete routing history.
      */
     public function history(
@@ -495,6 +585,7 @@ class DocumentRoutingController extends Controller
                 'toOffice',
                 'forwardedBy',
                 'receivedBy',
+                'cancelledBy',
                 'status',
                 'action',
             ])
@@ -545,6 +636,9 @@ class DocumentRoutingController extends Controller
             'to_office' => $this->officeShape($route->toOffice),
             'forwarded_by' => $this->userShape($route->forwardedBy),
             'received_by' => $this->userShape($route->receivedBy),
+            'cancelled_at' => $route->cancelled_at,
+            'cancellation_reason' => $route->cancellation_reason,
+            'cancelled_by' => $this->userShape($route->cancelledBy),
             'status' => $route->status
                 ? [
                     'id' => $route->status->id,

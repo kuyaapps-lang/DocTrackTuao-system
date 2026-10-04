@@ -1,5 +1,19 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+    Check,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    Eye,
+    EyeOff,
+    ListFilter,
+    Printer,
+    QrCode,
+    RefreshCw,
+    Trash2,
+    X,
+} from 'lucide-vue-next'
 import QRCode from 'qrcode'
 import { clearCurrentUser, useAuth } from '@/lib/auth'
 import { listenForRealtimeInvalidation } from '@/lib/realtime'
@@ -67,6 +81,7 @@ const requestsLoading = ref(true)
 const requestsError = ref('')
 const requestSaving = ref(false)
 const printingRequestId = ref(null)
+const printingUnused = ref(false)
 const printedRequestIds = ref(new Set())
 const reviewPendingId = ref(null)
 const expandedRequestId = ref(null)
@@ -144,6 +159,36 @@ const printableRequest = computed(() => {
         !printedRequestIds.value.has(request.id)
     )) || null
 })
+
+const availableQrCount = request => request.qr_codes.filter(qr => (
+    qr.status === 'unused' && !qr.linked
+)).length
+
+const assignedQrCount = request => `${availableQrCount(request)}/${request.quantity}`
+
+const assignedQrCardClass = request => request.status === 'pending'
+    ? 'border-yellow-200 bg-yellow-50'
+    : request.status === 'approved'
+        ? 'border-emerald-100 bg-emerald-50'
+        : 'border-red-100 bg-red-50'
+
+const assignedQrCardHeadingClass = request => request.status === 'pending'
+    ? 'text-yellow-700'
+    : request.status === 'approved'
+        ? 'text-emerald-700'
+        : 'text-red-700'
+
+const assignedQrCardLabel = request => request.status === 'pending'
+    ? 'Requested QR'
+    : request.status === 'approved'
+        ? 'Approved / Available QR'
+        : 'Rejected QR Request'
+
+const qrStatusClass = qr => qr.status === 'registered' || qr.linked
+    ? 'border-red-300 bg-red-50 text-red-800'
+    : qr.status === 'void'
+        ? 'border-slate-300 bg-slate-100 text-slate-600 line-through'
+        : 'border-emerald-300 bg-emerald-50 text-emerald-800'
 
 /*
 |--------------------------------------------------------------------------
@@ -802,6 +847,42 @@ const printRequestQrCodes = async (request) => {
     }
 }
 
+const printAllUnusedQrCodes = async () => {
+    if (!canIssueQr.value || printingUnused.value) return
+
+    printingUnused.value = true
+    error.value = ''
+
+    try {
+        const response = await fetch('/api/qr-codes/printable-unused', {
+            headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${getToken()}`,
+            },
+        })
+        const payload = await response.json()
+
+        if (!response.ok || !Array.isArray(payload.data)) {
+            throw new Error('Unable to load unused QR codes for printing.')
+        }
+        if (payload.data.length === 0) {
+            throw new Error('There are no unused QR codes to print.')
+        }
+
+        await printQrLabels({
+            windowRef: window,
+            items: payload.data.map(qr => ({ identifier: qr.qr_token, qr })),
+            getImageSource: item => createQrImage(item.qr),
+        })
+    } catch (err) {
+        error.value = err?.message === 'There are no unused QR codes to print.'
+            ? err.message
+            : qrPrintFailureMessage(err)
+    } finally {
+        printingUnused.value = false
+    }
+}
+
 /*
 |--------------------------------------------------------------------------
 | Formatting
@@ -857,7 +938,7 @@ onBeforeUnmount(() => {
     >
 
         <div v-if="canApproveQr || (canRequestQr && !canApproveQr)" class="border-b border-blue-100 bg-white px-6 py-3 shadow-sm">
-            <div class="mx-auto grid max-w-5xl gap-3 text-sm md:grid-cols-3 md:items-center">
+            <div class="grid w-full gap-3 text-sm md:grid-cols-3 md:items-center">
                 <p class="text-slate-600"><span class="font-semibold text-slate-900">1. Request Batch</span> — request unique QR labels.</p>
                 <p class="text-slate-600"><span class="font-semibold text-slate-900">2. Print & Attach</span> — attach ORIGINAL and retain RECORD COPY.</p>
                 <p class="text-slate-600"><span class="font-semibold text-slate-900">3. Scan & Register</span> — register or retrieve the document.</p>
@@ -866,7 +947,7 @@ onBeforeUnmount(() => {
 
         <!-- Main -->
         <div
-            class="mx-auto max-w-5xl p-6"
+            class="w-full p-6"
         >
 
             <!-- Success -->
@@ -933,6 +1014,7 @@ onBeforeUnmount(() => {
                             class="w-48 bg-blue-900 text-sm text-white hover:bg-blue-950 hover:text-white"
                             :disabled="requestSaving"
                         >
+                            <QrCode class="mr-2 h-4 w-4" />
                             {{ requestSaving ? 'Submitting...' : 'Request QR Code' }}
                         </Button>
                     </form>
@@ -967,7 +1049,10 @@ onBeforeUnmount(() => {
                                 {{ lastGeneratedBatch.length }} unique QR code{{ lastGeneratedBatch.length === 1 ? '' : 's' }} generated and ready for printing.
                             </p>
                         </div>
-                        <Button class="bg-white text-blue-900 hover:bg-blue-50 hover:text-blue-900" @click="printLastBatch">Print Last Batch</Button>
+                        <Button class="bg-white text-blue-900 hover:bg-blue-50 hover:text-blue-900" @click="printLastBatch">
+                            <Printer class="mr-2 h-4 w-4" />
+                            Print Last Batch
+                        </Button>
                     </div>
                 </CardHeader>
                 <CardContent class="[&_*]:!text-[13pt]">
@@ -997,12 +1082,23 @@ onBeforeUnmount(() => {
 
                         <div class="flex flex-wrap items-center gap-2">
                             <Button
+                                v-if="canIssueQr"
+                                type="button"
+                                class="bg-white !text-[12pt] text-blue-900 hover:bg-blue-50 hover:text-blue-900"
+                                :disabled="printingUnused"
+                                @click="printAllUnusedQrCodes"
+                            >
+                                <Printer class="mr-2 h-4 w-4" />
+                                {{ printingUnused ? 'Preparing...' : 'Print All Unused QR Codes' }}
+                            </Button>
+                            <Button
                                 v-if="printableRequest"
                                 type="button"
                                 class="bg-white !text-[12pt] text-blue-900 hover:bg-blue-50 hover:text-blue-900"
                                 :disabled="printingRequestId !== null"
                                 @click="printRequestQrCodes(printableRequest)"
                             >
+                                <Printer class="mr-2 h-4 w-4" />
                                 {{ printingRequestId === printableRequest.id ? 'Preparing...' : 'Print QR Codes' }}
                             </Button>
                             <Button
@@ -1011,6 +1107,7 @@ onBeforeUnmount(() => {
                                 :disabled="requestsLoading || reviewPendingId !== null || printingRequestId !== null"
                                 @click="fetchRequests"
                             >
+                                <RefreshCw class="mr-2 h-4 w-4" />
                                 Refresh
                             </Button>
                         </div>
@@ -1033,8 +1130,9 @@ onBeforeUnmount(() => {
                             <thead class="bg-blue-900 text-xs font-semibold tracking-wide text-white">
                                 <tr>
                                     <th scope="col" class="px-3 py-1">Requesting Office</th>
+                                    <th scope="col" class="px-3 py-1">Requesting Account</th>
                                     <th scope="col" class="px-3 py-1">Date Requested</th>
-                                    <th scope="col" class="px-3 py-1">Assigned QR Code</th>
+                                    <th scope="col" class="px-3 py-1">Assigned QR</th>
                                     <th scope="col" class="px-3 py-1 text-right"><span class="sr-only">QR code actions</span></th>
                                 </tr>
                             </thead>
@@ -1044,24 +1142,33 @@ onBeforeUnmount(() => {
                                         <td class="px-3 py-1">
                                             <p class="font-semibold text-slate-900 dark:text-slate-100">{{ request.requested_office?.office_name || 'Unassigned office' }}</p>
                                         </td>
+                                        <td class="px-3 py-1 text-sm text-slate-700 dark:text-slate-300">{{ request.requested_by?.name || 'Unknown account' }}</td>
                                         <td class="whitespace-nowrap px-3 py-1 text-sm text-slate-700 dark:text-slate-300">{{ formatDateTime(request.created_at) }}</td>
-                                        <td class="px-3 py-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{{ request.qr_codes.length > 0 ? `${request.qr_codes.length} assigned` : 'Not assigned yet' }}</td>
+                                        <td class="px-3 py-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{{ assignedQrCount(request) }}</td>
                                         <td class="px-3 py-1 text-right">
                                             <Button type="button" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :aria-expanded="expandedRequestId === request.id" @click="toggleRequestQrCodes(request.id)">
+                                                <EyeOff v-if="expandedRequestId === request.id" class="mr-2 h-4 w-4" />
+                                                <Eye v-else class="mr-2 h-4 w-4" />
                                                 {{ expandedRequestId === request.id ? 'Hide QR Codes' : 'Show QR Codes' }}
                                             </Button>
                                         </td>
                                     </tr>
                                     <tr v-if="expandedRequestId === request.id">
-                                        <td colspan="4" class="bg-slate-50 px-3 py-4 dark:bg-slate-800">
+                                        <td colspan="5" class="bg-slate-50 px-3 py-4 dark:bg-slate-800">
                                             <div class="space-y-3">
                                                 <div v-if="request.qr_codes.length > 0" class="flex flex-wrap gap-2">
-                                                    <span v-for="qr in request.qr_codes" :key="qr.id" class="rounded-md border bg-white px-3 py-1.5 font-mono text-xs font-semibold text-gray-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">{{ qr.qr_token }}</span>
+                                                    <span v-for="qr in request.qr_codes" :key="qr.id" class="rounded-md border px-3 py-1.5 font-mono text-xs font-semibold" :class="qrStatusClass(qr)">{{ qr.qr_token }}</span>
                                                 </div>
                                                 <p v-else class="text-sm text-slate-500 dark:text-slate-400">No QR codes have been assigned yet.</p>
                                                 <div v-if="request.status === 'pending'" class="flex gap-2">
-                                                    <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'approve')">{{ reviewPendingId === request.id ? 'Reviewing...' : 'Approve' }}</Button>
-                                                    <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'reject')">Reject</Button>
+                                                    <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'approve')">
+                                                        <Check class="mr-2 h-4 w-4" />
+                                                        {{ reviewPendingId === request.id ? 'Reviewing...' : 'Approve' }}
+                                                    </Button>
+                                                    <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'reject')">
+                                                        <X class="mr-2 h-4 w-4" />
+                                                        Reject
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </td>
@@ -1105,11 +1212,9 @@ onBeforeUnmount(() => {
                                             </p>
                                         </div>
 
-                                        <div class="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
-                                            <p class="text-xs font-semibold uppercase text-emerald-700">Assigned QR Code</p>
-                                            <p class="mt-1 text-sm font-semibold text-gray-900">
-                                                {{ request.qr_codes.length > 0 ? `${request.qr_codes.length} assigned` : 'Not assigned yet' }}
-                                            </p>
+                                        <div class="rounded-md border px-3 py-2" :class="assignedQrCardClass(request)">
+                                            <p class="text-xs font-semibold uppercase" :class="assignedQrCardHeadingClass(request)">{{ assignedQrCardLabel(request) }}</p>
+                                            <p class="mt-1 text-sm font-semibold text-gray-900">{{ assignedQrCount(request) }}</p>
                                         </div>
                                     </div>
 
@@ -1131,6 +1236,7 @@ onBeforeUnmount(() => {
                                         :disabled="reviewPendingId !== null"
                                         @click="reviewRequest(request, 'approve')"
                                     >
+                                        <Check class="mr-2 h-4 w-4" />
                                         {{ reviewPendingId === request.id ? 'Reviewing...' : 'Approve' }}
                                     </Button>
 
@@ -1139,6 +1245,7 @@ onBeforeUnmount(() => {
                                         :disabled="reviewPendingId !== null"
                                         @click="reviewRequest(request, 'reject')"
                                     >
+                                        <X class="mr-2 h-4 w-4" />
                                         Reject
                                     </Button>
                                 </div>
@@ -1153,7 +1260,8 @@ onBeforeUnmount(() => {
                                     <span
                                         v-for="qr in request.qr_codes"
                                         :key="qr.id"
-                                        class="rounded-md border bg-gray-50 px-3 py-1.5 font-mono text-xs font-semibold text-gray-700"
+                                        class="rounded-md border px-3 py-1.5 font-mono text-xs font-semibold"
+                                        :class="qrStatusClass(qr)"
                                     >
                                         {{ qr.qr_token }}
                                     </span>
@@ -1232,6 +1340,7 @@ onBeforeUnmount(() => {
                                 generateQrBatch
                             "
                         >
+                            <QrCode class="mr-2 h-4 w-4" />
                             {{
                                 generating
                                     ? 'Generating...'
@@ -1277,6 +1386,7 @@ onBeforeUnmount(() => {
                         :disabled="inventoryLoading || voidingId !== null"
                         @click="fetchInventory(inventoryMeta?.current_page || 1)"
                     >
+                        <RefreshCw class="mr-2 h-4 w-4" />
                         Retry
                     </Button>
                 </CardHeader>
@@ -1285,17 +1395,20 @@ onBeforeUnmount(() => {
                     <div class="mb-4 flex flex-wrap items-center gap-3">
                         <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
                             Lifecycle status
-                            <select
-                                v-model="inventoryStatus"
-                                :disabled="voidingId !== null"
-                                class="rounded-md border bg-white px-3 py-2"
-                                @change="fetchInventory(1)"
-                            >
-                                <option value="">All statuses</option>
-                                <option value="unused">Unused</option>
-                                <option value="registered">Registered</option>
-                                <option value="void">Void</option>
-                            </select>
+                            <span class="relative">
+                                <ListFilter class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                <select
+                                    v-model="inventoryStatus"
+                                    :disabled="voidingId !== null"
+                                    class="rounded-md border bg-white py-2 pl-10 pr-3"
+                                    @change="fetchInventory(1)"
+                                >
+                                    <option value="">All statuses</option>
+                                    <option value="unused">Unused</option>
+                                    <option value="registered">Registered</option>
+                                    <option value="void">Void</option>
+                                </select>
+                            </span>
                         </label>
 
                     </div>
@@ -1348,6 +1461,7 @@ onBeforeUnmount(() => {
                                             :aria-label="`Void QR record ${item.id}`"
                                             @click="openVoidConfirmation(item, $event)"
                                         >
+                                            <Trash2 class="mr-2 h-4 w-4" />
                                             Void
                                         </Button>
                                         <span v-else class="text-gray-500">Not available</span>
@@ -1361,12 +1475,18 @@ onBeforeUnmount(() => {
                         <p class="text-center text-sm text-gray-600">{{ inventoryMeta.total }} total results</p>
                         <nav class="max-w-full overflow-x-auto rounded-full bg-white p-1 shadow-[0_8px_18px_rgb(15_41_70/0.12)]" aria-label="QR inventory pagination">
                             <div class="flex min-w-max items-center gap-1">
-                                <button type="button" class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="voidingId !== null || !inventoryPaginationState.canGoPrevious" @click="changeInventoryPage(inventoryPaginationState.previousPage)">&lsaquo; Prev</button>
+                                <button type="button" class="inline-flex h-10 items-center gap-1 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="voidingId !== null || !inventoryPaginationState.canGoPrevious" @click="changeInventoryPage(inventoryPaginationState.previousPage)">
+                                    <ChevronLeft class="h-4 w-4" />
+                                    Prev
+                                </button>
                                 <template v-for="item in inventoryPaginationItems" :key="item.type === 'page' ? item.page : item.key">
                                     <span v-if="item.type === 'ellipsis'" class="flex size-10 items-center justify-center font-bold text-blue-900" aria-hidden="true">&hellip;</span>
                                     <button v-else type="button" class="size-10 rounded-full font-semibold transition-colors" :class="item.page === inventoryMeta.current_page ? 'bg-blue-900 text-white shadow-[inset_0_1px_2px_rgb(15_41_70/0.18)]' : 'text-blue-900 hover:bg-blue-50'" :aria-current="item.page === inventoryMeta.current_page ? 'page' : undefined" :disabled="voidingId !== null" @click="changeInventoryPage(item.page)">{{ item.page }}</button>
                                 </template>
-                                <button type="button" class="h-10 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="voidingId !== null || !inventoryPaginationState.canGoNext" @click="changeInventoryPage(inventoryPaginationState.nextPage)">Next &rsaquo;</button>
+                                <button type="button" class="inline-flex h-10 items-center gap-1 rounded-full px-3 font-semibold text-blue-900 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40" :disabled="voidingId !== null || !inventoryPaginationState.canGoNext" @click="changeInventoryPage(inventoryPaginationState.nextPage)">
+                                    Next
+                                    <ChevronRight class="h-4 w-4" />
+                                </button>
                             </div>
                         </nav>
                     </div>
@@ -1389,6 +1509,7 @@ onBeforeUnmount(() => {
                     </p>
                     <div class="mt-5 flex justify-end gap-2">
                         <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="voidingId !== null" @click="closeVoidConfirmation">
+                            <X class="mr-2 h-4 w-4" />
                             Cancel
                         </Button>
                         <Button
@@ -1397,6 +1518,7 @@ onBeforeUnmount(() => {
                             :disabled="voidingId !== null"
                             @click="confirmVoid"
                         >
+                            <Trash2 class="mr-2 h-4 w-4" />
                             {{ voidingId !== null ? 'Voiding...' : 'Void record' }}
                         </Button>
                     </div>

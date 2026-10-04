@@ -16,6 +16,9 @@ import { Button } from '@/components/ui/button'
 import {
     Eye,
     EyeOff,
+    LogIn,
+    Send,
+    X,
 } from 'lucide-vue-next'
 
 import logo from '@/assets/tuao-logo.png'
@@ -470,6 +473,7 @@ const submitResetRequest = async () => {
                     hover:from-cyan-700
                     hover:to-blue-800"
                 >
+                    <LogIn class="mr-2 h-5 w-5" />
                     {{
                         loading
                             ? 'Logging in...'
@@ -518,7 +522,7 @@ const submitResetRequest = async () => {
                 >
                     <div>
                         <label class="mb-2 block text-sm font-semibold text-gray-700">
-                            Email Address *
+                            Email Address <span class="text-red-600">*</span>
                         </label>
 
                         <Input
@@ -576,6 +580,7 @@ const submitResetRequest = async () => {
                             :disabled="resetRequestSaving"
                             @click="closeResetRequest"
                         >
+                            <X class="mr-2 h-4 w-4" />
                             Close
                         </Button>
 
@@ -583,6 +588,7 @@ const submitResetRequest = async () => {
                             type="submit"
                             :disabled="resetRequestSaving"
                         >
+                            <Send class="mr-2 h-4 w-4" />
                             {{ resetRequestSaving ? 'Submitting...' : 'Submit Request' }}
                         </Button>
                     </div>

@@ -18,6 +18,7 @@ import {
     ArrowLeft,
     ArrowRight,
     CheckCircle,
+    RotateCcw,
     Send,
     Paperclip,
     Upload,
@@ -130,6 +131,7 @@ const forwardError = ref('')
 const showReceiveModal = ref(false)
 let leaveRealtime = null
 const receiveError = ref('')
+const undoForwardError = ref('')
 
 /*
 |--------------------------------------------------------------------------
@@ -820,6 +822,7 @@ const processingEventLabel = (eventType) => {
         action_updated: 'Processing Update',
         forwarded: 'Route Forward',
         received: 'Route Receive',
+        forwarding_undone: 'Forwarding Undone',
         completed: 'Document Complete',
     }
 
@@ -922,6 +925,18 @@ const statusAtDate = (date) => {
         ) {
             latestStatus = 'Received'
             latestTime = receivedTime
+        }
+
+        const cancelledTime =
+            historyTimestamp(routeItem?.cancelled_at)
+
+        if (
+            cancelledTime &&
+            cancelledTime <= targetTime &&
+            cancelledTime >= latestTime
+        ) {
+            latestStatus = 'Received'
+            latestTime = cancelledTime
         }
     }
 
@@ -1438,7 +1453,8 @@ const pendingRoute = computed(() => {
             .reverse()
             .find(
                 item =>
-                    !item.received_at
+                    !item.received_at &&
+                    !item.cancelled_at
             ) || null
     )
 })
@@ -1490,6 +1506,62 @@ const canForward = computed(() => {
 
     return pendingRoute.value === null
 })
+
+const canUndoForward = computed(() => {
+    if (
+        !can('documents.route') ||
+        !pendingRoute.value ||
+        !routingOptions.value?.user ||
+        documentIsTerminal.value
+    ) {
+        return false
+    }
+
+    return Number(pendingRoute.value.from_office_id) ===
+        Number(routingOptions.value.user.office_id)
+})
+
+const undoForward = async () => {
+    undoForwardError.value = ''
+    successMessage.value = ''
+
+    if (!canUndoForward.value) {
+        return
+    }
+
+    if (!window.confirm('Undo this forwarding? The document will return to your office and the destination office will no longer be able to receive it.')) {
+        return
+    }
+
+    actionLoading.value = true
+
+    try {
+        const response = await fetch(
+            `/api/documents/${route.params.id}/undo-forward`,
+            {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({}),
+            }
+        )
+        const data = await response.json()
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Unable to undo forwarding.')
+        }
+
+        successMessage.value = data.message || 'Forwarding undone.'
+        await loadPage()
+    } catch (err) {
+        undoForwardError.value = err.message || 'Unable to undo forwarding.'
+    } finally {
+        actionLoading.value = false
+    }
+}
 
 const canComplete = computed(() => canCompleteDocument({
     document: document.value,
@@ -1841,7 +1913,7 @@ onBeforeUnmount(() => leaveRealtime?.())
         <div class="border-b border-white/80 bg-white px-6 py-4 shadow-[0_4px_14px_rgb(92_113_138/0.07)]">
 
             <div
-                class="max-w-6xl mx-auto flex items-center justify-between"
+                class="flex w-full items-center justify-between"
             >
 
                 <div>
@@ -1874,7 +1946,7 @@ onBeforeUnmount(() => leaveRealtime?.())
         </div>
 
         <!-- Main Content -->
-        <div class="max-w-6xl mx-auto p-6">
+        <div class="w-full p-6">
 
             <!-- Loading -->
             <DocumentDetailsSkeleton v-if="loading" />
@@ -1935,14 +2007,25 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     Receive Document
                                 </Button>
 
-                                <Button
-                                    v-if="canForward"
+                                 <Button
+                                     v-if="canForward"
                                     class="bg-blue-900 text-white hover:bg-blue-950"
                                     @click="openForwardModal"
                                 >
                                     <Send class="mr-2 h-4 w-4" />
                                         Release Document
-                                </Button>
+                                 </Button>
+
+                                 <Button
+                                     v-if="canUndoForward"
+                                     variant="outline"
+                                     class="border-amber-500 text-amber-800 hover:bg-amber-50"
+                                     :disabled="actionLoading"
+                                     @click="undoForward"
+                                 >
+                                     <RotateCcw class="mr-2 h-4 w-4" />
+                                     Undo Forwarding
+                                 </Button>
 
                                 <Button
                                     v-if="canComplete"
@@ -1983,12 +2066,19 @@ onBeforeUnmount(() => leaveRealtime?.())
                             {{ completeError }}
                         </div>
 
-                        <div
-                            v-if="archiveError"
+                         <div
+                             v-if="archiveError"
                             class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
                         >
                             {{ archiveError }}
-                        </div>
+                         </div>
+
+                         <div
+                             v-if="undoForwardError"
+                             class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
+                         >
+                             {{ undoForwardError }}
+                         </div>
 
                     </CardHeader>
 
@@ -3143,7 +3233,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                     <label
                         class="mb-2 block text-sm font-semibold text-gray-700"
                     >
-                        Destination Office *
+                        Destination Office <span class="text-red-600">*</span>
                     </label>
 
                     <select

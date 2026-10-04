@@ -299,6 +299,25 @@ class Process22AQrRequestWorkflowTest extends TestCase
             ->assertOk();
     }
 
+    public function test_only_administrator_can_load_all_unused_qr_tokens_for_printing(): void
+    {
+        $unused = $this->qr('ABCDE-2345678', 'unused', $this->officeA);
+        $registered = $this->qr('FGHJK-2345678', 'registered', $this->officeA);
+        $void = $this->qr('MNPQR-2345678', 'void', $this->officeA);
+
+        Sanctum::actingAs($this->recordsA);
+        $this->getJson('/api/qr-codes/printable-unused')->assertForbidden();
+
+        Sanctum::actingAs($this->admin);
+        $this->getJson('/api/qr-codes/printable-unused')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $unused->id)
+            ->assertJsonPath('data.0.qr_token', $unused->qr_token)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonMissing(['id' => $registered->id])
+            ->assertJsonMissing(['id' => $void->id]);
+    }
+
     public function test_qr_first_registration_verifies_scope_and_claims_once(): void
     {
         $valid = $this->qr('ABCDE-2345678', 'unused', $this->officeA);

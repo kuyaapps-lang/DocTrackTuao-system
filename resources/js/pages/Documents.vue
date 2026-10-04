@@ -8,6 +8,15 @@ import {
     watch,
 } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import {
+    Building2,
+    FileText,
+    Flag,
+    ListFilter,
+    LockKeyhole,
+    RotateCcw,
+    Search,
+} from 'lucide-vue-next'
 
 import {
     Card,
@@ -1140,15 +1149,18 @@ onBeforeUnmount(() => {
                                 Search this document list
                             </label>
 
-                            <Input
-                                id="document-search"
-                                v-model="searchTerm"
-                                type="search"
-                                :maxlength="DOCUMENT_SEARCH_MAX_LENGTH"
-                                placeholder="Tracking number, QR code, title, type, or office"
-                                autocomplete="off"
-                                class="h-10 border-slate-600 px-[10px]"
-                            />
+                            <div class="relative">
+                                <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                <Input
+                                    id="document-search"
+                                    v-model="searchTerm"
+                                    type="search"
+                                    :maxlength="DOCUMENT_SEARCH_MAX_LENGTH"
+                                    placeholder="Tracking number, QR code, title, type, or office"
+                                    autocomplete="off"
+                                    class="h-10 border-slate-600 pl-10 pr-[10px]"
+                                />
+                            </div>
                         </div>
 
                         <div v-if="activeTab === 'incoming'" class="order-3 xl:order-none">
@@ -1159,21 +1171,24 @@ onBeforeUnmount(() => {
                                 Incoming route state
                             </label>
 
-                            <select
-                                id="incoming-state"
-                                v-model="incomingState"
-                                class="h-10 w-[250px] rounded-md border border-slate-600 bg-white px-[10px] text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            >
-                                <option value="all">
-                                    All states
-                                </option>
-                                <option value="pending">
-                                    Pending receipt
-                                </option>
-                                <option value="received">
-                                    Received
-                                </option>
-                            </select>
+                            <div class="relative">
+                                <ListFilter class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                <select
+                                    id="incoming-state"
+                                    v-model="incomingState"
+                                    class="h-10 w-[250px] rounded-md border border-slate-600 bg-white pl-10 pr-[10px] text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option value="all">
+                                        All states
+                                    </option>
+                                    <option value="pending">
+                                        Pending receipt
+                                    </option>
+                                    <option value="received">
+                                        Received
+                                    </option>
+                                </select>
+                            </div>
                         </div>
 
                     </div>
@@ -1207,6 +1222,7 @@ onBeforeUnmount(() => {
                             class="mt-3"
                             @click="fetchDocuments()"
                         >
+                            <RotateCcw class="mr-2 h-4 w-4" />
                             Retry
                         </Button>
                     </div>
@@ -1597,29 +1613,32 @@ onBeforeUnmount(() => {
                                     Document Type <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="form.document_type_id"
-                                    :disabled="creating"
-                                    class="w-full h-11 rounded-md
-                                           border border-gray-300
-                                           bg-white px-3 text-sm
-                                           outline-none
-                                           focus:border-blue-500
-                                           focus:ring-1
-                                           focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Document Type
-                                    </option>
-
-                                    <option
-                                        v-for="type in documentTypes"
-                                        :key="type.id"
-                                        :value="type.id"
+                                <div class="relative">
+                                    <FileText class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="form.document_type_id"
+                                        :disabled="creating"
+                                        class="w-full h-11 rounded-md
+                                               border border-gray-300
+                                               bg-white pl-10 pr-3 text-sm
+                                               outline-none
+                                               focus:border-blue-500
+                                               focus:ring-1
+                                               focus:ring-blue-500"
                                     >
-                                        {{ type.type_name }}
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Document Type
+                                        </option>
+
+                                        <option
+                                            v-for="type in documentTypes"
+                                            :key="type.id"
+                                            :value="type.id"
+                                        >
+                                            {{ type.type_name }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div>
@@ -1631,29 +1650,32 @@ onBeforeUnmount(() => {
                                     Priority <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="form.priority_id"
-                                    :disabled="creating"
-                                    class="w-full h-11 rounded-md
-                                           border border-gray-300
-                                           bg-white px-3 text-sm
-                                           outline-none
-                                           focus:border-blue-500
-                                           focus:ring-1
-                                           focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Priority
-                                    </option>
-
-                                    <option
-                                        v-for="priority in priorities"
-                                        :key="priority.id"
-                                        :value="priority.id"
+                                <div class="relative">
+                                    <Flag class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="form.priority_id"
+                                        :disabled="creating"
+                                        class="w-full h-11 rounded-md
+                                               border border-gray-300
+                                               bg-white pl-10 pr-3 text-sm
+                                               outline-none
+                                               focus:border-blue-500
+                                               focus:ring-1
+                                               focus:ring-blue-500"
                                     >
-                                        {{ priority.priority_name }}
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Priority
+                                        </option>
+
+                                        <option
+                                            v-for="priority in priorities"
+                                            :key="priority.id"
+                                            :value="priority.id"
+                                        >
+                                            {{ priority.priority_name }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
 
                         </div>
@@ -1714,34 +1736,37 @@ onBeforeUnmount(() => {
                                     Confidentiality <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="
-                                        form.confidentiality_level_id
-                                    "
-                                    :disabled="creating"
-                                    class="w-full h-11 rounded-md
-                                           border border-gray-300
-                                           bg-white px-3 text-sm
-                                           outline-none
-                                           focus:border-blue-500
-                                           focus:ring-1
-                                           focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Confidentiality
-                                    </option>
-
-                                    <option
-                                        v-for="
-                                            level in
-                                            confidentialityLevels
+                                <div class="relative">
+                                    <LockKeyhole class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="
+                                            form.confidentiality_level_id
                                         "
-                                        :key="level.id"
-                                        :value="level.id"
+                                        :disabled="creating"
+                                        class="w-full h-11 rounded-md
+                                               border border-gray-300
+                                               bg-white pl-10 pr-3 text-sm
+                                               outline-none
+                                               focus:border-blue-500
+                                               focus:ring-1
+                                               focus:ring-blue-500"
                                     >
-                                        {{ level.level_name }}
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Confidentiality
+                                        </option>
+
+                                        <option
+                                            v-for="
+                                                level in
+                                                confidentialityLevels
+                                            "
+                                            :key="level.id"
+                                            :value="level.id"
+                                        >
+                                            {{ level.level_name }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div>
@@ -1753,20 +1778,22 @@ onBeforeUnmount(() => {
                                     Recipient Office <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="form.recipient_office_id"
-                                    :disabled="creating"
-                                    class="w-full h-11 rounded-md
-                                           border border-gray-300
-                                           bg-white px-3 text-sm
-                                           outline-none
-                                           focus:border-blue-500
-                                           focus:ring-1
-                                           focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Recipient Office
-                                    </option>
+                                <div class="relative">
+                                    <Building2 class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="form.recipient_office_id"
+                                        :disabled="creating"
+                                        class="w-full h-11 rounded-md
+                                               border border-gray-300
+                                               bg-white pl-10 pr-3 text-sm
+                                               outline-none
+                                               focus:border-blue-500
+                                               focus:ring-1
+                                               focus:ring-blue-500"
+                                    >
+                                        <option value="">
+                                            Select Recipient Office
+                                        </option>
 
                                     <option
                                         v-for="office in offices"
@@ -1776,7 +1803,8 @@ onBeforeUnmount(() => {
                                         {{ office.office_name }}
                                         ({{ office.office_code }})
                                     </option>
-                                </select>
+                                    </select>
+                                </div>
                             </div>
 
                             <div v-if="confidentialityLevels.find(level => level.id === Number(form.confidentiality_level_id))?.level_name === 'Private'">
@@ -1789,14 +1817,17 @@ onBeforeUnmount(() => {
                                     class="mb-2 w-full resize-none rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none"
                                     aria-label="Selected tagged offices"
                                 ></textarea>
-                                <input
-                                    v-model="officeTagSearch"
-                                    type="search"
-                                    :disabled="creating"
-                                    placeholder="Search office name or code"
-                                    class="w-full h-11 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                    aria-label="Search offices to tag"
-                                />
+                                <div class="relative">
+                                    <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <input
+                                        v-model="officeTagSearch"
+                                        type="search"
+                                        :disabled="creating"
+                                        placeholder="Search office name or code"
+                                        class="w-full h-11 rounded-md border border-gray-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        aria-label="Search offices to tag"
+                                    />
+                                </div>
                                 <div class="mt-2 max-h-40 overflow-y-auto rounded-md border border-gray-200 bg-white">
                                     <p v-if="!officeTagSearch.trim()" class="px-3 py-2 text-xs text-gray-500">
                                         Type an office name or code to search.

@@ -10,6 +10,11 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+    Eye,
+    EyeOff,
+    KeyRound,
+} from 'lucide-vue-next'
 import { useAuth } from '@/lib/auth'
 import {
     changePasswordRequest,
@@ -25,6 +30,9 @@ const {
 const currentPassword = ref('')
 const password = ref('')
 const passwordConfirmation = ref('')
+const showCurrentPassword = ref(false)
+const showPassword = ref(false)
+const showPasswordConfirmation = ref(false)
 const error = ref('')
 const saving = ref(false)
 
@@ -101,41 +109,101 @@ const submitPasswordChange = async () => {
                     >
                         <div>
                             <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                Current Temporary Password *
+                                Current Temporary Password <span class="text-red-600">*</span>
                             </label>
 
-                            <Input
-                                v-model="currentPassword"
-                                :disabled="saving"
-                                type="password"
-                                placeholder="Enter temporary password"
-                            />
+                            <div class="relative">
+                                <Input
+                                    v-model="currentPassword"
+                                    :disabled="saving"
+                                    :type="showCurrentPassword ? 'text' : 'password'"
+                                    placeholder="Enter temporary password"
+                                    class="pr-11"
+                                />
+
+                                <button
+                                    type="button"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
+                                    :aria-label="showCurrentPassword ? 'Hide temporary password' : 'Show temporary password'"
+                                    :disabled="saving"
+                                    @click="showCurrentPassword = !showCurrentPassword"
+                                >
+                                    <EyeOff
+                                        v-if="showCurrentPassword"
+                                        class="h-4 w-4"
+                                    />
+                                    <Eye
+                                        v-else
+                                        class="h-4 w-4"
+                                    />
+                                </button>
+                            </div>
                         </div>
 
                         <div>
                             <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                New Password *
+                                New Password <span class="text-red-600">*</span>
                             </label>
 
-                            <Input
-                                v-model="password"
-                                :disabled="saving"
-                                type="password"
-                                placeholder="Minimum 8 characters"
-                            />
+                            <div class="relative">
+                                <Input
+                                    v-model="password"
+                                    :disabled="saving"
+                                    :type="showPassword ? 'text' : 'password'"
+                                    placeholder="Minimum 8 characters"
+                                    class="pr-11"
+                                />
+
+                                <button
+                                    type="button"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
+                                    :aria-label="showPassword ? 'Hide new password' : 'Show new password'"
+                                    :disabled="saving"
+                                    @click="showPassword = !showPassword"
+                                >
+                                    <EyeOff
+                                        v-if="showPassword"
+                                        class="h-4 w-4"
+                                    />
+                                    <Eye
+                                        v-else
+                                        class="h-4 w-4"
+                                    />
+                                </button>
+                            </div>
                         </div>
 
                         <div>
                             <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                Confirm New Password *
+                                Confirm New Password <span class="text-red-600">*</span>
                             </label>
 
-                            <Input
-                                v-model="passwordConfirmation"
-                                :disabled="saving"
-                                type="password"
-                                placeholder="Repeat new password"
-                            />
+                            <div class="relative">
+                                <Input
+                                    v-model="passwordConfirmation"
+                                    :disabled="saving"
+                                    :type="showPasswordConfirmation ? 'text' : 'password'"
+                                    placeholder="Repeat new password"
+                                    class="pr-11"
+                                />
+
+                                <button
+                                    type="button"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
+                                    :aria-label="showPasswordConfirmation ? 'Hide confirmed password' : 'Show confirmed password'"
+                                    :disabled="saving"
+                                    @click="showPasswordConfirmation = !showPasswordConfirmation"
+                                >
+                                    <EyeOff
+                                        v-if="showPasswordConfirmation"
+                                        class="h-4 w-4"
+                                    />
+                                    <Eye
+                                        v-else
+                                        class="h-4 w-4"
+                                    />
+                                </button>
+                            </div>
                         </div>
 
                         <div
@@ -150,6 +218,7 @@ const submitPasswordChange = async () => {
                             class="w-full bg-blue-600 text-white hover:bg-blue-700"
                             :disabled="saving"
                         >
+                            <KeyRound class="mr-2 h-4 w-4" />
                             {{ saving ? 'Saving...' : 'Change Password' }}
                         </Button>
                     </form>

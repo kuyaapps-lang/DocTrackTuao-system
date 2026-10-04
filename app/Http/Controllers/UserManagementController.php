@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -391,6 +392,104 @@ class UserManagementController extends Controller
         ]);
     }
 
+    public function deactivate(
+        Request $request,
+        User $user,
+        AuditLogger $auditLogger
+    ): JsonResponse {
+        if ($request->user()->is($user)) {
+            return response()->json([
+                'message' => 'You cannot deactivate your own account.',
+            ], 422);
+        }
+
+        if ($this->wouldRemoveLastActiveAdministrator($user)) {
+            return response()->json([
+                'message' => 'At least one active administrator account is required.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($user, $auditLogger, $request): void {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedUser->deactivated_at === null) {
+                $lockedUser->forceFill([
+                    'deactivated_at' => now(),
+                ])->save();
+            }
+
+            $lockedUser->tokens()->delete();
+
+            $auditLogger->log(
+                module: AuditLog::MODULE_USERS,
+                action: AuditLog::ACTION_UPDATED,
+                recordId: $lockedUser->id,
+                description: 'Account deactivated.',
+                userId: $request->user()->id
+            );
+
+            $user->setRawAttributes($lockedUser->getAttributes(), true);
+        });
+
+        return response()->json([
+            'message' => 'User deactivated successfully.',
+            'user' => $this->userShape($user->load([
+                'role',
+                'office',
+            ])),
+        ]);
+    }
+
+    public function destroy(
+        Request $request,
+        User $user,
+        AuditLogger $auditLogger
+    ): JsonResponse {
+        if ($request->user()->is($user)) {
+            return response()->json([
+                'message' => 'You cannot delete your own account.',
+            ], 422);
+        }
+
+        if ($this->wouldRemoveLastActiveAdministrator($user)) {
+            return response()->json([
+                'message' => 'At least one active administrator account is required.',
+            ], 422);
+        }
+
+        if ($this->hasProtectedUserHistory($user)) {
+            return response()->json([
+                'message' => 'This user has document history and should be deactivated instead of deleted.',
+            ], 409);
+        }
+
+        DB::transaction(function () use ($user, $auditLogger, $request): void {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $recordId = (int) $lockedUser->id;
+            $lockedUser->tokens()->delete();
+            $lockedUser->delete();
+
+            $auditLogger->log(
+                module: AuditLog::MODULE_USERS,
+                action: AuditLog::ACTION_DELETED,
+                recordId: $recordId,
+                description: 'User account deleted.',
+                userId: $request->user()->id
+            );
+        });
+
+        return response()->json([
+            'message' => 'User deleted successfully.',
+        ]);
+    }
+
     private function rejectUnknownMutationFields(Request $request): void
     {
         if (array_diff(array_keys($request->all()), self::MUTATION_FIELDS) !== []) {
@@ -422,6 +521,7 @@ class UserManagementController extends Controller
             'email' => (string) $user->email,
             'role_id' => $user->role_id === null ? null : (int) $user->role_id,
             'must_change_password' => (bool) $user->must_change_password,
+            'deactivated_at' => $user->deactivated_at?->toISOString(),
             'department_id' => $user->department_id === null
                 ? null
                 : (int) $user->department_id,
@@ -460,5 +560,78 @@ class UserManagementController extends Controller
                 ? null
                 : (int) $office->department_id,
         ];
+    }
+
+    private function wouldRemoveLastActiveAdministrator(User $user): bool
+    {
+        if (!$user->role || $user->role->name !== 'Administrator') {
+            return false;
+        }
+
+        if ($user->deactivated_at !== null) {
+            return false;
+        }
+
+        return User::query()
+            ->whereHas('role', fn ($query) => $query->where('name', 'Administrator'))
+            ->whereNull('deactivated_at')
+            ->count() <= 1;
+    }
+
+    private function hasProtectedUserHistory(User $user): bool
+    {
+        $references = [
+            'documents' => [
+                'created_by',
+                'current_action_updated_by',
+                'completed_by',
+                'archived_by',
+            ],
+            'document_routes' => [
+                'forwarded_by',
+                'received_by',
+                'cancelled_by',
+            ],
+            'document_processing_logs' => [
+                'user_id',
+            ],
+            'document_attachments' => [
+                'uploaded_by',
+            ],
+            'document_comments' => [
+                'user_id',
+            ],
+            'document_qr_codes' => [
+                'generated_by',
+            ],
+            'qr_code_requests' => [
+                'requested_by_user_id',
+                'reviewed_by_user_id',
+            ],
+            'password_reset_requests' => [
+                'user_id',
+                'resolved_by_user_id',
+            ],
+            'notifications' => [
+                'user_id',
+            ],
+        ];
+
+        foreach ($references as $table => $columns) {
+            if (!Schema::hasTable($table)) {
+                continue;
+            }
+
+            foreach ($columns as $column) {
+                if (
+                    Schema::hasColumn($table, $column) &&
+                    DB::table($table)->where($column, $user->id)->exists()
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

@@ -91,6 +91,7 @@ class User extends Authenticatable
         'email',
         'password',
         'must_change_password',
+        'deactivated_at',
         'role_id',
         'department_id',
         'office_id',
@@ -107,6 +108,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'must_change_password' => 'boolean',
+            'deactivated_at' => 'datetime',
         ];
     }
 

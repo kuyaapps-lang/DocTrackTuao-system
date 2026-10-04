@@ -343,6 +343,10 @@ class DocumentController extends Controller
 
             if ($state === 'pending') {
                 $query->whereNull('received_at');
+
+                if (Schema::hasColumn('document_routes', 'cancelled_at')) {
+                    $query->whereNull('cancelled_at');
+                }
             } else {
                 $query->whereNotNull('received_at');
             }

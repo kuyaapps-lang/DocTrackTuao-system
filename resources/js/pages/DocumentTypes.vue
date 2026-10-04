@@ -1,5 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import {
+    Pencil,
+    Plus,
+    Save,
+    Trash2,
+    X,
+} from 'lucide-vue-next'
 
 import {
     Card,
@@ -311,7 +318,8 @@ onMounted(() => {
                     class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                     @click="openAddForm"
                 >
-                    + Add Document Type
+                    <Plus class="mr-2 h-4 w-4" />
+                    Add Document Type
                 </Button>
 
             </div>
@@ -408,6 +416,7 @@ onMounted(() => {
                                 :disabled="saving"
                                 @click="closeForm"
                             >
+                                <X class="mr-2 h-4 w-4" />
                                 Cancel
                             </Button>
 
@@ -415,6 +424,7 @@ onMounted(() => {
                                 type="submit"
                                 :disabled="saving"
                             >
+                                <Save class="mr-2 h-4 w-4" />
                                 {{
                                     saving
                                         ? 'Saving...'
@@ -523,6 +533,7 @@ onMounted(() => {
                                             class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                                             @click="openEditForm(documentType)"
                                         >
+                                            <Pencil class="mr-2 h-4 w-4" />
                                             Edit
                                         </Button>
 
@@ -536,6 +547,7 @@ onMounted(() => {
                                                 openDeleteModal(documentType)
                                             "
                                         >
+                                            <Trash2 class="mr-2 h-4 w-4" />
                                             Delete
                                         </Button>
 
@@ -595,6 +607,7 @@ onMounted(() => {
                         :disabled="deletingId !== null"
                         @click="closeDeleteModal"
                     >
+                        <X class="mr-2 inline h-4 w-4" />
                         Cancel
                     </button>
 
@@ -605,6 +618,7 @@ onMounted(() => {
                         :disabled="deletingId !== null"
                         @click="confirmDeleteDocumentType"
                     >
+                        <Trash2 class="mr-2 inline h-4 w-4" />
                         {{
                             deletingId !== null
                                 ? 'Deleting...'

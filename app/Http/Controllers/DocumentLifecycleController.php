@@ -42,7 +42,7 @@ class DocumentLifecycleController extends Controller
 
                 if (
                     DocumentRoute::where('document_id', $document->id)
-                        ->whereNull('received_at')
+                        ->pending()
                         ->lockForUpdate()
                         ->exists()
                 ) {
@@ -165,7 +165,7 @@ class DocumentLifecycleController extends Controller
 
                 if (
                     DocumentRoute::where('document_id', $document->id)
-                        ->whereNull('received_at')
+                        ->pending()
                         ->lockForUpdate()
                         ->exists()
                 ) {

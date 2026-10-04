@@ -191,6 +191,16 @@ Route::middleware([
         [UserManagementController::class, 'resetPassword']
     )->middleware('can:users.manage');
 
+    Route::post(
+        'users/{user}/deactivate',
+        [UserManagementController::class, 'deactivate']
+    )->middleware('can:users.manage');
+
+    Route::delete(
+        'users/{user}',
+        [UserManagementController::class, 'destroy']
+    )->middleware('can:users.manage');
+
     Route::get(
         'password-reset-requests',
         [PasswordResetRequestController::class, 'index']
@@ -274,6 +284,11 @@ Route::middleware([
     )->middleware('can:qr.manage');
 
     Route::get(
+        'qr-codes/printable-unused',
+        [DocumentQrCodeController::class, 'printableUnused']
+    )->middleware('can:qr.issue');
+
+    Route::get(
         'qr-codes/{qrCode}',
         [DocumentQrCodeController::class, 'show']
     )->middleware('can:qr.view');
@@ -329,6 +344,11 @@ Route::middleware([
     Route::post(
         'documents/{document}/receive',
         [DocumentRoutingController::class, 'receive']
+    )->middleware('can:documents.route');
+
+    Route::post(
+        'documents/{document}/undo-forward',
+        [DocumentRoutingController::class, 'undoForward']
     )->middleware('can:documents.route');
 
     Route::post(

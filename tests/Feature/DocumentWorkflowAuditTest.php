@@ -430,6 +430,61 @@ class DocumentWorkflowAuditTest extends TestCase
         );
     }
 
+    public function test_forwarding_office_can_undo_a_pending_forward_without_erasing_history(): void
+    {
+        Schema::table('document_routes', function (Blueprint $table): void {
+            $table->unsignedBigInteger('cancelled_by')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
+            $table->text('cancellation_reason')->nullable();
+        });
+
+        $sourceOfficeId = $this->createOffice('UNDOSOURCE');
+        $destinationOfficeId = $this->createOffice('UNDODEST');
+        $sender = $this->createUser('Office User', $sourceOfficeId);
+        $receiver = $this->createUser('Office User', $destinationOfficeId);
+        $document = $this->createDocument($destinationOfficeId);
+        $routeId = $this->createPendingRoute(
+            $document,
+            $sourceOfficeId,
+            $destinationOfficeId,
+            $sender
+        );
+
+        Sanctum::actingAs($receiver);
+        $this->postJson('/api/documents/'.$document->id.'/undo-forward')
+            ->assertForbidden();
+        $this->assertDatabaseHas('document_routes', [
+            'id' => $routeId,
+            'cancelled_at' => null,
+        ]);
+
+        Sanctum::actingAs($sender);
+        $this->postJson('/api/documents/'.$document->id.'/undo-forward', [
+            'reason' => 'Sent to the wrong office.',
+        ])->assertOk()
+            ->assertJsonPath('route.id', $routeId)
+            ->assertJsonPath('route.cancellation_reason', 'Sent to the wrong office.');
+
+        $this->assertDatabaseHas('document_routes', [
+            'id' => $routeId,
+            'cancelled_by' => $sender->id,
+            'cancellation_reason' => 'Sent to the wrong office.',
+            'received_at' => null,
+        ]);
+        $this->assertSame($sourceOfficeId, $document->fresh()->current_office_id);
+        $this->assertDatabaseHas('document_processing_logs', [
+            'document_id' => $document->id,
+            'document_route_id' => $routeId,
+            'event_type' => 'forwarding_undone',
+        ]);
+        $this->assertSingleAudit(
+            AuditLog::MODULE_DOCUMENT_ROUTING,
+            AuditLog::ACTION_FORWARDING_UNDONE,
+            $document->id,
+            $sender->id
+        );
+    }
+
     public function test_rejected_receive_attempts_do_not_mutate_routes_documents_or_audit(): void
     {
         $sourceOfficeId = $this->createOffice('RECEIVESOURCE');

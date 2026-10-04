@@ -257,17 +257,31 @@ test('builds bounded one-inch original and record-copy pairs safely', async () =
 })
 
 test('defines exact physical dimensions, quiet sizing, bounded preview, and pair breaks', () => {
-    assert.match(QR_PRINT_STYLES, /@page\s*{\s*margin:\s*0\.30in;/)
+    assert.match(QR_PRINT_STYLES, /@page\s*{\s*size:\s*A4;\s*margin:\s*0\.30in;/)
     assert.match(QR_PRINT_STYLES, /\.label\s*{[^}]*width:\s*1in;[^}]*height:\s*1in;/s)
     assert.match(QR_PRINT_STYLES, /\.label img\s*{[^}]*width:\s*0\.72in;[^}]*height:\s*0\.72in;/s)
     assert.match(QR_PRINT_STYLES, /\.qr-pair\s*{[^}]*break-inside:\s*avoid;[^}]*page-break-inside:\s*avoid;/s)
     assert.match(QR_PRINT_STYLES, /\.screen-note\s*{[^}]*max-width:\s*42rem;/s)
-    assert.match(QR_PRINT_STYLES, /\.sheet\s*{[^}]*max-width:\s*8in;/s)
+    assert.match(QR_PRINT_STYLES, /\.print-page\s*{[^}]*grid-template-columns:\s*repeat\(6,\s*1in\);/s)
+    assert.match(QR_PRINT_STYLES, /\.print-page:not\(:last-child\)\s*{[^}]*break-after:\s*page;/s)
     assert.doesNotMatch(QR_PRINT_STYLES, /280px|420px/)
     const identifierStyles = QR_PRINT_STYLES.match(/\.identifier\s*{[^}]*}/s)?.[0] || ''
     assert.match(identifierStyles, /overflow-wrap:\s*anywhere;/)
     assert.match(identifierStyles, /word-break:\s*break-all;/)
     assert.doesNotMatch(identifierStyles, /overflow:\s*hidden|text-overflow|nowrap/)
+})
+
+test('starts a fresh A4 page after the available 30 QR pairs are filled', async () => {
+    const env = environment()
+    const items = Array.from({ length: 31 }, (_, index) => ({
+        identifier: `${String.fromCharCode(65 + (index % 8))}BCDE-2345678`,
+        imageSource,
+    }))
+
+    await printQrLabels({ windowRef: env.windowRef, items, timerApi: env.timers })
+
+    assert.equal(byClass(env.documentRef.body, 'print-page').length, 2)
+    assert.equal(byClass(env.documentRef.body, 'qr-pair').length, 31)
 })
 
 test('opens synchronously and reports a blocked popup with a fixed message', () => {

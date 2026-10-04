@@ -13,6 +13,7 @@ import {
     FileSearch,
     Inbox,
     LayoutDashboard,
+    LogOut,
     QrCode,
     ScrollText,
     Settings,
@@ -251,6 +252,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     Settings
                 </Button>
                 <Button type="button" variant="ghost" class="mt-1 w-full justify-start text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
+                    <LogOut class="mr-2 size-4" aria-hidden="true" />
                     {{ logoutPending ? 'Logging out...' : 'Logout' }}
                 </Button>
                 <p v-if="logoutError" class="mt-2 text-sm text-red-600 dark:text-red-300" role="alert">{{ logoutError }}</p>
@@ -397,6 +399,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                         Settings
                     </Button>
                     <Button type="button" variant="ghost" class="mt-1 w-full justify-start text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
+                        <LogOut class="mr-2 size-4" aria-hidden="true" />
                         {{ logoutPending ? 'Logging out...' : 'Logout' }}
                     </Button>
                     <p v-if="logoutError" class="mt-2 text-sm text-red-600 dark:text-red-300" role="alert">{{ logoutError }}</p>

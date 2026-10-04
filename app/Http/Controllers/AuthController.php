@@ -60,13 +60,22 @@ class AuthController extends Controller
             'password' => $credentials['password'],
         ];
 
-        if (!Auth::attempt($loginCredentials)) {
+        if (!Auth::guard('web')->attempt($loginCredentials)) {
             return response()->json([
                 'message' => 'Invalid credentials',
             ], 401);
         }
 
-        $user = Auth::user();
+        $user = Auth::guard('web')->user();
+
+        if ($user->deactivated_at !== null) {
+            Auth::guard('web')->logout();
+
+            return response()->json([
+                'message' => 'This account has been deactivated.',
+            ], 403);
+        }
+
         $expiresAt = CarbonImmutable::now()->addMinutes(
             $policy['token_lifetime_minutes']
         );
@@ -113,7 +122,7 @@ class AuthController extends Controller
         });
 
         if ($token === null) {
-            Auth::guard()->logout();
+            Auth::guard('web')->logout();
 
             return response()->json([
                 'message' => 'Invalid credentials',

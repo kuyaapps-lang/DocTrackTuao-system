@@ -18,11 +18,30 @@ import {
 } from '@/components/ui/table'
 
 import {
+    ChevronDown,
+    Building2,
+    Check,
     Eye,
     EyeOff,
+    KeyRound,
+    MoreHorizontal,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Save,
+    ShieldCheck,
+    Trash2,
+    X,
+    UserX,
 } from 'lucide-vue-next'
 
 import { Button } from '@/components/ui/button'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 
@@ -56,6 +75,7 @@ const showForm = ref(false)
 const editingUser = ref(null)
 const saving = ref(false)
 const formError = ref('')
+const actionSavingUserId = ref(null)
 
 const resetTargetUser = ref(null)
 const resetTargetRequest = ref(null)
@@ -107,6 +127,14 @@ const canManageUsers = computed(() => {
 
 const canResetPassword = (user) => {
     return canResetUserPassword(currentUser.value, user)
+}
+
+const isCurrentUser = (user) => {
+    return Number(user?.id) === Number(currentUser.value?.id)
+}
+
+const isDeactivated = (user) => {
+    return Boolean(user?.deactivated_at)
 }
 
 const requestHeaders = (json = false) => {
@@ -433,6 +461,94 @@ const saveUser = async () => {
     }
 }
 
+const deactivateUser = async (user) => {
+    error.value = ''
+    successMessage.value = ''
+
+    if (isCurrentUser(user)) {
+        error.value = 'You cannot deactivate your own account.'
+        return
+    }
+
+    if (!window.confirm(`Deactivate ${user.name}? This will block future login until the account is restored by database maintenance.`)) {
+        return
+    }
+
+    actionSavingUserId.value = user.id
+
+    try {
+        const response = await fetch(`/api/users/${user.id}/deactivate`, {
+            method: 'POST',
+            headers: requestHeaders(),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                'Unable to deactivate user.'
+            )
+        }
+
+        successMessage.value =
+            data.message ||
+            'User deactivated successfully.'
+
+        await fetchUsers()
+    } catch (err) {
+        error.value =
+            err.message ||
+            'Unable to deactivate user.'
+    } finally {
+        actionSavingUserId.value = null
+    }
+}
+
+const deleteUser = async (user) => {
+    error.value = ''
+    successMessage.value = ''
+
+    if (isCurrentUser(user)) {
+        error.value = 'You cannot delete your own account.'
+        return
+    }
+
+    if (!window.confirm(`Delete ${user.name}? This permanently removes the account when it has no protected history.`)) {
+        return
+    }
+
+    actionSavingUserId.value = user.id
+
+    try {
+        const response = await fetch(`/api/users/${user.id}`, {
+            method: 'DELETE',
+            headers: requestHeaders(),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                'Unable to delete user.'
+            )
+        }
+
+        successMessage.value =
+            data.message ||
+            'User deleted successfully.'
+
+        await fetchUsers()
+    } catch (err) {
+        error.value =
+            err.message ||
+            'Unable to delete user.'
+    } finally {
+        actionSavingUserId.value = null
+    }
+}
+
 const resetUserPassword = async () => {
     resetPasswordError.value = ''
     successMessage.value = ''
@@ -588,7 +704,8 @@ onBeforeUnmount(() => leaveRealtime?.())
                 class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950"
                 @click="openAddForm"
             >
-                + Add User
+                <Plus class="mr-2 h-4 w-4" />
+                Add User
             </Button>
         </div>
 
@@ -628,6 +745,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                             :disabled="resetRequestsLoading"
                             @click="fetchPendingResetRequests"
                         >
+                            <RefreshCw class="mr-2 h-4 w-4" />
                             {{ resetRequestsLoading ? 'Refreshing...' : 'Refresh' }}
                         </Button>
                     </div>
@@ -692,6 +810,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                         :disabled="!request.user || resetPasswordSaving"
                                         @click="openResetRequestResolveForm(request)"
                                     >
+                                        <Check class="mr-2 h-4 w-4" />
                                         Resolve
                                     </Button>
 
@@ -703,6 +822,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                         :disabled="resetPasswordSaving"
                                         @click="startRejectResetRequest(request)"
                                     >
+                                        <X class="mr-2 h-4 w-4" />
                                         Reject
                                     </Button>
                                 </div>
@@ -732,6 +852,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                         :disabled="resetPasswordSaving"
                                         @click="cancelRejectResetRequest"
                                     >
+                                        <X class="mr-2 h-4 w-4" />
                                         Cancel
                                     </Button>
 
@@ -742,6 +863,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                         :disabled="resetPasswordSaving"
                                         @click="rejectResetRequest(request)"
                                     >
+                                        <Trash2 class="mr-2 h-4 w-4" />
                                         {{ resetPasswordSaving ? 'Rejecting...' : 'Reject Request' }}
                                     </Button>
                                 </div>
@@ -799,6 +921,10 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </TableHead>
 
                                     <TableHead class="text-center text-white font-semibold">
+                                        Status
+                                    </TableHead>
+
+                                    <TableHead class="text-center text-white font-semibold">
                                         Action
                                     </TableHead>
                                 </TableRow>
@@ -844,25 +970,92 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </TableCell>
 
                                     <TableCell class="text-center">
-                                        <div class="flex justify-center gap-2">
-                                            <Button
-                                                v-if="canResetPassword(user)"
-                                                variant="outline"
-                                                size="sm"
-                                                class="doctrack-reset-password-button border-[0.5px] border-blue-900 bg-white text-[11.5pt] text-blue-900 hover:bg-blue-50 hover:text-blue-950"
-                                                @click="openResetPasswordForm(user)"
-                                            >
-                                                Reset Password
-                                            </Button>
+                                        <span
+                                            class="inline-flex rounded-full px-2.5 py-1 text-[13.5px] font-semibold"
+                                            :class="isDeactivated(user) ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'"
+                                        >
+                                            {{ isDeactivated(user) ? 'Deactivated' : 'Active' }}
+                                        </span>
+                                    </TableCell>
 
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
-                                                @click="openEditForm(user)"
-                                            >
-                                                Edit
-                                            </Button>
+                                    <TableCell class="text-center">
+                                        <div class="flex justify-center gap-2">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger as-child>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        class="border-blue-900 bg-white text-[11.5pt] font-semibold text-blue-900 hover:bg-blue-50 hover:text-blue-950"
+                                                        :disabled="actionSavingUserId === user.id"
+                                                    >
+                                                        <MoreHorizontal class="mr-2 h-4 w-4" />
+                                                        {{ actionSavingUserId === user.id ? 'Working...' : 'Actions' }}
+
+                                                        <ChevronDown class="ml-1 h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+
+                                                <DropdownMenuContent
+                                                    align="end"
+                                                    class="w-56"
+                                                >
+                                                    <DropdownMenuItem
+                                                        class="gap-3"
+                                                        @click="openEditForm(user)"
+                                                    >
+                                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                                                            <Pencil class="h-4 w-4" />
+                                                        </span>
+
+                                                        <span class="font-semibold text-gray-800">
+                                                            Edit
+                                                        </span>
+                                                    </DropdownMenuItem>
+
+                                                    <DropdownMenuItem
+                                                        v-if="canResetPassword(user)"
+                                                        class="gap-3"
+                                                        @click="openResetPasswordForm(user)"
+                                                    >
+                                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                                                            <KeyRound class="h-4 w-4" />
+                                                        </span>
+
+                                                        <span class="font-semibold text-gray-800">
+                                                            Reset Password
+                                                        </span>
+                                                    </DropdownMenuItem>
+
+                                                    <DropdownMenuItem
+                                                        class="gap-3"
+                                                        :disabled="isCurrentUser(user) || isDeactivated(user)"
+                                                        @click="deactivateUser(user)"
+                                                    >
+                                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+                                                            <UserX class="h-4 w-4" />
+                                                        </span>
+
+                                                        <span class="font-semibold text-gray-800">
+                                                            Deactivate
+                                                        </span>
+                                                    </DropdownMenuItem>
+
+                                                    <DropdownMenuItem
+                                                        class="gap-3"
+                                                        :disabled="isCurrentUser(user)"
+                                                        @click="deleteUser(user)"
+                                                    >
+                                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-red-700">
+                                                            <Trash2 class="h-4 w-4" />
+                                                        </span>
+
+                                                        <span class="font-semibold text-red-700">
+                                                            Delete
+                                                        </span>
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -896,7 +1089,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <div>
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                    Full Name *
+                                    Full Name <span class="text-red-600">*</span>
                                 </label>
 
                                 <Input
@@ -908,7 +1101,7 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                             <div>
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                    Username *
+                                    Username <span class="text-red-600">*</span>
                                 </label>
 
                                 <Input
@@ -921,7 +1114,7 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                             <div>
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                    Email *
+                                    Email <span class="text-red-600">*</span>
                                 </label>
 
                                 <Input
@@ -936,26 +1129,29 @@ onBeforeUnmount(() => leaveRealtime?.())
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                    Role *
+                                    Role <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="form.role_id"
-                                    :disabled="saving || isEditingSelf"
-                                    class="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-                                >
-                                    <option value="">
-                                        Select Role
-                                    </option>
-
-                                    <option
-                                        v-for="role in roles"
-                                        :key="role.id"
-                                        :value="role.id"
+                                <div class="relative">
+                                    <ShieldCheck class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="form.role_id"
+                                        :disabled="saving || isEditingSelf"
+                                        class="h-11 w-full rounded-md border border-gray-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                                     >
-                                        {{ role.name }}
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Role
+                                        </option>
+
+                                        <option
+                                            v-for="role in roles"
+                                            :key="role.id"
+                                            :value="role.id"
+                                        >
+                                            {{ role.name }}
+                                        </option>
+                                    </select>
+                                </div>
 
                                 <p
                                     v-if="isEditingSelf"
@@ -967,34 +1163,41 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                             <div>
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                    Office *
+                                    Office <span class="text-red-600">*</span>
                                 </label>
 
-                                <select
-                                    v-model="form.office_id"
-                                    :disabled="saving"
-                                    class="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                >
-                                    <option value="">
-                                        Select Office
-                                    </option>
-
-                                    <option
-                                        v-for="office in offices"
-                                        :key="office.id"
-                                        :value="office.id"
+                                <div class="relative">
+                                    <Building2 class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                                    <select
+                                        v-model="form.office_id"
+                                        :disabled="saving"
+                                        class="h-11 w-full rounded-md border border-gray-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                     >
-                                        {{ office.office_name }}
-                                        {{ office.office_code ? `(${office.office_code})` : '' }}
-                                    </option>
-                                </select>
+                                        <option value="">
+                                            Select Office
+                                        </option>
+
+                                        <option
+                                            v-for="office in offices"
+                                            :key="office.id"
+                                            :value="office.id"
+                                        >
+                                            {{ office.office_name }}
+                                            {{ office.office_code ? `(${office.office_code})` : '' }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                    {{ isEditing ? 'New Password' : 'Password *' }}
+                                    {{ isEditing ? 'New Password' : 'Password' }}
+                                    <span
+                                        v-if="!isEditing"
+                                        class="text-red-600"
+                                    >*</span>
                                 </label>
 
                                 <div class="relative">
@@ -1077,6 +1280,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 :disabled="saving"
                                 @click="closeForm"
                             >
+                                <X class="mr-2 h-4 w-4" />
                                 Cancel
                             </Button>
 
@@ -1085,6 +1289,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 class="bg-blue-600 text-white hover:bg-blue-700"
                                 :disabled="saving"
                             >
+                                <Save class="mr-2 h-4 w-4" />
                                 {{ saving ? 'Saving...' : 'Save User' }}
                             </Button>
                         </div>
@@ -1115,7 +1320,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                     >
                         <div>
                             <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                Temporary Password *
+                                Temporary Password <span class="text-red-600">*</span>
                             </label>
 
                             <div class="relative">
@@ -1148,7 +1353,7 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                         <div>
                             <label class="mb-2 block text-sm font-semibold text-gray-700">
-                                Confirm Temporary Password *
+                                Confirm Temporary Password <span class="text-red-600">*</span>
                             </label>
 
                             <div class="relative">
@@ -1210,6 +1415,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 :disabled="resetPasswordSaving"
                                 @click="closeResetPasswordForm"
                             >
+                                <X class="mr-2 h-4 w-4" />
                                 Cancel
                             </Button>
 
@@ -1218,6 +1424,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 class="bg-blue-600 text-white hover:bg-blue-700"
                                 :disabled="resetPasswordSaving"
                             >
+                                <KeyRound class="mr-2 h-4 w-4" />
                                 {{ resetPasswordSaving ? 'Saving...' : 'Set Temporary Password' }}
                             </Button>
                         </div>

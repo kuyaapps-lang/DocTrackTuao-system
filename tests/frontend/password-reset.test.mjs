@@ -334,6 +334,19 @@ test('change password validation and request payload use current temporary passw
     })
 })
 
+test('change password page provides independent accessible visibility controls for all password fields', async () => {
+    const source = await readFile(new URL('../../resources/js/pages/ChangePassword.vue', import.meta.url), 'utf8')
+
+    assert.match(source, /showCurrentPassword/)
+    assert.match(source, /showPasswordConfirmation/)
+    assert.match(source, /Show temporary password/)
+    assert.match(source, /Show new password/)
+    assert.match(source, /Show confirmed password/)
+    assert.equal((source.match(/<Eye\b/g) || []).length, 3)
+    assert.equal((source.match(/<EyeOff\b/g) || []).length, 3)
+    assert.equal((source.match(/<span class="text-red-600">\*<\/span>/g) || []).length, 3)
+})
+
 test('change password page clears local auth and redirects to login after success', async () => {
     const values = new Map([
         ['auth_token', 'test-token'],

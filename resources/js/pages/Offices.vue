@@ -1,5 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import {
+    Plus,
+    Pencil,
+    Save,
+    Trash2,
+    X,
+} from 'lucide-vue-next'
 
 import {
     Card,
@@ -236,6 +243,7 @@ onMounted(() => {
                     class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                     @click="openAddOffice"
                 >
+                    <Plus class="mr-2 h-4 w-4" />
                     Add Office
                 </Button>
 
@@ -337,6 +345,7 @@ onMounted(() => {
                                             class="bg-blue-900 text-[11.5pt] text-white hover:bg-blue-950 hover:text-white"
                                             @click="openEditOffice(office)"
                                         >
+                                            <Pencil class="mr-2 h-4 w-4" />
                                             Edit
                                         </Button>
 
@@ -345,6 +354,7 @@ onMounted(() => {
                                             size="sm"
                                             @click="openDeleteOffice(office)"
                                         >
+                                            <Trash2 class="mr-2 h-4 w-4" />
                                             Delete
                                         </Button>
 
@@ -384,8 +394,14 @@ onMounted(() => {
                         </label>
                         <p v-if="formError" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ formError }}</p>
                         <div class="flex justify-end gap-3">
-                            <Button type="button" variant="outline" class="bg-black text-white hover:bg-black/90 hover:text-white" :disabled="saving" @click="closeEditOffice">Cancel</Button>
-                            <Button type="submit" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="saving">{{ saving ? 'Saving...' : editingOffice ? 'Save Changes' : 'Add Office' }}</Button>
+                            <Button type="button" variant="outline" class="bg-black text-white hover:bg-black/90 hover:text-white" :disabled="saving" @click="closeEditOffice">
+                                <X class="mr-2 h-4 w-4" />
+                                Cancel
+                            </Button>
+                            <Button type="submit" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="saving">
+                                <Save class="mr-2 h-4 w-4" />
+                                {{ saving ? 'Saving...' : editingOffice ? 'Save Changes' : 'Add Office' }}
+                            </Button>
                         </div>
                     </form>
                 </CardContent>
@@ -401,8 +417,14 @@ onMounted(() => {
                     <p class="text-sm text-gray-700">Delete <span class="font-semibold">{{ officeToDelete.office_name }}</span>? This cannot be undone.</p>
                     <p v-if="deleteError" class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ deleteError }}</p>
                     <div class="mt-6 flex justify-end gap-3">
-                        <Button type="button" variant="outline" class="bg-black text-white hover:bg-black/90 hover:text-white" :disabled="deleting" @click="closeDeleteOffice">Cancel</Button>
-                        <Button type="button" variant="destructive" :disabled="deleting" @click="deleteOffice">{{ deleting ? 'Deleting...' : 'Delete Office' }}</Button>
+                        <Button type="button" variant="outline" class="bg-black text-white hover:bg-black/90 hover:text-white" :disabled="deleting" @click="closeDeleteOffice">
+                            <X class="mr-2 h-4 w-4" />
+                            Cancel
+                        </Button>
+                        <Button type="button" variant="destructive" :disabled="deleting" @click="deleteOffice">
+                            <Trash2 class="mr-2 h-4 w-4" />
+                            {{ deleting ? 'Deleting...' : 'Delete Office' }}
+                        </Button>
                     </div>
                 </CardContent>
             </Card>

@@ -28,6 +28,7 @@ class AuditLog extends Model
     public const ACTION_UPDATED = 'updated';
     public const ACTION_DELETED = 'deleted';
     public const ACTION_FORWARDED = 'forwarded';
+    public const ACTION_FORWARDING_UNDONE = 'forwarding_undone';
     public const ACTION_RECEIVED = 'received';
     public const ACTION_PROCESSING_UPDATED = 'processing_updated';
     public const ACTION_COMPLETED = 'completed';
