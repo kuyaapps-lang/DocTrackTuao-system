@@ -16,9 +16,7 @@ import {
     LogOut,
     QrCode,
     ScrollText,
-    Settings,
     Send,
-    UserRound,
     Users,
     X,
 } from 'lucide-vue-next'
@@ -243,15 +241,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 aria-label="Profile menu"
                 @keydown.esc="closeProfileMenu"
             >
-                <Button type="button" variant="ghost" class="w-full justify-start dark:hover:bg-slate-800 dark:hover:text-white" disabled role="menuitem">
-                    <UserRound class="mr-2 size-4" aria-hidden="true" />
-                    Profile
-                </Button>
-                <Button type="button" variant="ghost" class="w-full justify-start dark:hover:bg-slate-800 dark:hover:text-white" disabled role="menuitem">
-                    <Settings class="mr-2 size-4" aria-hidden="true" />
-                    Settings
-                </Button>
-                <Button type="button" variant="ghost" class="mt-1 w-full justify-start text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
+                <Button type="button" variant="ghost" size="sm" class="h-9 w-full justify-start px-3 py-1.5 text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
                     <LogOut class="mr-2 size-4" aria-hidden="true" />
                     {{ logoutPending ? 'Logging out...' : 'Logout' }}
                 </Button>
@@ -390,15 +380,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     aria-label="Profile menu"
                     @keydown.esc="closeProfileMenu"
                 >
-                    <Button type="button" variant="ghost" class="w-full justify-start dark:hover:bg-slate-800 dark:hover:text-white" disabled role="menuitem">
-                        <UserRound class="mr-2 size-4" aria-hidden="true" />
-                        Profile
-                    </Button>
-                    <Button type="button" variant="ghost" class="w-full justify-start dark:hover:bg-slate-800 dark:hover:text-white" disabled role="menuitem">
-                        <Settings class="mr-2 size-4" aria-hidden="true" />
-                        Settings
-                    </Button>
-                    <Button type="button" variant="ghost" class="mt-1 w-full justify-start text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
+                    <Button type="button" variant="ghost" size="sm" class="h-9 w-full justify-start px-3 py-1.5 text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
                         <LogOut class="mr-2 size-4" aria-hidden="true" />
                         {{ logoutPending ? 'Logging out...' : 'Logout' }}
                     </Button>

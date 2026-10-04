@@ -5,6 +5,7 @@ import {
 
 import Login from '../pages/Login.vue'
 import ChangePassword from '../pages/ChangePassword.vue'
+import Profile from '../pages/Profile.vue'
 import Dashboard from '../pages/Dashboard.vue'
 import Documents from '../pages/Documents.vue'
 import DocumentDetails from '../pages/DocumentDetails.vue'
@@ -104,6 +105,15 @@ const routes = [
                     title: 'Change Password',
                     navKey: null,
                     passwordChange: true,
+                },
+            },
+            {
+                path: 'profile',
+                component: Profile,
+                meta: {
+                    authenticated: true,
+                    title: 'Profile',
+                    navKey: null,
                 },
             },
             {
