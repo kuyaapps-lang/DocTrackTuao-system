@@ -1860,7 +1860,14 @@ const receiveDocument = async () => {
 */
 
 const goBack = () => {
-    router.push('/documents')
+    const returnView = ['incoming', 'outgoing'].includes(route.query.return_view)
+        ? route.query.return_view
+        : 'outgoing'
+
+    router.push({
+        path: '/documents',
+        query: { view: returnView },
+    })
 }
 
 /*
@@ -2098,15 +2105,11 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 >
 
                                     <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
-                                        >
-                                            Document Type
+                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
+                                            Document Type:
                                         </p>
 
-                                        <p
-                                            class="mt-1 break-words font-medium text-gray-900"
-                                        >
+                                        <p class="ml-1 inline break-words font-medium text-gray-900">
                                             {{
                                                 document.type
                                                     ?.type_name
@@ -2116,15 +2119,11 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </div>
 
                                     <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
-                                        >
-                                            Status
+                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
+                                            Status:
                                         </p>
 
-                                        <p
-                                            class="mt-1 inline-flex max-w-full break-words font-semibold text-gray-900"
-                                        >
+                                        <p class="ml-1 inline max-w-full break-words font-semibold text-gray-900">
                                             {{
                                                 document.status
                                                     ?.status_name
@@ -2134,15 +2133,11 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </div>
 
                                     <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
-                                        >
-                                            Priority
+                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
+                                            Priority:
                                         </p>
 
-                                        <p
-                                            class="mt-1 break-words font-medium text-gray-900"
-                                        >
+                                        <p class="ml-1 inline break-words font-medium text-gray-900">
                                             {{
                                                 document.priority
                                                     ?.priority_name
@@ -2152,15 +2147,11 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </div>
 
                                     <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
-                                        >
-                                            Confidentiality
+                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
+                                            Confidentiality:
                                         </p>
 
-                                        <p
-                                            class="mt-1 break-words font-medium text-gray-900"
-                                        >
+                                        <p class="ml-1 inline break-words font-medium text-gray-900">
                                             {{
                                                 document.confidentiality
                                                     ?.level_name
@@ -2170,15 +2161,11 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </div>
 
                                     <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
-                                        >
-                                            Origin Office
+                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
+                                            Origin Office:
                                         </p>
 
-                                        <p
-                                            class="mt-1 break-words font-medium text-gray-900"
-                                        >
+                                        <p class="ml-1 inline break-words font-medium text-gray-900">
                                             {{
                                                 document.origin_office
                                                     ?.office_name
@@ -2188,15 +2175,11 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </div>
 
                                     <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
-                                        >
-                                            Current Office
+                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
+                                            Current Office:
                                         </p>
 
-                                        <p
-                                            class="mt-1 break-words font-semibold text-blue-700"
-                                        >
+                                        <p class="ml-1 inline break-words font-semibold text-blue-700">
                                             {{
                                                 document.current_office
                                                     ?.office_name
@@ -2206,15 +2189,11 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </div>
 
                                     <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
-                                        >
-                                            Document Date
+                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
+                                            Document Date:
                                         </p>
 
-                                        <p
-                                            class="mt-1 text-gray-900"
-                                        >
+                                        <p class="ml-1 inline text-gray-900">
                                             {{
                                                 formatSimpleDate(
                                                     document.document_date
@@ -2224,15 +2203,11 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     </div>
 
                                     <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
-                                        >
-                                            Due Date
+                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
+                                            Due Date:
                                         </p>
 
-                                        <p
-                                            class="mt-1 text-gray-900"
-                                        >
+                                        <p class="ml-1 inline text-gray-900">
                                             {{
                                                 formatSimpleDate(
                                                     document.due_date
@@ -2243,7 +2218,7 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                                     <div class="col-span-2 min-w-0 max-[359px]:col-span-1 md:col-span-1">
                                         <p
-                                            class="text-xs font-semibold uppercase text-gray-500"
+                                            class="text-[11pt] font-semibold uppercase text-gray-500"
                                         >
                                             Registered By
                                         </p>

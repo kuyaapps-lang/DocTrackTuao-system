@@ -195,7 +195,7 @@ test('process 24a keeps the soft dashboard foundation scoped to the Vue shell', 
     assert.match(sidebar, /bg-slate-100 bg-white\/70 text-slate-800/)
     assert.match(sidebar, /dark:bg-slate-900\/95/)
     assert.match(sidebar, /dark:bg-slate-800\/80/)
-    assert.match(sidebar, /rounded-xl px-3 py-2 text-\[12pt\]/)
+    assert.match(sidebar, /rounded-xl px-3 py-2 text-\[10\.5pt\]/)
     assert.match(dashboard, /min-h-screen bg-\[#f4f7fb\] p-4 text-slate-900 dark:bg-\[#111827\] dark:text-slate-100 sm:p-6/)
     assert.match(dashboard, /rounded-2xl border border-slate-200 bg-white px-5 py-5 .*dark:bg-slate-900\/95/)
     assert.match(dashboard, /rounded-xl border border-blue-100 bg-blue-50 .*dark:bg-blue-950\/40/)

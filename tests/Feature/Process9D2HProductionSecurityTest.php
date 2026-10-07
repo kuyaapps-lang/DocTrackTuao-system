@@ -206,7 +206,7 @@ class Process9D2HProductionSecurityTest extends TestCase
         $response->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'DENY')
             ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-            ->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()')
+            ->assertHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()')
             ->assertHeaderMissing('Strict-Transport-Security')
             ->assertHeaderMissing('X-Powered-By');
         $this->assertStringContainsString("default-src 'self'", $response->headers->get('Content-Security-Policy'));

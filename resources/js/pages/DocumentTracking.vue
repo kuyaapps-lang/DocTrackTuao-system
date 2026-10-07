@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
     Search,
@@ -14,6 +14,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import CameraQrScanner from '@/components/CameraQrScanner.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,10 +24,14 @@ const trackingNumber = ref('')
 const document = ref(null)
 const searchResults = ref([])
 const linkedQrCode = ref('')
+const inquiryMeta = ref({ total: 0 })
+const inquiryLoadingMore = ref(false)
+const inquirySentinel = ref(null)
 
 const loading = ref(false)
 const searchLoading = ref(false)
 const error = ref('')
+let inquiryObserver = null
 
 /*
 |--------------------------------------------------------------------------
@@ -82,8 +87,6 @@ const selectInquiryDocument = async (result) => {
     }
 
     linkedQrCode.value = result.qr_code || ''
-    trackingNumber.value = result.qr_code || trackingNo
-    searchResults.value = []
 
     await router.replace({
         path: '/document-inquiry',
@@ -93,13 +96,19 @@ const selectInquiryDocument = async (result) => {
     await fetchTracking(trackingNo)
 }
 
+const closeInquiryDocument = async () => {
+    document.value = null
+    linkedQrCode.value = ''
+    error.value = ''
+
+    await router.replace({
+        path: '/document-inquiry',
+        query: {},
+    })
+}
+
 const searchInquiryDocuments = async () => {
     const value = trackingNumber.value.trim()
-
-    if (!value) {
-        error.value = 'Enter or scan a QR code, subject, or document description.'
-        return
-    }
 
     searchLoading.value = true
     error.value = ''
@@ -109,7 +118,7 @@ const searchInquiryDocuments = async () => {
 
     try {
         const response = await fetch(
-            `/api/documents?search=${encodeURIComponent(value)}`,
+            `/api/documents?per_page=50&sort=received_desc${value ? `&search=${encodeURIComponent(value)}` : ''}`,
             {
                 headers: {
                     Accept: 'application/json',
@@ -124,20 +133,53 @@ const searchInquiryDocuments = async () => {
         }
 
         searchResults.value = data.data
-
-        if (data.data.length === 1 && data.data[0]?.tracking_no) {
-            await selectInquiryDocument(data.data[0])
-            return
-        }
+        inquiryMeta.value = data.meta || { total: data.data.length }
 
         if (data.data.length === 0) {
-            error.value = 'No document matches that QR code, subject, or description.'
+            error.value = value
+                ? 'No accessible document matches that QR code, subject, or description.'
+                : 'No accessible documents are available yet.'
         }
     } catch (err) {
         error.value = err.message || 'Unable to search documents.'
     } finally {
         searchLoading.value = false
     }
+}
+
+const canLoadMoreInquiry = computed(() => searchResults.value.length < inquiryMeta.value.total)
+
+const loadMoreInquiryDocuments = async () => {
+    if (!isInquiry.value || searchLoading.value || inquiryLoadingMore.value || !canLoadMoreInquiry.value) return
+
+    inquiryLoadingMore.value = true
+    try {
+        const value = trackingNumber.value.trim()
+        const page = Math.floor(searchResults.value.length / 10) + 1
+        const response = await fetch(
+            `/api/documents?per_page=10&page=${page}&sort=received_desc${value ? `&search=${encodeURIComponent(value)}` : ''}`,
+            { headers: { Accept: 'application/json', Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` } }
+        )
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || !Array.isArray(data.data)) throw new Error(data.message || 'Unable to load more documents.')
+
+        const seen = new Set(searchResults.value.map(result => result.id))
+        searchResults.value.push(...data.data.filter(result => !seen.has(result.id)))
+        inquiryMeta.value = data.meta || inquiryMeta.value
+    } catch (err) {
+        error.value = err.message || 'Unable to load more documents.'
+    } finally {
+        inquiryLoadingMore.value = false
+    }
+}
+
+const observeInquiryScroll = () => {
+    if (!inquirySentinel.value || typeof IntersectionObserver === 'undefined') return
+
+    inquiryObserver = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) loadMoreInquiryDocuments()
+    }, { rootMargin: '240px' })
+    inquiryObserver.observe(inquirySentinel.value)
 }
 
 /*
@@ -173,6 +215,11 @@ const searchDocument = async () => {
     )
 
     await fetchTracking(value)
+}
+
+const scanInquiryCamera = async token => {
+    trackingNumber.value = token
+    await searchInquiryDocuments()
 }
 
 /*
@@ -247,9 +294,12 @@ const statusClass = (status) => {
 |--------------------------------------------------------------------------
 */
 
-onMounted(() => {
+onMounted(async () => {
     if (isInquiry.value) {
         const trackingNo = String(route.query.tracking || '').trim()
+
+        await searchInquiryDocuments()
+        observeInquiryScroll()
 
         if (trackingNo) {
             trackingNumber.value = trackingNo
@@ -271,6 +321,8 @@ onMounted(() => {
         )
     }
 })
+
+onBeforeUnmount(() => inquiryObserver?.disconnect())
 </script>
 
 <template>
@@ -325,6 +377,12 @@ onMounted(() => {
                             />
                         </div>
 
+                        <CameraQrScanner
+                            v-if="isInquiry"
+                            :disabled="loading || searchLoading"
+                            @scan="scanInquiryCamera"
+                        />
+
                         <Button
                             type="submit"
                             class="h-11 bg-blue-600 px-6 hover:bg-blue-700"
@@ -344,22 +402,49 @@ onMounted(() => {
 
             </Card>
 
-            <Card v-if="isInquiry && searchResults.length > 0" class="mt-6">
+            <Card v-if="isInquiry" class="mt-6">
                 <CardHeader>
-                    <CardTitle>Matching Documents</CardTitle>
-                    <p class="text-sm text-gray-500">Choose a document to view its tracking history.</p>
+                    <CardTitle>Accessible Documents</CardTitle>
+                    <p class="text-sm text-gray-500">Documents created by, received by, or publicly visible to your office. Select one to inquire about its status.</p>
                 </CardHeader>
-                <CardContent class="space-y-2">
-                    <button
-                        v-for="result in searchResults"
-                        :key="result.id"
-                        type="button"
-                        class="w-full rounded-lg border border-slate-200 p-4 text-left transition-colors hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                        @click="selectInquiryDocument(result)"
-                    >
-                        <p class="font-semibold text-slate-900">{{ result.title || 'Untitled document' }}</p>
-                        <p class="mt-1 font-mono text-sm text-blue-700">{{ result.qr_code || result.tracking_no }}</p>
-                    </button>
+                <CardContent>
+                    <p v-if="searchLoading" class="py-6 text-center text-sm text-gray-500">Loading documents...</p>
+                    <p v-else-if="searchResults.length === 0" class="py-6 text-center text-sm text-gray-500">No accessible documents match the current search.</p>
+                    <div v-else class="overflow-x-auto rounded-lg border border-slate-200">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm">
+                            <thead class="bg-blue-900 text-left text-xs font-semibold uppercase tracking-wide text-white">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 text-white">Code</th>
+                                    <th scope="col" class="px-4 py-3 text-white">Title/Description</th>
+                                    <th scope="col" class="px-4 py-3 text-white">Current Office</th>
+                                    <th scope="col" class="px-4 py-3 text-white">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 bg-white">
+                                <tr
+                                    v-for="result in searchResults"
+                                    :key="result.id"
+                                    tabindex="0"
+                                    class="cursor-pointer transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                                    @click="selectInquiryDocument(result)"
+                                    @keydown.enter="selectInquiryDocument(result)"
+                                    @keydown.space.prevent="selectInquiryDocument(result)"
+                                >
+                                    <td class="whitespace-nowrap px-4 py-3 font-mono font-medium text-blue-700">{{ result.qr_code || result.tracking_no || 'N/A' }}</td>
+                                    <td class="px-4 py-3 text-slate-900">{{ result.title || result.description || 'Untitled document' }}</td>
+                                    <td class="px-4 py-3 text-slate-600">{{ result.current_office?.office_name || 'N/A' }}</td>
+                                    <td class="px-4 py-3">
+                                        <span class="inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(result.status?.status_name)">
+                                            {{ result.status?.status_name || 'N/A' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div ref="inquirySentinel" class="h-1" aria-hidden="true" />
+                    <p v-if="inquiryLoadingMore" class="py-3 text-center text-sm text-slate-500">Loading 10 more documents...</p>
+                    <p v-else-if="searchResults.length > 0 && !canLoadMoreInquiry" class="py-3 text-center text-sm text-slate-500">All accessible documents are loaded.</p>
                 </CardContent>
             </Card>
 
@@ -373,14 +458,14 @@ onMounted(() => {
 
             <!-- Error -->
             <div
-                v-else-if="error"
+                v-else-if="error && !isInquiry"
                 class="mt-6 rounded-lg border border-red-200 bg-red-50 p-5 text-center text-red-700"
             >
                 {{ error }}
             </div>
 
             <!-- Document -->
-            <template v-else-if="document">
+            <template v-else-if="document && !isInquiry">
 
                 <!-- Main Information -->
                 <Card class="mt-6">
@@ -761,6 +846,57 @@ onMounted(() => {
                 </div>
 
             </template>
+
+            <div
+                v-if="isInquiry && document"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
+                @click.self="closeInquiryDocument"
+            >
+                <section
+                    class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="inquiry-document-title"
+                >
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="font-mono text-sm font-semibold text-blue-700">{{ linkedQrCode || document.tracking_no }}</p>
+                            <h2 id="inquiry-document-title" class="mt-2 text-xl font-bold text-slate-900">{{ document.title }}</h2>
+                        </div>
+                        <span class="inline-flex shrink-0 rounded-full px-3 py-1 text-sm font-semibold" :class="statusClass(document.status)">
+                            {{ document.status || 'N/A' }}
+                        </span>
+                    </div>
+
+                    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div><p class="text-xs font-semibold uppercase text-slate-500">Current Office</p><p class="mt-1 font-medium text-slate-900">{{ document.current_office || 'N/A' }}</p></div>
+                        <div><p class="text-xs font-semibold uppercase text-slate-500">Origin Office</p><p class="mt-1 font-medium text-slate-900">{{ document.origin_office || 'N/A' }}</p></div>
+                        <div><p class="text-xs font-semibold uppercase text-slate-500">Document Type</p><p class="mt-1 font-medium text-slate-900">{{ document.document_type || 'N/A' }}</p></div>
+                        <div><p class="text-xs font-semibold uppercase text-slate-500">Priority</p><p class="mt-1 font-medium text-slate-900">{{ document.priority || 'N/A' }}</p></div>
+                    </div>
+
+                    <div v-if="document.details && !document.is_protected" class="mt-6 border-t border-slate-200 pt-5">
+                        <p class="text-xs font-semibold uppercase text-slate-500">Document Details</p>
+                        <p class="mt-2 whitespace-pre-line text-slate-800">{{ document.details }}</p>
+                    </div>
+
+                    <div class="mt-6 border-t border-slate-200 pt-5">
+                        <p class="text-sm font-semibold text-slate-900">Tracking History</p>
+                        <div v-if="!document.movement_history?.length" class="mt-3 text-sm text-slate-500">No routing movement has been recorded yet.</div>
+                        <div v-else class="mt-3 space-y-3">
+                            <div v-for="movement in document.movement_history" :key="movement.id" class="rounded-lg border border-slate-200 p-3">
+                                <p class="font-medium text-slate-900">{{ movement.from_office || 'N/A' }} → {{ movement.to_office || 'N/A' }}</p>
+                                <p class="mt-1 text-sm text-slate-600">Forwarded: {{ formatDate(movement.forwarded_at) }}</p>
+                                <p class="text-sm text-slate-600">{{ movement.received_at ? `Received: ${formatDate(movement.received_at)}` : 'Awaiting receipt' }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex justify-end">
+                        <Button type="button" @click="closeInquiryDocument">Close</Button>
+                    </div>
+                </section>
+            </div>
 
         </div>
 

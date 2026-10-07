@@ -69,7 +69,7 @@ final class SecurityPolicy
             "font-src 'self'",
             'connect-src '.implode(' ', $connect),
             "worker-src 'self'",
-            "media-src 'none'",
+            "media-src 'self' blob:",
             "frame-src 'none'",
             "manifest-src 'self'",
         ]).';';

@@ -44,6 +44,10 @@ class DocumentController extends Controller
 
         $this->applyAllDocumentSearch($query, $filters['search']);
 
+        if ($filters['sort'] === 'received_desc') {
+            $query->orderByRaw('(SELECT MAX(document_routes.received_at) FROM document_routes WHERE document_routes.document_id = documents.id) DESC');
+        }
+
         $documents = $query
             ->orderByDesc('documents.created_at')
             ->orderByDesc('documents.id')
@@ -112,14 +116,8 @@ class DocumentController extends Controller
         );
 
         $documents = $query
-            ->leftJoin(
-                'priorities as incoming_priorities',
-                'incoming_priorities.id',
-                '=',
-                'documents.priority_id'
-            )
             ->select('documents.*')
-            ->orderByRaw($this->priorityOrderSql('incoming_priorities'))
+            ->orderByRaw('(SELECT MAX(document_routes.received_at) FROM document_routes WHERE document_routes.document_id = documents.id AND document_routes.to_office_id = ?) DESC', [$user->office_id])
             ->orderByDesc('documents.created_at')
             ->orderByDesc('documents.id')
             ->paginate($filters['per_page']);
@@ -208,6 +206,7 @@ class DocumentController extends Controller
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', Rule::in([10, 25, 50])],
             'search' => ['sometimes', 'string', 'max:100'],
+            'sort' => ['sometimes', 'string', Rule::in(['received_desc'])],
             'state' => $allowState
                 ? ['sometimes', 'string', Rule::in(['pending', 'received'])]
                 : ['prohibited'],
@@ -217,6 +216,7 @@ class DocumentController extends Controller
             'page' => $validated['page'] ?? 1,
             'per_page' => $validated['per_page'] ?? 25,
             'search' => $validated['search'] ?? '',
+            'sort' => $validated['sort'] ?? null,
             'state' => $validated['state'] ?? null,
         ];
     }
@@ -401,6 +401,10 @@ class DocumentController extends Controller
             $approvedQuery['search'] = $filters['search'];
         }
 
+        if ($view === 'all' && $filters['sort'] === 'received_desc') {
+            $approvedQuery['sort'] = 'received_desc';
+        }
+
         if ($view === 'incoming' && $filters['state'] !== null) {
             $approvedQuery['state'] = $filters['state'];
         }
@@ -520,21 +524,6 @@ class DocumentController extends Controller
     }
 
     /**
-     * Master data has no rank column, so use the established priority names
-     * rather than development IDs. Unknown or unassigned values remain last.
-     */
-    private function priorityOrderSql(string $priorityTable): string
-    {
-        return "CASE LOWER(COALESCE({$priorityTable}.priority_name, ''))
-            WHEN 'urgent' THEN 0
-            WHEN 'high' THEN 1
-            WHEN 'normal' THEN 2
-            WHEN 'low' THEN 3
-            ELSE 4
-        END";
-    }
-
-    /**
      * Return lookup data needed by the document registration form.
      */
     public function formOptions()
@@ -569,10 +558,17 @@ class DocumentController extends Controller
     RealtimeBroadcaster $realtime)
 
     {
-        // Compatibility for existing API clients/tests while the UI uses recipient_office_id.
-        if (!$request->has('recipient_office_id') && $request->has('origin_office_id')) {
-            $request->merge(['recipient_office_id' => $request->input('origin_office_id')]);
+        $user = $request->user();
+
+        if (
+            ! $user->office_id ||
+            ! Office::whereKey($user->office_id)->exists()
+        ) {
+            abort(403, 'Your user account is not assigned to a valid office.');
         }
+
+        $officeId = (int) $user->office_id;
+
         $validated = $request->validate([
             'title' =>
                 'required|string|max:255',
@@ -587,10 +583,8 @@ class DocumentController extends Controller
                 'required|exists:priorities,id',
 
             'confidentiality_level_id' =>
-                'required|exists:confidentiality_levels,id',
+                'nullable|exists:confidentiality_levels,id',
 
-            'recipient_office_id' =>
-                'required|exists:offices,id',
             'tagged_office_ids' => ['nullable', 'array', 'max:10'],
             'tagged_office_ids.*' => ['integer', 'distinct', 'exists:offices,id'],
 
@@ -607,12 +601,25 @@ class DocumentController extends Controller
             ],
         ]);
 
+        // New registrations are private. The field remains tolerated in the
+        // request for older clients, but cannot override this policy.
+        $privateConfidentialityId = ConfidentialityLevel::where(
+            'level_name',
+            'Private'
+        )->value('id');
+
+        if (! $privateConfidentialityId) {
+            abort(500, 'The Private confidentiality level is not configured.');
+        }
+
         $document = DB::transaction(
             function () use (
                 $validated,
                 $request,
                 $auditLogger,
-                $qrRegistration
+                $qrRegistration,
+                $officeId,
+                $privateConfidentialityId
             ) {
                 /*
                 |--------------------------------------------------------------------------
@@ -698,12 +705,12 @@ class DocumentController extends Controller
                         $validated['priority_id'],
 
                     'confidentiality_level_id' =>
-                        $validated['confidentiality_level_id'],
+                        $privateConfidentialityId,
 
-                    // Existing column now means initial recipient; retained for routing history compatibility.
-                    'origin_office_id' => $validated['recipient_office_id'],
+                    // Registration begins in the registering user's office.
+                    'origin_office_id' => $officeId,
 
-                    'current_office_id' => $validated['recipient_office_id'],
+                    'current_office_id' => $officeId,
 
                     'current_action_id' =>
                         $registeredAction->id,
@@ -755,8 +762,11 @@ class DocumentController extends Controller
                     'event_note' =>
                         'Document registered.',
                 ]);
-                $isPrivate = ConfidentialityLevel::whereKey($validated['confidentiality_level_id'])->value('level_name') === 'Private';
-                if ($isPrivate) $document->taggedOffices()->sync($validated['tagged_office_ids'] ?? []);
+                if (Schema::hasTable('document_office_tags')) {
+                if (Schema::hasTable('document_office_tags')) {
+                    $document->taggedOffices()->sync($validated['tagged_office_ids'] ?? []);
+                }
+                }
 
                 /*
                 |--------------------------------------------------------------------------

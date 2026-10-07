@@ -224,13 +224,13 @@ const normalizeQuantity = () => {
         )
 
     if (Number.isNaN(value)) {
-        value = 1
+        value = 10
     }
 
     quantity.value =
         Math.min(
             maxBatchSize,
-            Math.max(1, value)
+            Math.max(10, Math.round(value / 10) * 10)
         )
 }
 
@@ -576,7 +576,7 @@ const normalizeRequestQuantity = () => {
         value = 1
     }
 
-    requestForm.value.quantity = Math.min(maxBatchSize, Math.max(1, value))
+    requestForm.value.quantity = Math.min(maxBatchSize, Math.max(10, Math.round(value / 10) * 10))
 }
 
 const submitRequest = async () => {

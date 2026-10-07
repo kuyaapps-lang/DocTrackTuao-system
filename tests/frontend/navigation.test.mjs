@@ -10,6 +10,8 @@ import {
 const permissionSets = {
     administrator: [
         'documents.view',
+        'documents.process',
+        'documents.route',
         'qr.request',
         'qr.view',
         'qr.manage',
@@ -19,23 +21,31 @@ const permissionSets = {
         'master_data.view',
         'users.manage',
         'audit.view',
+        'reports.view',
     ],
     recordsOfficer: [
         'documents.view',
+        'documents.process',
+        'documents.route',
         'qr.request',
         'qr.view',
         'qr.manage',
         'master_data.view',
         'audit.view',
+        'reports.view',
     ],
     officeUser: [
         'documents.view',
+        'documents.process',
+        'documents.route',
         'qr.request',
         'master_data.view',
+        'reports.view',
     ],
     viewer: [
         'documents.view',
         'master_data.view',
+        'reports.view',
     ],
 }
 
@@ -54,11 +64,16 @@ test('administrator sees every current sidebar destination', () => {
             'dashboard',
             'outgoing-documents',
             'incoming-documents',
+            'received-document',
+            'change-status',
+            'release-document',
             'document-inquiry',
             'qr-codes',
             'master-data',
             'offices',
             'document-types',
+            'reports',
+            'accomplishment-report',
             'users',
             'audit',
         ]
@@ -72,11 +87,16 @@ test('records officer sees every current link except users', () => {
             'dashboard',
             'outgoing-documents',
             'incoming-documents',
+            'received-document',
+            'change-status',
+            'release-document',
             'document-inquiry',
             'qr-codes',
             'master-data',
             'offices',
             'document-types',
+            'reports',
+            'accomplishment-report',
             'audit',
         ]
     )
@@ -89,8 +109,13 @@ test('office user sees QR requests but not master data links', () => {
             'dashboard',
             'outgoing-documents',
             'incoming-documents',
+            'received-document',
+            'change-status',
+            'release-document',
             'document-inquiry',
             'qr-codes',
+            'reports',
+            'accomplishment-report',
         ]
     )
 })
@@ -103,6 +128,8 @@ test('viewer does not see master data links', () => {
             'outgoing-documents',
             'incoming-documents',
             'document-inquiry',
+            'reports',
+            'accomplishment-report',
         ]
     )
 })
@@ -151,7 +178,10 @@ test('document list navigation resolves filtered lists to their sidebar links', 
         resolveActiveNavigationKey('/documents?view=outgoing'),
         'outgoing-documents'
     )
-    assert.equal(resolveActiveNavigationKey('/documents'), null)
+    assert.equal(
+        resolveActiveNavigationKey('/documents'),
+        'outgoing-documents'
+    )
     assert.equal(resolveActiveNavigationKey('/documents/7'), null)
     assert.equal(
         resolveActiveNavigationKey('/register-document/ABCDE-1234567'),
@@ -163,11 +193,15 @@ test('each other sidebar destination resolves to its own key', () => {
     for (const [path, key] of [
         ['/dashboard', 'dashboard'],
         ['/document-inquiry', 'document-inquiry'],
+        ['/received-document', 'received-document'],
+        ['/change-status', 'change-status'],
+        ['/release-document', 'release-document'],
         ['/qr-codes', 'qr-codes'],
         ['/offices', 'offices'],
         ['/document-types', 'document-types'],
         ['/users', 'users'],
         ['/audit', 'audit'],
+        ['/reports/accomplishment', 'accomplishment-report'],
     ]) {
         assert.equal(resolveActiveNavigationKey(path), key)
     }
@@ -186,8 +220,8 @@ test('public and unknown routes have no active sidebar key', () => {
     }
 })
 
-test('navigation definitions contain no Reports destination', () => {
+test('navigation definitions include the reports group and accomplishment report', () => {
     const serialized = JSON.stringify(navigationItems).toLowerCase()
 
-    assert.equal(serialized.includes('report'), false)
+    assert.equal(serialized.includes('accomplishment report'), true)
 })

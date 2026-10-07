@@ -17,6 +17,18 @@ use Illuminate\Validation\ValidationException;
 
 class DocumentProcessingController extends Controller
 {
+    /** Return manual processing actions for the bulk status workflow. */
+    public function actions(Request $request)
+    {
+        if (! $request->user()->office_id) {
+            abort(403, 'Your account is not assigned to an office.');
+        }
+
+        return response()->json([
+            'data' => $this->manualActions(),
+        ]);
+    }
+
     /**
      * Return current processing information and actions that a user
      * may manually select.
@@ -89,30 +101,7 @@ class DocumentProcessingController extends Controller
         |
         */
 
-        $actions =
-            ProcessingAction::where(
-                'is_active',
-                true
-            )
-                ->whereNotIn(
-                    'action_code',
-                    [
-                        'REGISTERED',
-                        'AWAITING_RECEIPT',
-                        'FOR_ACTION',
-                    ]
-                )
-                ->orderBy(
-                    'sort_order'
-                )
-                ->orderBy(
-                    'action_name'
-                )
-                ->get([
-                    'id',
-                    'action_code',
-                    'action_name',
-                ]);
+        $actions = $this->manualActions();
 
         $history =
             DocumentProcessingLog::with([
@@ -199,6 +188,15 @@ class DocumentProcessingController extends Controller
                 'office_code' => $office->office_code,
             ]
             : null;
+    }
+
+    private function manualActions()
+    {
+        return ProcessingAction::where('is_active', true)
+            ->whereNotIn('action_code', ['REGISTERED', 'AWAITING_RECEIPT', 'FOR_ACTION'])
+            ->orderBy('sort_order')
+            ->orderBy('action_name')
+            ->get(['id', 'action_code', 'action_name']);
     }
 
     private function userShape($user): ?array

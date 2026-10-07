@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { computed, ref } from 'vue'
-import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, isValidDashboardTimestamp, normalizeDashboardMonth } from '../../resources/js/lib/dashboard.js'
+import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardDateRange, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, isValidDashboardTimestamp, normalizeDashboardMonth } from '../../resources/js/lib/dashboard.js'
 
 const validResponse = {
     filters: { month: null, date_from: null, date_to: null, timezone: 'Asia/Manila' }, scope: { type: 'system', office: null },
@@ -27,7 +27,7 @@ test('calculates the current dashboard month in the reporting timezone', () => {
     assert.equal(currentDashboardMonth(new Date('2026-09-30T16:01:00Z')), '2026-10')
     assert.equal(currentDashboardMonth(new Date('2026-09-30T15:59:00Z')), '2026-09')
 })
-test('dashboard loads all dates when no date range is selected', async () => {
+test('dashboard defaults to today through the final day of the current month', async () => {
     const replacements = []
     const requests = []
     let watcher = null
@@ -40,14 +40,21 @@ test('dashboard loads all dates when no date range is selected', async () => {
         },
         fetch: async url => {
             requests.push(url)
-            return { ok: true, status: 200, json: async () => validResponse }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    ...validResponse,
+                    filters: { ...validResponse.filters, date_from: '2026-09-10', date_to: '2026-09-30' },
+                }),
+            }
         },
     })
 
     assert.ok(watcher)
     await new Promise(resolve => setTimeout(resolve, 0))
     assert.deepEqual(JSON.parse(JSON.stringify(replacements)), [])
-    assert.equal(requests.at(-1), '/api/dashboard/summary')
+    assert.equal(requests.at(-1), '/api/dashboard/summary?date_from=2026-09-10&date_to=2026-09-30')
 })
 test('dashboard applies and clears a complete date range through the URL', async () => {
     const pushes = []
@@ -64,7 +71,7 @@ test('dashboard applies and clears a complete date range through the URL', async
 
     assert.deepEqual(JSON.parse(JSON.stringify(pushes)), [
         { path: '/dashboard', query: { date_from: '2026-09-10', date_to: '2026-09-20' } },
-        { path: '/dashboard', query: {} },
+        { path: '/dashboard', query: { date_from: '2026-09-10', date_to: '2026-09-30' } },
     ])
 })
 test('formats dashboard timestamps in the reporting timezone', async () => {
@@ -77,6 +84,16 @@ test('formats dashboard timestamps in the reporting timezone', async () => {
     assert.equal(page.formatDashboardDateTime('2026-09-23T10:45:00+00:00'), '09/23/2026 06:45 PM')
     assert.equal(page.formatDashboardDateTime(null), 'N/A')
     assert.equal(page.formatDashboardDateTime('not-a-date'), 'N/A')
+})
+test('builds the dashboard default date range in the reporting timezone', () => {
+    assert.deepEqual(
+        currentDashboardDateRange(new Date('2026-09-30T16:01:00Z')),
+        { from: '2026-10-01', to: '2026-10-31' }
+    )
+    assert.deepEqual(
+        currentDashboardDateRange(new Date('2026-02-14T03:00:00Z')),
+        { from: '2026-02-14', to: '2026-02-28' }
+    )
 })
 test('uses stable request keys', () => { assert.equal(dashboardRequestKey(null), 'all-time'); assert.equal(dashboardRequestKey('invalid'), 'all-time'); assert.equal(dashboardRequestKey('2026-08'), '2026-08') })
 test('accepts complete response without mutation', () => { const payload = structuredClone(validResponse); const before = structuredClone(payload); assert.equal(isValidDashboardResponse(payload), true); assert.deepEqual(payload, before) })
@@ -311,6 +328,7 @@ const loadDashboardSetup = async ({
     watch,
     fetch = async () => ({ ok: true, status: 200, json: async () => validResponse }),
     currentDashboardMonth: currentMonth = () => '2026-09',
+    currentDashboardDateRange: currentRange = () => ({ from: '2026-09-10', to: '2026-09-30' }),
 }) => {
     const source = await readFile(new URL('../../resources/js/pages/Dashboard.vue', import.meta.url), 'utf8')
     const setup = source.match(/<script setup>([\s\S]*?)<\/script>/)[1]
@@ -327,6 +345,7 @@ const loadDashboardSetup = async ({
         buildDashboardRequestUrl,
         calculateDashboardPercentage,
         currentDashboardMonth: currentMonth,
+        currentDashboardDateRange: currentRange,
         dashboardRequestKey,
         isValidDashboardResponse,
         normalizeDashboardMonth,

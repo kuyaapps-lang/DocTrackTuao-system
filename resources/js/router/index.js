@@ -8,6 +8,9 @@ import ChangePassword from '../pages/ChangePassword.vue'
 import Profile from '../pages/Profile.vue'
 import Dashboard from '../pages/Dashboard.vue'
 import Documents from '../pages/Documents.vue'
+import ChangeStatus from '../pages/ChangeStatus.vue'
+import ReleaseDocument from '../pages/ReleaseDocument.vue'
+import ReceivedDocument from '../pages/ReceivedDocument.vue'
 import DocumentDetails from '../pages/DocumentDetails.vue'
 import DocumentTracking from '../pages/DocumentTracking.vue'
 import QrResolver from '../pages/QrResolver.vue'
@@ -16,6 +19,7 @@ import Offices from '../pages/Offices.vue'
 import DocumentTypes from '../pages/DocumentTypes.vue'
 import Users from '../pages/Users.vue'
 import AuditLogs from '../pages/AuditLogs.vue'
+import AccomplishmentReport from '../pages/AccomplishmentReport.vue'
 import Notifications from '../pages/Notifications.vue'
 import AppShell from '../layouts/AppShell.vue'
 
@@ -128,10 +132,50 @@ const routes = [
             {
                 path: 'documents',
                 component: Documents,
+                beforeEnter: (to) => {
+                    if (['incoming', 'outgoing'].includes(to.query.view)) {
+                        return true
+                    }
+
+                    return {
+                        path: '/documents',
+                        query: {
+                            ...to.query,
+                            view: 'outgoing',
+                        },
+                    }
+                },
                 meta: {
                     permission: 'documents.view',
                     title: 'Documents',
                     navKey: 'documents',
+                },
+            },
+            {
+                path: 'received-document',
+                component: ReceivedDocument,
+                meta: {
+                    permission: 'documents.route',
+                    title: 'Received Document',
+                    navKey: 'received-document',
+                },
+            },
+            {
+                path: 'change-status',
+                component: ChangeStatus,
+                meta: {
+                    permission: 'documents.process',
+                    title: 'Change Status',
+                    navKey: 'change-status',
+                },
+            },
+            {
+                path: 'release-document',
+                component: ReleaseDocument,
+                meta: {
+                    permission: 'documents.route',
+                    title: 'Release Document',
+                    navKey: 'release-document',
                 },
             },
             {
@@ -186,6 +230,15 @@ const routes = [
                     permission: 'users.manage',
                     title: 'Users',
                     navKey: 'users',
+                },
+            },
+            {
+                path: 'reports/accomplishment',
+                component: AccomplishmentReport,
+                meta: {
+                    permission: 'reports.view',
+                    title: 'Accomplishment Report',
+                    navKey: 'accomplishment-report',
                 },
             },
             {

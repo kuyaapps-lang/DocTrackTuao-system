@@ -29,6 +29,27 @@ export const navigationItems = [
         group: null,
     },
     {
+        key: 'received-document',
+        label: 'Received Document',
+        path: '/received-document',
+        permission: 'documents.route',
+        group: null,
+    },
+    {
+        key: 'change-status',
+        label: 'Change Status',
+        path: '/change-status',
+        permission: 'documents.process',
+        group: null,
+    },
+    {
+        key: 'release-document',
+        label: 'Release Document',
+        path: '/release-document',
+        permission: 'documents.route',
+        group: null,
+    },
+    {
         key: 'document-inquiry',
         label: 'Document Inquiry / Status',
         path: '/document-inquiry',
@@ -63,6 +84,23 @@ export const navigationItems = [
                 path: '/document-types',
                 permission: 'master_data.view',
                 group: 'master-data',
+            },
+        ],
+    },
+    {
+        key: 'reports',
+        label: 'Reports',
+        path: null,
+        permission: null,
+        visibilityPermissions: ['reports.view'],
+        group: null,
+        children: [
+            {
+                key: 'accomplishment-report',
+                label: 'Accomplishment Report',
+                path: '/reports/accomplishment',
+                permission: 'reports.view',
+                group: 'reports',
             },
         ],
     },
@@ -139,7 +177,9 @@ export const resolveActiveNavigationKey = (routePath) => {
             return 'outgoing-documents'
         }
 
-        return null
+        return path === '/documents'
+            ? 'outgoing-documents'
+            : null
     }
 
     for (const item of navigationItems) {

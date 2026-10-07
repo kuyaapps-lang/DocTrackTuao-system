@@ -38,6 +38,24 @@ export const currentDashboardMonth = (date = new Date(), timeZone = 'Asia/Manila
 
     return normalizeDashboardMonth(`${year}-${month}`)
 }
+export const currentDashboardDateRange = (date = new Date(), timeZone = 'Asia/Manila') => {
+    const parts = new Intl.DateTimeFormat('en', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(date)
+    const part = type => parts.find(item => item.type === type)?.value
+    const year = Number(part('year'))
+    const month = Number(part('month'))
+    const day = part('day')
+    const endDay = String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')
+
+    return {
+        from: `${year}-${String(month).padStart(2, '0')}-${day}`,
+        to: `${year}-${String(month).padStart(2, '0')}-${endDay}`,
+    }
+}
 export const buildDashboardQuery = month => normalizeDashboardMonth(month) ? { month: normalizeDashboardMonth(month) } : {}
 export const buildDashboardRequestUrl = month => {
     const suffix = new URLSearchParams(buildDashboardQuery(month)).toString()

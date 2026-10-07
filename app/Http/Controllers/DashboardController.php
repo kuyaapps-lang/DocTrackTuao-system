@@ -157,6 +157,66 @@ class DashboardController extends Controller
         ]);
     }
 
+    /** A printable weekly activity summary, scoped to the signed-in user's office. */
+    public function accomplishment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'date_from' => ['sometimes', 'date_format:Y-m-d'],
+            'date_to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+        ]);
+        $timezone = $this->reportingTimezone();
+        if ($timezone === null) {
+            return response()->json(['message' => self::UNAVAILABLE_MESSAGE], 500);
+        }
+
+        $today = CarbonImmutable::now($timezone)->startOfDay();
+        $weekStart = $today->subDays($today->dayOfWeek);
+        $from = $validated['date_from'] ?? $weekStart->format('Y-m-d');
+        $to = $validated['date_to'] ?? $weekStart->addDays(6)->format('Y-m-d');
+        $bounds = $this->dateRangeBounds($from, $to, $timezone);
+        $user = $request->user();
+        $systemWide = $this->hasSystemScope($user);
+        $office = $this->resolveOfficeScope($user, $systemWide);
+        $officeId = $office ? (int) $office->id : null;
+
+        $received = DB::table('document_routes')->whereNotNull('received_at');
+        $outgoing = DB::table('document_routes')->whereNotNull('forwarded_at');
+        $changedStatus = DB::table('document_processing_logs')->where('event_type', 'action_updated');
+        if ($officeId !== null) {
+            $received->where('to_office_id', $officeId);
+            $outgoing->where('from_office_id', $officeId);
+            $changedStatus->where('office_id', $officeId);
+        }
+        $this->applyBounds($received, 'received_at', $bounds);
+        $this->applyBounds($outgoing, 'forwarded_at', $bounds);
+        $this->applyBounds($changedStatus, 'created_at', $bounds);
+
+        $officeSummary = $systemWide ? DB::table('offices')
+            ->select(['id', 'office_name'])
+            ->orderBy('office_name')
+            ->get()
+            ->map(function (object $office) use ($bounds): array {
+                $received = DB::table('document_routes')->where('to_office_id', $office->id)->whereNotNull('received_at');
+                $outgoing = DB::table('document_routes')->where('from_office_id', $office->id)->whereNotNull('forwarded_at');
+                $changed = DB::table('document_processing_logs')->where('office_id', $office->id)->where('event_type', 'action_updated');
+                $this->applyBounds($received, 'received_at', $bounds);
+                $this->applyBounds($outgoing, 'forwarded_at', $bounds);
+                $this->applyBounds($changed, 'created_at', $bounds);
+                return ['id' => (int) $office->id, 'office_name' => $office->office_name, 'received_documents' => $received->count(), 'outgoing_documents' => $outgoing->count(), 'status_changes' => $changed->count()];
+            })->all() : [];
+
+        return response()->json([
+            'filters' => ['date_from' => $from, 'date_to' => $to, 'timezone' => $timezone->getName()],
+            'scope' => ['type' => $systemWide ? 'system' : 'office', 'office' => $office ? ['id' => (int) $office->id, 'name' => $office->office_name] : null],
+            'summary' => [
+                'received_documents' => $received->count(),
+                'outgoing_documents' => $outgoing->count(),
+                'status_changes' => $changedStatus->count(),
+            ],
+            'offices' => $officeSummary,
+        ]);
+    }
+
     private function rejectUnknownParameters(Request $request): void
     {
         $unknown = array_values(array_diff(

@@ -101,6 +101,11 @@ Route::middleware([
         [DashboardController::class, 'summary']
     )->middleware('can:reports.view');
 
+    Route::get(
+        'reports/accomplishment',
+        [DashboardController::class, 'accomplishment']
+    )->middleware('can:reports.view');
+
     /*
     |--------------------------------------------------------------------------
     | AUTHENTICATED USER
@@ -223,6 +228,11 @@ Route::middleware([
     */
 
     Route::get(
+        'processing-actions',
+        [DocumentProcessingController::class, 'actions']
+    )->middleware('can:documents.process');
+
+    Route::get(
         'documents/{document}/processing',
         [DocumentProcessingController::class, 'show']
     )->middleware('can:documents.view');
@@ -330,6 +340,11 @@ Route::middleware([
     | DOCUMENT ROUTING
     |--------------------------------------------------------------------------
     */
+
+    Route::get(
+        'routing-offices',
+        [DocumentRoutingController::class, 'bulkOffices']
+    )->middleware('can:documents.route');
 
     Route::get(
         'documents/{document}/routing-options',

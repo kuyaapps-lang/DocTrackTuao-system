@@ -36,7 +36,7 @@ class SecurityHeaders
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set(
             'Permissions-Policy',
-            'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+            'camera=(self), microphone=(), geolocation=(), payment=(), usb=()'
         );
         $response->headers->remove('X-Powered-By');
 

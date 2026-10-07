@@ -17,7 +17,7 @@ use Tests\TestCase;
 
 class Process9D1SecurityBoundaryTest extends TestCase
 {
-    private const PRODUCTION_CSP = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; media-src 'none'; frame-src 'none'; manifest-src 'self';";
+    private const PRODUCTION_CSP = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; media-src 'self' blob:; frame-src 'none'; manifest-src 'self';";
 
     protected function setUp(): void
     {
@@ -711,7 +711,7 @@ class Process9D1SecurityBoundaryTest extends TestCase
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
         $response->assertHeader('X-Frame-Options', 'DENY');
         $response->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $response->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+        $response->assertHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()');
         $response->assertHeaderMissing('X-Powered-By');
         $response->assertHeaderMissing('Strict-Transport-Security');
     }

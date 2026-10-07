@@ -160,6 +160,30 @@ class DashboardSummaryApiTest extends TestCase
         )->assertUnauthorized();
     }
 
+    public function test_accomplishment_report_is_office_scoped_and_counts_activity(): void
+    {
+        $office = $this->office('REPORT');
+        $otherOffice = $this->office('OTHERREPORT');
+        $document = $this->document(null, $office, $office);
+        $this->route($document, $office, $otherOffice, '2026-10-05 01:00:00', '2026-10-06 02:00:00');
+        DB::table('document_processing_logs')->insert([
+            'document_id' => $document,
+            'office_id' => $office,
+            'event_type' => 'action_updated',
+            'created_at' => '2026-10-06 03:00:00',
+            'updated_at' => '2026-10-06 03:00:00',
+        ]);
+        Sanctum::actingAs($this->user('Office User', $office));
+
+        $this->getJson('/api/reports/accomplishment?date_from=2026-10-05&date_to=2026-10-11')
+            ->assertOk()
+            ->assertJsonPath('scope.type', 'office')
+            ->assertJsonPath('scope.office.id', $office)
+            ->assertJsonPath('summary.received_documents', 0)
+            ->assertJsonPath('summary.outgoing_documents', 1)
+            ->assertJsonPath('summary.status_changes', 1);
+    }
+
     public function test_role_without_reports_permission_is_forbidden(): void
     {
         Sanctum::actingAs($this->user('Unknown Role'));

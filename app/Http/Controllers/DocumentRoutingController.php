@@ -19,6 +19,22 @@ use Illuminate\Support\Facades\DB;
 
 class DocumentRoutingController extends Controller
 {
+    /** Return destination offices for the bulk release workflow. */
+    public function bulkOffices(Request $request)
+    {
+        $officeId = $request->user()->office_id;
+
+        if (! $officeId || ! Office::whereKey($officeId)->exists()) {
+            abort(403, 'Your user account is not assigned to a valid office.');
+        }
+
+        return response()->json([
+            'data' => Office::where('id', '!=', $officeId)
+                ->orderBy('office_name')
+                ->get(['id', 'office_name', 'office_code']),
+        ]);
+    }
+
     /**
      * Return routing information/options for a document.
      */

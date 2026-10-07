@@ -9,10 +9,12 @@ import {
 } from 'vue-router'
 import {
     Building2,
+    FileBarChart,
     FileText,
     FileSearch,
     Inbox,
     LayoutDashboard,
+    ListChecks,
     LogOut,
     QrCode,
     ScrollText,
@@ -68,12 +70,16 @@ const navigationIcons = {
     dashboard: LayoutDashboard,
     'outgoing-documents': Send,
     'incoming-documents': Inbox,
+    'received-document': Inbox,
+    'change-status': ListChecks,
+    'release-document': Send,
     'document-inquiry': FileSearch,
     'qr-codes': QrCode,
     offices: Building2,
     'document-types': FileText,
     users: Users,
     audit: ScrollText,
+    'accomplishment-report': FileBarChart,
 }
 
 const items = computed(() => {
@@ -111,8 +117,8 @@ const closeProfileMenu = () => {
 
 const linkClasses = (key, grouped = false, collapsed = false) => {
     const base = grouped
-        ? 'flex rounded-xl px-3 py-2 text-[12pt] font-medium'
-        : 'flex rounded-xl px-3 py-2 text-[12pt] font-semibold'
+        ? 'flex rounded-xl px-3 py-2 text-[10.5pt] font-medium'
+        : 'flex rounded-xl px-3 py-2 text-[10.5pt] font-semibold'
 
     return [
         base,
@@ -127,7 +133,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
 <template>
     <aside
-        class="fixed inset-y-0 left-0 z-30 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-white/80 bg-slate-100 bg-white/70 text-slate-800 shadow-[10px_0_30px_rgb(67_86_119/0.12),inset_-1px_0_0_rgb(255_255_255/0.8)] backdrop-blur-xl transition-[width,background-color,border-color,color] duration-200 md:flex"
+        class="fixed inset-y-0 left-0 z-30 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-white/80 bg-slate-100 bg-white/70 text-slate-800 shadow-[10px_0_30px_rgb(67_86_119/0.12),inset_-1px_0_0_rgb(255_255_255/0.8)] backdrop-blur-xl transition-[width,background-color,border-color,color] duration-200 md:flex"
         :class="desktopCollapsed ? 'w-20' : 'w-64'"
     >
         <div
@@ -162,7 +168,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
         <nav
             id="desktop-navigation"
             aria-label="Main navigation"
-            class="flex-1 space-y-2 px-4 pb-4 pt-[10pt]"
+            class="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pb-4 pt-[10pt]"
         >
             <template
                 v-for="item in items"
@@ -171,7 +177,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 <div
                     v-if="item.children"
                     class="space-y-1"
-                    :class="item.key === 'master-data' ? 'mt-[5pt] border-t border-slate-300/80 pt-2' : ''"
+                    :class="['master-data', 'reports'].includes(item.key) ? 'mt-[5pt] pt-2' : ''"
                 >
                     <p
                         class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400"
@@ -204,7 +210,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
                 <p
                     v-if="item.key === 'outgoing-documents'"
-                    class="mt-[5pt] flex items-center gap-2 border-t border-slate-300/80 pt-2 text-xs font-bold uppercase tracking-wide text-slate-400"
+                    class="mt-[5pt] flex items-center gap-2 pt-2 text-xs font-bold uppercase tracking-wide text-slate-400"
                     :class="desktopCollapsed ? 'sr-only' : 'px-3'"
                 >
                     <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
@@ -241,7 +247,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 aria-label="Profile menu"
                 @keydown.esc="closeProfileMenu"
             >
-                <Button type="button" variant="ghost" size="sm" class="h-9 w-full justify-start px-3 py-1.5 text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
+                <Button type="button" variant="ghost" size="sm" class="h-9 w-full justify-start bg-blue-900 px-3 py-1.5 text-white hover:bg-blue-800 hover:text-white dark:bg-blue-900 dark:text-white dark:hover:bg-blue-800 dark:hover:text-white" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
                     <LogOut class="mr-2 size-4" aria-hidden="true" />
                     {{ logoutPending ? 'Logging out...' : 'Logout' }}
                 </Button>
@@ -280,7 +286,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
         <aside
             id="mobile-navigation-drawer"
-            class="relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-slate-100 bg-white/90 shadow-xl backdrop-blur-xl"
+            class="relative flex h-full w-72 max-w-[85vw] flex-col overflow-hidden bg-slate-100 bg-white/90 shadow-xl backdrop-blur-xl"
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation menu"
@@ -312,7 +318,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
 
             <nav
                 aria-label="Main navigation"
-                class="flex-1 space-y-2 px-4 pb-4 pt-[10pt]"
+                class="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pb-4 pt-[10pt]"
             >
                 <template
                     v-for="item in items"
@@ -321,11 +327,11 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     <div
                         v-if="item.children"
                         class="space-y-1"
-                        :class="item.key === 'master-data' ? 'mt-[5pt] border-t border-slate-300/80 pt-2' : ''"
+                        :class="['master-data', 'reports'].includes(item.key) ? 'mt-[5pt] pt-2' : ''"
                     >
                         <p class="flex items-center gap-2 px-3 text-xs font-bold uppercase tracking-wide text-gray-400">
-                            <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
-                            <span>{{ item.label }}</span>
+                        <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
+                        <span>{{ item.label }}</span>
                             <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
                         </p>
 
@@ -347,11 +353,11 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     </div>
 
                     <p
-                        v-if="item.key === 'outgoing-documents'"
-                        class="mt-[5pt] flex items-center gap-2 border-t border-slate-300/80 px-3 pt-2 text-xs font-bold uppercase tracking-wide text-gray-400"
-                    >
-                        <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
-                        <span>Documents</span>
+                    v-if="item.key === 'outgoing-documents'"
+                        class="mt-[5pt] flex items-center gap-2 px-3 pt-2 text-xs font-bold uppercase tracking-wide text-gray-400"
+                >
+                    <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
+                    <span>Documents</span>
                         <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />
                     </p>
 
@@ -380,7 +386,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     aria-label="Profile menu"
                     @keydown.esc="closeProfileMenu"
                 >
-                    <Button type="button" variant="ghost" size="sm" class="h-9 w-full justify-start px-3 py-1.5 text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-950/60 dark:hover:text-red-200" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
+                    <Button type="button" variant="ghost" size="sm" class="h-9 w-full justify-start bg-blue-900 px-3 py-1.5 text-white hover:bg-blue-800 hover:text-white dark:bg-blue-900 dark:text-white dark:hover:bg-blue-800 dark:hover:text-white" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
                         <LogOut class="mr-2 size-4" aria-hidden="true" />
                         {{ logoutPending ? 'Logging out...' : 'Logout' }}
                     </Button>

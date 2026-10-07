@@ -17,7 +17,7 @@ import DashboardSkeleton from '@/components/loaders/DashboardSkeleton.vue'
 import DashboardDateRangePicker from '@/components/DashboardDateRangePicker.vue'
 import { useAuth } from '@/lib/auth'
 import { listenForRealtimeInvalidation } from '@/lib/realtime'
-import { isValidDashboardResponse } from '@/lib/dashboard'
+import { currentDashboardDateRange, isValidDashboardResponse } from '@/lib/dashboard'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +25,7 @@ const { clearCurrentUser, getToken, ensureCurrentUser } = useAuth()
 const dashboard = ref(null)
 const dateFrom = ref('')
 const dateTo = ref('')
+const defaultDateRange = currentDashboardDateRange()
 const loading = ref(true)
 const state = ref('loading')
 let activeController = null
@@ -194,16 +195,19 @@ const updateDateRange = () => router.push({
     query: { date_from: dateFrom.value, date_to: dateTo.value },
 })
 const clearDateRange = () => {
-    dateFrom.value = ''
-    dateTo.value = ''
-    return router.push({ path: route.path, query: {} })
+    dateFrom.value = defaultDateRange.from
+    dateTo.value = defaultDateRange.to
+    return router.push({
+        path: route.path,
+        query: { date_from: dateFrom.value, date_to: dateTo.value },
+    })
 }
 const retry = () => loadDashboard(dateFrom.value, dateTo.value)
 
 watch(() => [route.query.date_from, route.query.date_to], ([from, to]) => {
     const hasCompleteRange = typeof from === 'string' && typeof to === 'string'
-    dateFrom.value = hasCompleteRange ? from : ''
-    dateTo.value = hasCompleteRange ? to : ''
+    dateFrom.value = hasCompleteRange ? from : defaultDateRange.from
+    dateTo.value = hasCompleteRange ? to : defaultDateRange.to
 
     return loadDashboard(dateFrom.value, dateTo.value)
 }, { immediate: true })

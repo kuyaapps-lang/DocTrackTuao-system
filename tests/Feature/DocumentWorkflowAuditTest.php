@@ -52,6 +52,7 @@ class DocumentWorkflowAuditTest extends TestCase
     public function test_create_produces_exactly_one_expected_audit_row(): void
     {
         $officeId = $this->createOffice('CREATE');
+        $otherOfficeId = $this->createOffice('OTHER');
         $user = $this->createUser('Records Officer', $officeId);
         Sanctum::actingAs($user);
 
@@ -61,12 +62,20 @@ class DocumentWorkflowAuditTest extends TestCase
             'priority_id' => $this->lookupId('priorities'),
             'confidentiality_level_id' =>
                 $this->lookupId('confidentiality_levels'),
-            'origin_office_id' => $officeId,
+            'recipient_office_id' => $otherOfficeId,
             'document_date' => '2026-08-26',
             'qr_token' => $this->issuedQrToken(),
         ])->assertCreated();
 
         $documentId = $response->json('document.id');
+        $this->assertDatabaseHas('documents', [
+            'id' => $documentId,
+            'origin_office_id' => $officeId,
+            'current_office_id' => $officeId,
+            'confidentiality_level_id' => DB::table('confidentiality_levels')
+                ->where('level_name', 'Private')
+                ->value('id'),
+        ]);
         $this->assertSame(2, AuditLog::count());
         $this->assertDatabaseHas('audit_logs', [
             'module' => AuditLog::MODULE_DOCUMENTS,
@@ -571,6 +580,35 @@ class DocumentWorkflowAuditTest extends TestCase
         $this->assertStringNotContainsString($note, $audit->description);
     }
 
+    public function test_bulk_processing_actions_exclude_system_actions_and_require_processing_permission(): void
+    {
+        $officeId = $this->createOffice('BULKACTIONS');
+
+        Sanctum::actingAs($this->createUser('Office User', $officeId));
+        $response = $this->getJson('/api/processing-actions')->assertOk();
+
+        $codes = collect($response->json('data'))->pluck('action_code')->all();
+        $this->assertSame(['UNDER_REVIEW'], $codes);
+
+        Sanctum::actingAs($this->createUser('Viewer', $officeId));
+        $this->getJson('/api/processing-actions')->assertForbidden();
+    }
+
+    public function test_bulk_release_offices_exclude_the_users_office_and_require_routing_permission(): void
+    {
+        $officeId = $this->createOffice('BULKRELEASESOURCE');
+        $destinationOfficeId = $this->createOffice('BULKRELEASEDEST');
+
+        Sanctum::actingAs($this->createUser('Office User', $officeId));
+        $response = $this->getJson('/api/routing-offices')->assertOk();
+
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertSame([$destinationOfficeId], $ids);
+
+        Sanctum::actingAs($this->createUser('Viewer', $officeId));
+        $this->getJson('/api/routing-offices')->assertForbidden();
+    }
+
     public function test_forbidden_role_and_wrong_office_attempts_create_no_audit_rows(): void
     {
         $currentOfficeId = $this->createOffice('CURRENT');
@@ -1051,11 +1089,13 @@ class DocumentWorkflowAuditTest extends TestCase
             'created_at' => $now,
             'updated_at' => $now,
         ]);
-        DB::table('confidentiality_levels')->insert([
-            'level_name' => 'Public',
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
+        foreach (['Public', 'Private'] as $levelName) {
+            DB::table('confidentiality_levels')->insert([
+                'level_name' => $levelName,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
         DB::table('route_actions')->insert([
             'action_name' => 'Forward',
             'created_at' => $now,

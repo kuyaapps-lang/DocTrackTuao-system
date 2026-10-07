@@ -32,15 +32,25 @@ const {
 
 const logoutPending = ref(false)
 const logoutError = ref('')
+const logoutConfirmationOpen = ref(false)
 const desktopSidebarCollapsed = ref(false)
 const mobileNavigationOpen = ref(false)
 const menuTrigger = ref(null)
 const sidebar = ref(null)
+const confirmLogoutButton = ref(null)
+
+let logoutTrigger = null
 
 let desktopMediaQuery = null
 let previousBodyOverflow = ''
 
 const pageTitle = computed(() => {
+    if (route.path === '/documents') {
+        return route.query.view === 'incoming'
+            ? 'Incoming Documents'
+            : 'Outgoing Documents'
+    }
+
     return route.meta?.title || 'DocTrack Tuao'
 })
 
@@ -65,6 +75,41 @@ const closeMobileNavigation = async (restoreFocus = true) => {
 }
 
 const handleDocumentKeydown = (event) => {
+    if (logoutConfirmationOpen.value) {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            closeLogoutConfirmation()
+            return
+        }
+
+        if (event.key !== 'Tab') {
+            return
+        }
+
+        const dialog = document.getElementById('logout-confirmation-dialog')
+        const focusableElements = dialog?.querySelectorAll(
+            'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+
+        if (!focusableElements?.length) {
+            event.preventDefault()
+            return
+        }
+
+        const firstElement = focusableElements[0]
+        const lastElement = focusableElements[focusableElements.length - 1]
+
+        if (event.shiftKey && document.activeElement === firstElement) {
+            event.preventDefault()
+            lastElement.focus()
+        } else if (!event.shiftKey && document.activeElement === lastElement) {
+            event.preventDefault()
+            firstElement.focus()
+        }
+
+        return
+    }
+
     if (!mobileNavigationOpen.value) {
         return
     }
@@ -154,11 +199,32 @@ const clearLocalAuthentication = async () => {
     await router.replace('/login')
 }
 
+const requestLogout = async () => {
+    if (logoutPending.value) {
+        return
+    }
+
+    logoutTrigger = document.activeElement
+    logoutConfirmationOpen.value = true
+
+    await nextTick()
+    confirmLogoutButton.value?.$el?.focus()
+}
+
+const closeLogoutConfirmation = async () => {
+    logoutConfirmationOpen.value = false
+
+    await nextTick()
+    logoutTrigger?.focus?.()
+    logoutTrigger = null
+}
+
 const logout = async () => {
     if (logoutPending.value) {
         return
     }
 
+    logoutConfirmationOpen.value = false
     logoutError.value = ''
 
     const token = getToken()
@@ -207,7 +273,7 @@ const logout = async () => {
             @toggle-desktop="desktopSidebarCollapsed = !desktopSidebarCollapsed"
             @close-mobile="closeMobileNavigation()"
             @navigate="closeMobileNavigation()"
-            @logout="logout"
+            @logout="requestLogout"
         />
 
         <div class="min-w-0 flex-1 bg-slate-100 bg-white/35 pt-20 transition-[margin,background-color] duration-200" :class="desktopSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
@@ -246,6 +312,37 @@ const logout = async () => {
             <main class="min-w-0">
                 <RouterView />
             </main>
+        </div>
+
+        <div
+            v-if="logoutConfirmationOpen"
+            class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm"
+            @click.self="closeLogoutConfirmation"
+        >
+            <section
+                id="logout-confirmation-dialog"
+                class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="logout-confirmation-title"
+                aria-describedby="logout-confirmation-description"
+            >
+                <h2 id="logout-confirmation-title" class="text-xl font-bold text-slate-900 dark:text-white">
+                    Log out?
+                </h2>
+                <p id="logout-confirmation-description" class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                    Are you sure you want to log out of your account?
+                </p>
+
+                <div class="mt-6 flex justify-end gap-3">
+                    <Button type="button" variant="outline" @click="closeLogoutConfirmation">
+                        Cancel
+                    </Button>
+                    <Button ref="confirmLogoutButton" type="button" :disabled="logoutPending" @click="logout">
+                        {{ logoutPending ? 'Logging out...' : 'Yes, log out' }}
+                    </Button>
+                </div>
+            </section>
         </div>
     </div>
 </template>

@@ -9,11 +9,9 @@ import {
 } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-    Building2,
     FileText,
     Flag,
     ListFilter,
-    LockKeyhole,
     RotateCcw,
     Search,
 } from 'lucide-vue-next'
@@ -37,6 +35,7 @@ import {
 import { Button } from '@/components/ui/button'
 import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 import { Input } from '@/components/ui/input'
+import CameraQrScanner from '@/components/CameraQrScanner.vue'
 import DocTrackDatePicker from '@/components/DocTrackDatePicker.vue'
 import { formatDateValue } from '@/lib/date-picker'
 import { can } from '@/lib/auth'
@@ -66,7 +65,11 @@ const router = useRouter()
 |--------------------------------------------------------------------------
 */
 
-const initialQuery = parseDocumentListQuery(route.query)
+const parsedInitialQuery = parseDocumentListQuery(route.query)
+const initialQuery = {
+    ...parsedInitialQuery,
+    perPage: parsedInitialQuery.view === 'incoming' ? 50 : parsedInitialQuery.perPage,
+}
 const documents = ref([])
 const loading = ref(true)
 const error = ref('')
@@ -83,6 +86,8 @@ const paginationMeta = ref({
     from: null,
     to: null,
 })
+const incomingLoadingMore = ref(false)
+const incomingSentinel = ref(null)
 
 let activeRequestController = null
 let componentUnmounted = false
@@ -91,6 +96,11 @@ let pageMounted = false
 let requestSequence = 0
 let searchDebounceTimer = null
 let leaveRealtime = null
+let incomingObserver = null
+
+const canLoadMoreIncoming = computed(() => {
+    return activeTab.value === 'incoming' && documents.value.length < paginationMeta.value.total
+})
 
 const paginationState = computed(() => {
     return getDocumentPaginationState(paginationMeta.value)
@@ -133,7 +143,6 @@ const paginationItems = computed(() => {
 
 const documentTypes = ref([])
 const priorities = ref([])
-const confidentialityLevels = ref([])
 const offices = ref([])
 const officeTagSearch = ref('')
 
@@ -209,8 +218,6 @@ const form = ref({
     description: '',
     document_type_id: '',
     priority_id: '',
-    confidentiality_level_id: '',
-    recipient_office_id: '',
     tagged_office_ids: [],
     document_date: '',
     due_date: '',
@@ -237,8 +244,6 @@ const canSubmitRegistration = computed(() => {
         form.value.title.trim() &&
         form.value.document_type_id &&
         form.value.priority_id &&
-        form.value.confidentiality_level_id &&
-        form.value.recipient_office_id &&
         form.value.document_date
     )
 })
@@ -327,6 +332,10 @@ const fetchDocuments = async (state = currentListState()) => {
 
         documents.value = data.data
         paginationMeta.value = data.meta
+        if (state.view === 'incoming') {
+            await nextTick()
+            observeIncomingScroll()
+        }
 
     } catch (err) {
         if (
@@ -354,6 +363,44 @@ const fetchDocuments = async (state = currentListState()) => {
             }
         }
     }
+}
+
+const loadMoreIncomingDocuments = async () => {
+    if (componentUnmounted || loading.value || incomingLoadingMore.value || !canLoadMoreIncoming.value) return
+
+    incomingLoadingMore.value = true
+    try {
+        const state = currentListState()
+        const nextPage = Math.floor(documents.value.length / 10) + 1
+        const requestQuery = new URLSearchParams(buildDocumentListRequestQuery({
+            ...state,
+            page: nextPage,
+            perPage: 10,
+        }))
+        const response = await fetch(`${getDocumentEndpoint('incoming')}?${requestQuery}`, {
+            headers: { Accept: 'application/json', Authorization: `Bearer ${getToken()}` },
+        })
+        const data = await response.json()
+        if (!response.ok || !isValidDocumentListResponse(data)) throw new Error('Unable to load more documents. Please try again.')
+
+        const seen = new Set(documents.value.map(document => document.id))
+        documents.value.push(...data.data.filter(document => !seen.has(document.id)))
+        paginationMeta.value = { ...paginationMeta.value, total: data.meta.total }
+    } catch (err) {
+        error.value = err?.message || 'Unable to load more documents. Please try again.'
+    } finally {
+        incomingLoadingMore.value = false
+    }
+}
+
+const observeIncomingScroll = () => {
+    if (!incomingSentinel.value || typeof IntersectionObserver === 'undefined') return
+
+    incomingObserver?.disconnect()
+    incomingObserver = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) loadMoreIncomingDocuments()
+    }, { rootMargin: '240px' })
+    incomingObserver.observe(incomingSentinel.value)
 }
 
 const currentListQuery = () => {
@@ -460,6 +507,11 @@ const verifyQrForRegistration = async () => {
     }
 }
 
+const scanRegistrationCamera = async token => {
+    qrInput.value = token
+    await verifyQrForRegistration()
+}
+
 const clearQrVerificationWhenChanged = () => {
     if (normalizeRegistrationQrInput(qrInput.value) === qrToken.value) {
         return
@@ -506,9 +558,6 @@ const fetchFormOptions = async () => {
         priorities.value =
             data.priorities || []
 
-        confidentialityLevels.value =
-            data.confidentiality_levels || []
-
         offices.value =
             data.offices || []
 
@@ -533,8 +582,6 @@ const resetForm = () => {
         description: '',
         document_type_id: '',
         priority_id: '',
-        confidentiality_level_id: '',
-        recipient_office_id: '',
         tagged_office_ids: [],
         document_date: formatDateValue(new Date()),
         due_date: '',
@@ -546,15 +593,13 @@ const resetForm = () => {
 }
 
 const loadRegistrationOptions = async () => {
-    if (documentTypes.value.length === 0 || priorities.value.length === 0 || confidentialityLevels.value.length === 0 || offices.value.length === 0) {
+    if (documentTypes.value.length === 0 || priorities.value.length === 0 || offices.value.length === 0) {
         await fetchFormOptions()
     }
 
     const normalPriority = priorities.value.find(item => item.priority_name === 'Normal')
-    const publicLevel = confidentialityLevels.value.find(item => item.level_name === 'Public')
 
     if (normalPriority) form.value.priority_id = normalPriority.id
-    if (publicLevel) form.value.confidentiality_level_id = publicLevel.id
 }
 
 /*
@@ -645,20 +690,6 @@ const createDocument = async () => {
         return
     }
 
-    if (!form.value.confidentiality_level_id) {
-        createError.value =
-            'Confidentiality level is required.'
-
-        return
-    }
-
-    if (!form.value.recipient_office_id) {
-        createError.value =
-            'Recipient office is required.'
-
-        return
-    }
-
     if (!form.value.document_date) {
         createError.value =
             'Document date is required.'
@@ -698,16 +729,6 @@ const createDocument = async () => {
                             form.value.priority_id
                         ),
 
-                    confidentiality_level_id:
-                        Number(
-                            form.value
-                                .confidentiality_level_id
-                        ),
-
-                    recipient_office_id:
-                        Number(
-                            form.value.recipient_office_id
-                        ),
                     tagged_office_ids: form.value.tagged_office_ids.map(Number),
 
                     document_date:
@@ -1063,6 +1084,8 @@ onMounted(async () => {
     pageMounted = true
 
     await fetchDocuments(currentListState())
+    await nextTick()
+    observeIncomingScroll()
     const user = await ensureCurrentUser().catch(() => null)
     if (user) {
         const channel = ['Administrator', 'Records Officer'].includes(user.role?.role_name || user.role?.name)
@@ -1088,6 +1111,7 @@ onBeforeUnmount(() => {
     clearTimeout(searchDebounceTimer)
     activeRequestController?.abort()
     activeRequestController = null
+    incomingObserver?.disconnect()
     leaveRealtime?.()
 })
 </script>
@@ -1130,7 +1154,7 @@ onBeforeUnmount(() => {
                         </div>
 
                         <Button
-                            v-if="canCreateDocuments && activeTab !== 'incoming'"
+                            v-if="canCreateDocuments && activeTab === 'outgoing'"
                             @click="openCreateForm()"
                             class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
                         >
@@ -1242,7 +1266,10 @@ onBeforeUnmount(() => {
                         v-else
                         class="overflow-x-auto"
                     >
-                        <Table class="min-w-[46rem] table-auto [&_td]:whitespace-normal [&_td]:px-[10px] [&_td]:py-[10px] [&_th]:whitespace-normal [&_th]:px-[10px] [&_th]:py-[10px]">
+                        <Table
+                            class="min-w-[46rem] table-auto [&_td]:whitespace-normal [&_td]:px-[10px] [&_td]:py-[10px] [&_th]:whitespace-normal [&_th]:px-[10px] [&_th]:py-[10px]"
+                            :class="['incoming', 'outgoing'].includes(activeTab) ? '[&_tbody_td]:!text-[10.5pt] [&_tbody_td_*]:!text-[10.5pt]' : ''"
+                        >
 
                             <TableHeader class="bg-blue-900 text-white">
                                 <TableRow>
@@ -1322,7 +1349,10 @@ onBeforeUnmount(() => {
                                         class="min-w-0 break-all whitespace-normal font-medium"
                                     >
                                         <RouterLink
-                                            :to="`/documents/${document.id}`"
+                                            :to="{
+                                                path: `/documents/${document.id}`,
+                                                query: { return_view: activeTab },
+                                            }"
                                             class="rounded text-blue-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                                             :aria-label="`View document ${document.qr_code || document.id}: ${document.title || 'Untitled document'}`"
                                         >
@@ -1490,7 +1520,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div
-                        v-if="!loading && !error"
+                        v-if="!loading && !error && activeTab !== 'incoming'"
                         class="mt-4 flex flex-col items-center border-t pt-4"
                     >
                         <nav class="max-w-full overflow-x-auto rounded-full bg-white p-1 shadow-[0_8px_18px_rgb(15_41_70/0.12)]" aria-label="Document list pagination">
@@ -1530,6 +1560,9 @@ onBeforeUnmount(() => {
                             </div>
                         </nav>
                     </div>
+                    <div v-if="!loading && !error && activeTab === 'incoming'" ref="incomingSentinel" class="mt-4 h-1" aria-hidden="true" />
+                    <p v-if="!loading && !error && activeTab === 'incoming' && incomingLoadingMore" class="mt-4 text-center text-sm text-slate-500">Loading 10 more documents...</p>
+                    <p v-else-if="!loading && !error && activeTab === 'incoming' && documents.length > 0 && !canLoadMoreIncoming" class="mt-4 text-center text-sm text-slate-500">All incoming documents are loaded.</p>
 
                 </CardContent>
 
@@ -1581,6 +1614,12 @@ onBeforeUnmount(() => {
                                 @input="clearQrVerificationWhenChanged"
                                 @keydown.enter.prevent="verifyQrForRegistration"
                             />
+                            <div class="mt-3 flex justify-center">
+                                <CameraQrScanner
+                                    :disabled="qrVerifying || creating"
+                                    @scan="scanRegistrationCamera"
+                                />
+                            </div>
                             <p v-if="qrVerifying" class="mt-2 text-sm text-gray-500">Verifying QR code...</p>
                             <p v-else-if="qrVerified" class="mt-2 text-sm font-medium text-green-700" role="status">QR code verified.</p>
                             <p v-if="qrVerificationError" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-left text-sm text-red-700" role="alert">{{ qrVerificationError }}</p>
@@ -1721,93 +1760,9 @@ onBeforeUnmount(() => {
                             ></textarea>
                         </div>
 
-                        <!-- Confidentiality + Origin -->
-                        <div
-                            class="grid grid-cols-1
-                                   md:grid-cols-2 gap-4"
-                        >
-
+                        <!-- New documents are always Private; tags grant history visibility. -->
+                        <div>
                             <div>
-                                <label
-                                    class="block mb-2 text-sm
-                                           font-semibold
-                                           text-gray-700"
-                                >
-                                    Confidentiality <span class="text-red-600">*</span>
-                                </label>
-
-                                <div class="relative">
-                                    <LockKeyhole class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                                    <select
-                                        v-model="
-                                            form.confidentiality_level_id
-                                        "
-                                        :disabled="creating"
-                                        class="w-full h-11 rounded-md
-                                               border border-gray-300
-                                               bg-white pl-10 pr-3 text-sm
-                                               outline-none
-                                               focus:border-blue-500
-                                               focus:ring-1
-                                               focus:ring-blue-500"
-                                    >
-                                        <option value="">
-                                            Select Confidentiality
-                                        </option>
-
-                                        <option
-                                            v-for="
-                                                level in
-                                                confidentialityLevels
-                                            "
-                                            :key="level.id"
-                                            :value="level.id"
-                                        >
-                                            {{ level.level_name }}
-                                        </option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label
-                                    class="block mb-2 text-sm
-                                           font-semibold
-                                           text-gray-700"
-                                >
-                                    Recipient Office <span class="text-red-600">*</span>
-                                </label>
-
-                                <div class="relative">
-                                    <Building2 class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                                    <select
-                                        v-model="form.recipient_office_id"
-                                        :disabled="creating"
-                                        class="w-full h-11 rounded-md
-                                               border border-gray-300
-                                               bg-white pl-10 pr-3 text-sm
-                                               outline-none
-                                               focus:border-blue-500
-                                               focus:ring-1
-                                               focus:ring-blue-500"
-                                    >
-                                        <option value="">
-                                            Select Recipient Office
-                                        </option>
-
-                                    <option
-                                        v-for="office in offices"
-                                        :key="office.id"
-                                        :value="office.id"
-                                    >
-                                        {{ office.office_name }}
-                                        ({{ office.office_code }})
-                                    </option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div v-if="confidentialityLevels.find(level => level.id === Number(form.confidentiality_level_id))?.level_name === 'Private'">
                                 <label class="block mb-2 text-sm font-semibold text-gray-700">Tagged Offices</label>
                                 <textarea
                                     readonly
@@ -1850,7 +1805,7 @@ onBeforeUnmount(() => {
                                         <span>{{ office.office_name }} ({{ office.office_code }})</span>
                                     </label>
                                 </div>
-                                <p class="mt-1 text-xs text-gray-500">Private documents are visible to the recipient, tagged offices, creator’s office, and routed offices.</p>
+                                <p class="mt-1 text-xs text-gray-500">Tagged offices can view the document history. They cannot release it or change its status unless it is currently assigned to their office.</p>
                             </div>
 
                         </div>
