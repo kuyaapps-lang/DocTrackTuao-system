@@ -27,6 +27,7 @@ class UserManagementController extends Controller
     private const MUTATION_FIELDS = [
         'name',
         'username',
+        'designation',
         'email',
         'role_id',
         'office_id',
@@ -101,6 +102,7 @@ class UserManagementController extends Controller
                 'regex:/\A[a-zA-Z0-9][a-zA-Z0-9._-]*\z/',
                 'unique:users,username',
             ],
+            'designation' => ['nullable', 'string', 'max:150'],
             'email' => [
                 'required',
                 'email',
@@ -133,6 +135,7 @@ class UserManagementController extends Controller
 
         $userValues = [
             'name' => $validated['name'],
+            'designation' => $validated['designation'] ?? null,
             'email' => $validated['email'],
             'password' => Hash::make(
                 $validated['password']
@@ -154,7 +157,7 @@ class UserManagementController extends Controller
             module: AuditLog::MODULE_USERS,
             action: AuditLog::ACTION_CREATED,
             recordId: $user->id,
-            description: 'Changed fields: name, username, email, role_id, office_id, department_id; password changed: yes.',
+            description: 'Changed fields: name, username, designation, email, role_id, office_id, department_id; password changed: yes.',
             userId: $request->user()->id
         );
 
@@ -189,6 +192,7 @@ class UserManagementController extends Controller
                 Rule::unique('users', 'username')
                     ->ignore($user->id),
             ],
+            'designation' => ['nullable', 'string', 'max:150'],
             'email' => [
                 'required',
                 'email',
@@ -234,6 +238,7 @@ class UserManagementController extends Controller
         $usernameProvided = array_key_exists('username', $validated);
         $newValues = [
             'name' => $validated['name'],
+            'designation' => $validated['designation'] ?? null,
             'email' => $validated['email'],
             'role_id' => (int) $validated['role_id'],
             'office_id' => (int) $office->id,
@@ -281,6 +286,7 @@ class UserManagementController extends Controller
             }
 
             $lockedUser->name = $validated['name'];
+            $lockedUser->designation = $validated['designation'] ?? null;
             if ($usernameProvided) {
                 $lockedUser->username = $this->normalizeUsername(
                     $validated['username']
@@ -518,6 +524,7 @@ class UserManagementController extends Controller
             'id' => (int) $user->id,
             'name' => (string) $user->name,
             'username' => $user->username === null ? null : (string) $user->username,
+            'designation' => $user->designation === null ? null : (string) $user->designation,
             'email' => (string) $user->email,
             'role_id' => $user->role_id === null ? null : (int) $user->role_id,
             'must_change_password' => (bool) $user->must_change_password,

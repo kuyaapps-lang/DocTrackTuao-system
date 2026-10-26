@@ -228,21 +228,20 @@ const submitResetRequest = async () => {
     resetRequestSaving.value = true
 
     try {
-        const data = await submitPasswordResetRequest({
+        await submitPasswordResetRequest({
             email: resetRequestForm.value.email.trim(),
             name: resetRequestForm.value.name.trim(),
             message: resetRequestForm.value.message.trim(),
         })
 
-        resetRequestSuccess.value =
-            data.message ||
-            'If the account exists, an administrator will review the password reset request.'
-
         resetRequestForm.value = {
-            email: resetRequestForm.value.email.trim(),
+            email: '',
             name: '',
             message: '',
         }
+        resetRequestOpen.value = false
+        success.value =
+            'Password reset request sent. An administrator will review the password reset request.'
     } catch (err) {
         resetRequestError.value =
             err.message ||
@@ -324,7 +323,7 @@ const submitResetRequest = async () => {
             class="mt-3 text-5xl md:text-5xl
             font-black text-white tracking-wide"
         >
-            Document Management System
+            Document Tracking System
         </h1>
 
         <!-- Subtitle -->
@@ -606,7 +605,7 @@ const submitResetRequest = async () => {
         text-blue-100/70"
     >
         &copy; 2026 Municipality of Tuao
-        &middot; Document Management System
+        &middot; Document Tracking System
     </div>
 
 </div>

@@ -44,6 +44,77 @@ const formError = ref('')
 const successMessage = ref('')
 
 const editingId = ref(null)
+const routeType = ref(null)
+const routeOffices = ref([])
+const routeSteps = ref([])
+const routeLoading = ref(false)
+const routeReady = ref(false)
+const routeSaving = ref(false)
+const routeError = ref('')
+let routeRequest = 0
+
+const routeHeaders = () => ({ Accept: 'application/json', Authorization: `Bearer ${getToken()}` })
+
+const openRouteEditor = async type => {
+    if (!ensureCanManageMasterData()) return
+    const requestId = ++routeRequest
+    routeType.value = type
+    routeSteps.value = []
+    routeError.value = ''
+    routeReady.value = false
+    routeLoading.value = true
+    try {
+        const [routeResponse, officesResponse] = await Promise.all([
+            fetch(`/api/document-types/${type.id}/suggested-route`, { headers: routeHeaders() }),
+            fetch('/api/offices', { headers: routeHeaders() }),
+        ])
+        if (!routeResponse.ok || !officesResponse.ok) throw new Error('Unable to load routing offices.')
+        const [routeData, officeData] = await Promise.all([routeResponse.json(), officesResponse.json()])
+        if (requestId !== routeRequest) return
+        routeSteps.value = routeData.office_ids.map(String)
+        routeOffices.value = officeData
+        routeReady.value = true
+    } catch (err) {
+        if (requestId === routeRequest) routeError.value = err.message || 'Unable to load routing offices.'
+    } finally {
+        if (requestId === routeRequest) routeLoading.value = false
+    }
+}
+
+const closeRouteEditor = () => {
+    if (routeSaving.value) return
+    routeRequest++
+    routeType.value = null
+}
+
+const moveRouteStep = (index, offset) => {
+    const target = index + offset
+    if (target < 0 || target >= routeSteps.value.length) return
+    const steps = [...routeSteps.value]
+    ;[steps[index], steps[target]] = [steps[target], steps[index]]
+    routeSteps.value = steps
+}
+
+const saveRoute = async () => {
+    if (!ensureCanManageMasterData() || !routeType.value || routeLoading.value || !routeReady.value) return
+    if (routeSteps.value.some(id => !id)) { routeError.value = 'Select an office for every step.'; return }
+    routeSaving.value = true
+    routeError.value = ''
+    try {
+        const response = await fetch(`/api/document-types/${routeType.value.id}/suggested-route`, {
+            method: 'PUT', headers: { ...routeHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ office_ids: routeSteps.value.map(Number) }),
+        })
+        const data = await response.json()
+        if (!response.ok) throw new Error(Object.values(data.errors || {})[0]?.[0] || data.message || 'Unable to save the suggested route.')
+        routeType.value = null
+        successMessage.value = 'Suggested route updated successfully.'
+    } catch (err) {
+        routeError.value = err.message || 'Unable to save the suggested route.'
+    } finally {
+        routeSaving.value = false
+    }
+}
 
 const form = ref({
     type_name: '',
@@ -450,6 +521,33 @@ onMounted(() => {
                 {{ error }}
             </div>
 
+            <Card v-if="routeType && canManageMasterData" class="mb-6 overflow-hidden !bg-white">
+                <CardHeader class="bg-blue-900 text-white"><CardTitle>Suggested Route: {{ routeType.type_name }}</CardTitle></CardHeader>
+                <CardContent class="space-y-4 bg-white">
+                    <p class="text-sm text-gray-600">These steps are suggestions. Authorized users may forward to another office.</p>
+                    <p v-if="routeLoading" role="status">Loading offices and route...</p>
+                    <p v-if="routeError" role="alert" class="text-sm text-red-700">{{ routeError }}</p>
+                    <template v-if="!routeLoading && routeReady">
+                        <div v-for="(officeId, index) in routeSteps" :key="index" class="flex flex-wrap items-center gap-2">
+                            <label :for="`route-office-${index}`" class="w-16 text-sm font-semibold">Step {{ index + 1 }}</label>
+                            <select :id="`route-office-${index}`" v-model="routeSteps[index]" :disabled="routeSaving" class="h-10 min-w-48 flex-1 rounded-md border border-gray-300 bg-white px-3 text-sm">
+                                <option value="">Select office</option>
+                                <option v-for="office in routeOffices" :key="office.id" :value="String(office.id)">{{ office.office_name }}</option>
+                            </select>
+                            <Button type="button" variant="outline" :disabled="routeSaving || index === 0" @click="moveRouteStep(index, -1)">Up</Button>
+                            <Button type="button" variant="outline" :disabled="routeSaving || index === routeSteps.length - 1" @click="moveRouteStep(index, 1)">Down</Button>
+                            <Button type="button" variant="outline" :disabled="routeSaving" @click="routeSteps.splice(index, 1)">Remove</Button>
+                        </div>
+                        <p v-if="!routeSteps.length" class="text-sm text-gray-500">No suggested offices yet.</p>
+                        <Button type="button" variant="outline" :disabled="routeSaving || routeSteps.length >= 100" @click="routeSteps.push('')">Add office</Button>
+                    </template>
+                    <div class="flex justify-end gap-2">
+                        <Button type="button" variant="outline" :disabled="routeSaving" @click="closeRouteEditor">Cancel</Button>
+                        <Button type="button" :disabled="routeLoading || routeSaving || !routeReady" @click="saveRoute">{{ routeSaving ? 'Saving...' : 'Save route' }}</Button>
+                    </div>
+                </CardContent>
+            </Card>
+
             <!-- Document Type List -->
             <Card class="relative overflow-hidden !bg-white before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-6 before:bg-blue-900">
 
@@ -526,6 +624,8 @@ onMounted(() => {
                                 >
 
                                     <div class="flex gap-2">
+
+                                        <Button variant="outline" size="sm" @click="openRouteEditor(documentType)">Routing offices</Button>
 
                                         <Button
                                             variant="outline"

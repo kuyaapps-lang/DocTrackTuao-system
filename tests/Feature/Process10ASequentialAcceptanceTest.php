@@ -216,7 +216,7 @@ class Process10ASequentialAcceptanceTest extends TestCase
         $tracked = $this->readUnchanged(null, '/api/track/'.$document->tracking_no, 200);
         $this->assertSame('Completed', $tracked->json('status'));
         $this->assertSame('Synthetic Office C', $tracked->json('current_office'));
-        $this->assertSame([$first, $second], array_column($tracked->json('movement_history'), 'id'));
+        $this->assertSame([$second, $first], array_column($tracked->json('movement_history'), 'id'));
         $resolved = $this->readUnchanged(null, '/api/q/'.$qrToken, 200);
         $this->assertSame('registered', $resolved->json('state'));
         $this->assertTrue($resolved->json('qr_token') === $qrToken, 'QR association must survive routing');

@@ -1,0 +1,32 @@
+# Copy this file outside the repository (for example, C:\ProgramData\Caddy\Caddyfile).
+# Do not store Caddy's local CA files or private keys in the repository.
+#
+# The hostname must be resolvable by every trusted client to this laptop's
+# current private LAN address. See PORTABLE_LAN_SETUP.md.
+{
+	# Do not expose Caddy's administration API on the LAN.
+	admin off
+
+	# Apache remains available only on loopback port 80; Caddy serves HTTPS
+	# only and must not bind a competing HTTP redirect listener.
+	auto_https disable_redirects
+
+	# Keep the internal CA and its private key in a protected, persistent
+	# machine-level directory so the Windows service and manual test runs use
+	# the same certificate authority.
+	storage file_system {
+		root C:/ProgramData/Caddy/data
+	}
+}
+
+https://doctrack.home.arpa {
+	# A locally-issued certificate: free and fully offline, but its root CA
+	# must be installed and trusted on every authorized client device.
+	tls internal
+
+	encode zstd gzip
+
+	# Apache listens only on this computer. Laravel receives the original Host
+	# and Caddy's forwarded HTTPS headers through this local proxy.
+	reverse_proxy 127.0.0.1:8080
+}

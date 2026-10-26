@@ -1,0 +1,23 @@
+# Apache 2.4 / XAMPP example. Review paths before enabling.
+#
+# Prerequisites:
+#   1. In Apache's MAIN configuration, replace any LAN-facing "Listen 80" with
+#      "Listen 127.0.0.1:80" and do not expose Apache HTTPS directly. Caddy is
+#      the only LAN-facing service.
+#   2. Add "Listen 127.0.0.1:8080" to Apache's main configuration, then
+#      include this file from httpd-vhosts.conf (or equivalent).
+#   3. Replace the DocumentRoot path with this project's actual public path.
+
+<VirtualHost 127.0.0.1:8080>
+    ServerName doctrack.home.arpa
+    DocumentRoot "C:/xampp/htdocs/DocTrackTuao-system/public"
+
+    <Directory "C:/xampp/htdocs/DocTrackTuao-system/public">
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require local
+    </Directory>
+
+    ErrorLog "logs/doctrack-lan-error.log"
+    CustomLog "logs/doctrack-lan-access.log" combined
+</VirtualHost>

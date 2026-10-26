@@ -41,7 +41,8 @@ class DocumentTrackingController extends Controller
                         'toOffice',
                         'status',
                     ])
-                    ->orderBy('id');
+                    ->orderByRaw('COALESCE(received_at, forwarded_at) DESC')
+                    ->orderByDesc('id');
             },
         ])
             ->where(

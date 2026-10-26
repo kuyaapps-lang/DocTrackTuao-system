@@ -19,6 +19,10 @@ class DocumentDetailAttachmentSecurityTest extends TestCase
     {
         parent::setUp();
 
+        Schema::create('document_office_tags', function (Blueprint $table) {
+            $table->unsignedBigInteger('document_id'); $table->unsignedBigInteger('office_id');
+        });
+
         Schema::create('roles', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -45,6 +49,7 @@ class DocumentDetailAttachmentSecurityTest extends TestCase
         });
 
         foreach ([
+            'document_office_tags',
             'document_types' => 'type_name',
             'document_statuses' => 'status_name',
             'priorities' => 'priority_name',

@@ -53,7 +53,6 @@ class DashboardController extends Controller
         $systemWide = $this->hasSystemScope($user);
         $office = $this->resolveOfficeScope($user, $systemWide);
         $officeId = $office ? (int) $office->id : null;
-
         $documents = $this->documentQuery($officeId, $bounds);
 
         $summary = [
@@ -83,6 +82,9 @@ class DashboardController extends Controller
 
                     if (Schema::hasColumn('document_routes', 'cancelled_at')) {
                         $query->whereNull('pending_routes.cancelled_at');
+                    }
+                    if (Schema::hasColumn('document_routes', 'rejected_at')) {
+                        $query->whereNull('pending_routes.rejected_at');
                     }
                 })
                 ->distinct()
@@ -114,6 +116,9 @@ class DashboardController extends Controller
                     if (Schema::hasColumn('document_routes', 'cancelled_at')) {
                         $query->whereNull('pending_routes.cancelled_at');
                     }
+                    if (Schema::hasColumn('document_routes', 'rejected_at')) {
+                        $query->whereNull('pending_routes.rejected_at');
+                    }
                 })
                 ->distinct()
                 ->count('documents.id'),
@@ -128,12 +133,10 @@ class DashboardController extends Controller
             ],
             'scope' => [
                 'type' => $systemWide ? 'system' : 'office',
-                'office' => $office
-                    ? [
-                        'id' => (int) $office->id,
-                        'name' => $office->office_name,
-                    ]
-                    : null,
+                'office' => $office ? [
+                    'id' => (int) $office->id,
+                    'name' => $office->office_name,
+                ] : null,
             ],
             'summary' => $summary,
             'status_distribution' => $this->statusDistribution($documents),
@@ -182,36 +185,48 @@ class DashboardController extends Controller
         $received = DB::table('document_routes')->whereNotNull('received_at');
         $outgoing = DB::table('document_routes')->whereNotNull('forwarded_at');
         $changedStatus = DB::table('document_processing_logs')->where('event_type', 'action_updated');
+        $completed = DB::table('documents')->whereNotNull('completed_at');
+        $archived = DB::table('documents')->whereNotNull('archived_at');
         if ($officeId !== null) {
             $received->where('to_office_id', $officeId);
             $outgoing->where('from_office_id', $officeId);
             $changedStatus->where('office_id', $officeId);
+            $completed->where('current_office_id', $officeId);
+            $archived->where('current_office_id', $officeId);
         }
         $this->applyBounds($received, 'received_at', $bounds);
         $this->applyBounds($outgoing, 'forwarded_at', $bounds);
         $this->applyBounds($changedStatus, 'created_at', $bounds);
+        $this->applyBounds($completed, 'completed_at', $bounds);
+        $this->applyBounds($archived, 'archived_at', $bounds);
 
         $officeSummary = $systemWide ? DB::table('offices')
-            ->select(['id', 'office_name'])
+            ->select(['id', 'office_name', 'signatory_name', 'signatory_designation'])
             ->orderBy('office_name')
             ->get()
             ->map(function (object $office) use ($bounds): array {
                 $received = DB::table('document_routes')->where('to_office_id', $office->id)->whereNotNull('received_at');
                 $outgoing = DB::table('document_routes')->where('from_office_id', $office->id)->whereNotNull('forwarded_at');
                 $changed = DB::table('document_processing_logs')->where('office_id', $office->id)->where('event_type', 'action_updated');
+                $completed = DB::table('documents')->where('current_office_id', $office->id)->whereNotNull('completed_at');
+                $archived = DB::table('documents')->where('current_office_id', $office->id)->whereNotNull('archived_at');
                 $this->applyBounds($received, 'received_at', $bounds);
                 $this->applyBounds($outgoing, 'forwarded_at', $bounds);
                 $this->applyBounds($changed, 'created_at', $bounds);
-                return ['id' => (int) $office->id, 'office_name' => $office->office_name, 'received_documents' => $received->count(), 'outgoing_documents' => $outgoing->count(), 'status_changes' => $changed->count()];
+                $this->applyBounds($completed, 'completed_at', $bounds);
+                $this->applyBounds($archived, 'archived_at', $bounds);
+                return ['id' => (int) $office->id, 'office_name' => $office->office_name, 'signatory_name' => $office->signatory_name, 'signatory_designation' => $office->signatory_designation, 'received_documents' => $received->count(), 'outgoing_documents' => $outgoing->count(), 'status_changes' => $changed->count(), 'completed_documents' => $completed->count(), 'archived_documents' => $archived->count()];
             })->all() : [];
 
         return response()->json([
             'filters' => ['date_from' => $from, 'date_to' => $to, 'timezone' => $timezone->getName()],
-            'scope' => ['type' => $systemWide ? 'system' : 'office', 'office' => $office ? ['id' => (int) $office->id, 'name' => $office->office_name] : null],
+            'scope' => ['type' => $systemWide ? 'system' : 'office', 'office' => $office ? ['id' => (int) $office->id, 'name' => $office->office_name, 'signatory_name' => $office->signatory_name, 'signatory_designation' => $office->signatory_designation] : null],
             'summary' => [
                 'received_documents' => $received->count(),
                 'outgoing_documents' => $outgoing->count(),
                 'status_changes' => $changedStatus->count(),
+                'completed_documents' => $completed->count(),
+                'archived_documents' => $archived->count(),
             ],
             'offices' => $officeSummary,
         ]);
@@ -292,7 +307,7 @@ class DashboardController extends Controller
         }
 
         $office = DB::table('offices')
-            ->select(['id', 'office_name'])
+            ->select(['id', 'office_name', 'signatory_name', 'signatory_designation'])
             ->where('id', $user->office_id)
             ->first();
 
@@ -316,10 +331,7 @@ class DashboardController extends Controller
                         $route
                             ->selectRaw('1')
                             ->from('document_routes as scope_routes')
-                            ->whereColumn(
-                                'scope_routes.document_id',
-                                'documents.id'
-                            )
+                            ->whereColumn('scope_routes.document_id', 'documents.id')
                             ->where(function (Builder $route) use ($officeId): void {
                                 $route
                                     ->where('scope_routes.from_office_id', $officeId)
@@ -685,10 +697,7 @@ class DashboardController extends Controller
     {
         return "CASE LOWER(COALESCE({$priorityTable}.priority_name, ''))
             WHEN 'urgent' THEN 0
-            WHEN 'high' THEN 1
-            WHEN 'normal' THEN 2
-            WHEN 'low' THEN 3
-            ELSE 4
+            ELSE 1
         END";
     }
 

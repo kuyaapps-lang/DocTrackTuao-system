@@ -234,7 +234,7 @@ onMounted(() => {
                 <p
                     class="mt-1 text-xs text-blue-100"
                 >
-                    LGU Tuao Document Management System
+                    LGU Tuao Document Tracking System
                 </p>
             </CardHeader>
 

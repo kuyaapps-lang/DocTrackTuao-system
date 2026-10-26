@@ -494,6 +494,135 @@ class DocumentRoutingController extends Controller
         ]);
     }
 
+    /** Reject a pending receipt and create a return route to a permitted office. */
+    public function rejectReceipt(
+        Request $request,
+        AuditLogger $auditLogger,
+        InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime,
+        $documentId
+    ) {
+        $validated = $request->validate([
+            'return_to' => ['required', 'in:forwarding_office,origin_office'],
+            'reason' => ['required', 'string', 'max:2000'],
+        ]);
+        $user = $request->user();
+
+        [$rejectedRoute, $returnRoute] = DB::transaction(function () use ($documentId, $user, $validated, $auditLogger) {
+            $document = Document::whereKey($documentId)->lockForUpdate()->firstOrFail();
+
+            if (! $user->office_id || ! Office::whereKey($user->office_id)->exists()) {
+                abort(403, 'Your user account is not assigned to a valid office.');
+            }
+
+            $pendingRoutes = DocumentRoute::where('document_id', $document->id)
+                ->pending()->orderBy('id')->lockForUpdate()->get();
+
+            if ($pendingRoutes->count() !== 1) {
+                abort(409, 'This document must have exactly one pending route to reject receipt.');
+            }
+
+            $rejectedRoute = $pendingRoutes->first();
+            if ((int) $rejectedRoute->to_office_id !== (int) $user->office_id) {
+                abort(403, 'You cannot reject receipt because this document is routed to another office.');
+            }
+
+            $currentStatus = DocumentStatus::whereKey($document->status_id)->first();
+            if ($currentStatus && in_array($currentStatus->status_name, ['Completed', 'Archived'], true)) {
+                abort(409, 'Completed or archived documents cannot have receipt rejected.');
+            }
+
+            $returnOfficeId = $validated['return_to'] === 'origin_office'
+                ? $document->origin_office_id
+                : $rejectedRoute->from_office_id;
+
+            if (! $returnOfficeId || (int) $returnOfficeId === (int) $user->office_id) {
+                abort(422, 'The selected return office must be different from your office.');
+            }
+
+            $returnOffice = Office::whereKey($returnOfficeId)->first();
+            if (! $returnOffice) {
+                abort(422, 'The selected return office is not available.');
+            }
+
+            $returnedStatus = DocumentStatus::where('status_name', 'Returned')->firstOrFail();
+            $forwardedStatus = DocumentStatus::where('status_name', 'Forwarded')->firstOrFail();
+            $rejectAction = RouteAction::where('action_name', 'Reject')->firstOrFail();
+            $returnAction = RouteAction::where('action_name', 'Return')->firstOrFail();
+            $awaitingReceiptAction = ProcessingAction::where('action_code', 'AWAITING_RECEIPT')
+                ->where('is_active', true)->firstOrFail();
+            $now = now();
+
+            $returnRoute = DocumentRoute::create([
+                'document_id' => $document->id,
+                'from_office_id' => $user->office_id,
+                'to_office_id' => $returnOffice->id,
+                'forwarded_by' => $user->id,
+                'forwarded_at' => $now,
+                'status_id' => $forwardedStatus->id,
+                'action_id' => $returnAction->id,
+                'remarks' => 'Returned after receipt rejection.',
+            ]);
+
+            $rejectedRoute->update([
+                'rejected_by' => $user->id,
+                'rejected_at' => $now,
+                'rejection_reason' => $validated['reason'],
+                'return_route_id' => $returnRoute->id,
+                'status_id' => $returnedStatus->id,
+                'action_id' => $rejectAction->id,
+            ]);
+
+            $document->update([
+                'current_office_id' => $returnOffice->id,
+                'status_id' => $forwardedStatus->id,
+                'current_action_id' => $awaitingReceiptAction->id,
+                'processing_note' => null,
+                'current_action_updated_by' => $user->id,
+                'current_action_updated_at' => $now,
+            ]);
+
+            DocumentProcessingLog::create([
+                'document_id' => $document->id,
+                'office_id' => $user->office_id,
+                'user_id' => $user->id,
+                'processing_action_id' => $awaitingReceiptAction->id,
+                'document_route_id' => $rejectedRoute->id,
+                'event_type' => 'receipt_rejected',
+                'event_note' => 'Receipt rejected; document returned to '.$returnOffice->office_name.'.',
+            ]);
+            DocumentProcessingLog::create([
+                'document_id' => $document->id,
+                'office_id' => $returnOffice->id,
+                'user_id' => $user->id,
+                'processing_action_id' => $awaitingReceiptAction->id,
+                'document_route_id' => $returnRoute->id,
+                'event_type' => 'forwarded',
+                'event_note' => 'Document returned after receipt rejection.',
+            ]);
+
+            $auditLogger->log(
+                module: AuditLog::MODULE_DOCUMENT_ROUTING,
+                action: AuditLog::ACTION_REJECTED,
+                recordId: $document->id,
+                description: 'Receipt rejected; document returned to '.$returnOffice->office_name.'.',
+                userId: $user->id
+            );
+
+            return [$rejectedRoute, $returnRoute];
+        });
+
+        $returnRoute->load(['fromOffice', 'toOffice', 'forwardedBy', 'receivedBy', 'status', 'action']);
+        $notifications->documentReturned($returnRoute);
+        $realtime->document($returnRoute->document, 'document.receipt_rejected', ['documents', 'dashboard', 'document-detail']);
+
+        return response()->json([
+            'message' => 'Receipt rejected. The document has been returned and is awaiting receipt.',
+            'rejected_route' => $this->routeShape($rejectedRoute->fresh(['fromOffice', 'toOffice', 'forwardedBy', 'rejectedBy', 'returnRoute', 'status', 'action'])),
+            'return_route' => $this->routeShape($returnRoute),
+        ], 201);
+    }
+
     /**
      * Cancel a pending forward before the destination office receives it.
      */
@@ -601,6 +730,8 @@ class DocumentRoutingController extends Controller
                 'toOffice',
                 'forwardedBy',
                 'receivedBy',
+                'rejectedBy',
+                'returnRoute',
                 'cancelledBy',
                 'status',
                 'action',
@@ -647,6 +778,10 @@ class DocumentRoutingController extends Controller
             'to_office_id' => $route->to_office_id,
             'forwarded_at' => $route->forwarded_at,
             'received_at' => $route->received_at,
+            'rejected_at' => $route->rejected_at,
+            'rejection_reason' => $route->rejection_reason,
+            'rejected_by' => $this->userShape($route->rejectedBy),
+            'return_route_id' => $route->return_route_id,
             'remarks' => $route->remarks,
             'from_office' => $this->officeShape($route->fromOffice),
             'to_office' => $this->officeShape($route->toOffice),

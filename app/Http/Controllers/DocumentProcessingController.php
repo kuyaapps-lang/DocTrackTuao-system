@@ -13,6 +13,7 @@ use App\Services\DocumentReadScope;
 use App\Services\RealtimeBroadcaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class DocumentProcessingController extends Controller
@@ -192,6 +193,16 @@ class DocumentProcessingController extends Controller
 
     private function manualActions()
     {
+        if (Schema::hasColumn('document_statuses', 'processing_action_id')) {
+            return ProcessingAction::query()
+                ->join('document_statuses', 'document_statuses.processing_action_id', '=', 'processing_actions.id')
+                ->where('processing_actions.is_active', true)
+                ->whereNotIn('processing_actions.action_code', ['REGISTERED', 'AWAITING_RECEIPT', 'FOR_ACTION'])
+                ->orderBy('processing_actions.sort_order')
+                ->orderBy('document_statuses.status_name')
+                ->get(['processing_actions.id', 'processing_actions.action_code', 'document_statuses.status_name as action_name']);
+        }
+
         return ProcessingAction::where('is_active', true)
             ->whereNotIn('action_code', ['REGISTERED', 'AWAITING_RECEIPT', 'FOR_ACTION'])
             ->orderBy('sort_order')
@@ -229,7 +240,9 @@ class DocumentProcessingController extends Controller
             'forwarded_at' => $route->forwarded_at,
             'received_at' => $route->received_at,
             'cancelled_at' => $route->cancelled_at,
-            'cancelled_at' => $route->cancelled_at,
+            'rejected_at' => $route->rejected_at,
+            'rejection_reason' => $route->rejection_reason,
+            'return_route_id' => $route->return_route_id,
             'remarks' => $route->remarks,
             'from_office' => $this->officeShape($route->fromOffice),
             'to_office' => $this->officeShape($route->toOffice),
@@ -318,12 +331,20 @@ class DocumentProcessingController extends Controller
 
                 $action = ProcessingAction::whereKey($validated['current_action_id'])
                     ->where('is_active', true)
+                    ->lockForUpdate()
                     ->first();
 
                 if (!$action) {
                     throw ValidationException::withMessages([
                         'current_action_id' =>
                             'The selected processing action is not available.',
+                    ]);
+                }
+
+                if (Schema::hasColumn('document_statuses', 'processing_action_id') &&
+                    !DocumentStatus::where('processing_action_id', $action->id)->exists()) {
+                    throw ValidationException::withMessages([
+                        'current_action_id' => 'The selected processing action is not available.',
                     ]);
                 }
 

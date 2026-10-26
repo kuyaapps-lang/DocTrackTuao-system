@@ -129,6 +129,10 @@ const canResetPassword = (user) => {
     return canResetUserPassword(currentUser.value, user)
 }
 
+const isPasswordChangeRequest = computed(() => {
+    return resetTargetRequest.value?.request_type === 'change'
+})
+
 const isCurrentUser = (user) => {
     return Number(user?.id) === Number(currentUser.value?.id)
 }
@@ -241,6 +245,7 @@ const resetForm = () => {
     form.value = {
         name: '',
         username: '',
+        designation: '',
         email: '',
         role_id: '',
         office_id: '',
@@ -267,6 +272,7 @@ const openEditForm = (user) => {
     form.value = {
         name: user.name || '',
         username: user.username || '',
+        designation: user.designation || '',
         email: user.email || '',
         role_id: user.role_id || '',
         office_id: user.office_id || '',
@@ -416,6 +422,7 @@ const saveUser = async () => {
             body: JSON.stringify({
                 name: form.value.name.trim(),
                 username: form.value.username.trim(),
+                designation: form.value.designation.trim() || null,
                 email: form.value.email.trim(),
                 role_id: Number(form.value.role_id),
                 office_id: Number(form.value.office_id),
@@ -557,16 +564,16 @@ const resetUserPassword = async () => {
         return
     }
 
-    if (!resetPasswordForm.value.password) {
+    if (!isPasswordChangeRequest.value && !resetPasswordForm.value.password) {
         resetPasswordError.value =
             'Temporary password is required.'
         return
     }
 
-    if (
+    if (!isPasswordChangeRequest.value && (
         resetPasswordForm.value.password !==
         resetPasswordForm.value.password_confirmation
-    ) {
+    )) {
         resetPasswordError.value =
             'Password confirmation does not match.'
         return
@@ -725,7 +732,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <CardTitle>
-                                Password Reset Requests
+                                Password Reset Requests &amp; Change Requests
 
                                 <span class="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-sm font-semibold text-blue-700">
                                     {{ pendingResetRequests.length }}
@@ -733,7 +740,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                             </CardTitle>
 
                             <p class="mt-1 text-sm text-blue-100">
-                                Review pending requests, then set a temporary password or reject the request.
+                                Approve user-selected password changes, set temporary passwords for reset requests, or reject them.
                             </p>
                         </div>
 
@@ -787,6 +794,10 @@ onBeforeUnmount(() => leaveRealtime?.())
                                         {{ request.email }}
                                     </div>
 
+                                    <p v-if="request.request_type === 'change'" class="mt-2 text-sm font-semibold text-blue-700">
+                                        User-selected password change awaiting approval.
+                                    </p>
+
                                     <p
                                         v-if="request.message"
                                         class="mt-2 text-[14pt] text-gray-600"
@@ -811,7 +822,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                         @click="openResetRequestResolveForm(request)"
                                     >
                                         <Check class="mr-2 h-4 w-4" />
-                                        Resolve
+                                        {{ request.request_type === 'change' ? 'Approve' : 'Resolve' }}
                                     </Button>
 
                                     <Button
@@ -885,7 +896,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                 </CardHeader>
 
                 <CardContent class="bg-white">
-                    <TableSkeleton v-if="loading" :columns="6" />
+                    <TableSkeleton v-if="loading" :columns="6" :headers="['Full Name', 'Role', 'Office', 'Status', 'Action']" />
 
                     <div
                         v-else-if="error"
@@ -1124,6 +1135,19 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     placeholder="user@example.com"
                                 />
                             </div>
+
+                            <div>
+                                <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                    Position / Designation
+                                </label>
+
+                                <Input
+                                    v-model="form.designation"
+                                    :disabled="saving"
+                                    maxlength="150"
+                                    placeholder="e.g., Records Officer"
+                                />
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1305,11 +1329,13 @@ onBeforeUnmount(() => leaveRealtime?.())
             <Card class="w-full max-w-xl bg-white">
                 <CardHeader>
                     <CardTitle>
-                        {{ resetTargetRequest ? 'Resolve Password Reset Request' : 'Reset Password' }}
+                        {{ isPasswordChangeRequest ? 'Approve Password Change Request' : (resetTargetRequest ? 'Resolve Password Reset Request' : 'Reset Password') }}
                     </CardTitle>
 
                     <p class="mt-1 text-sm text-gray-500">
-                        Set a temporary password for {{ resetTargetUser.name }}. Give it to the user through a secure channel and do not store it after saving.
+                        {{ isPasswordChangeRequest
+                            ? `Approve the password selected by ${resetTargetUser.name}. The password is hidden and will be applied only after approval; the user will need to sign in again.`
+                            : `Set a temporary password for ${resetTargetUser.name}. Give it to the user through a secure channel and do not store it after saving.` }}
                     </p>
                 </CardHeader>
 
@@ -1318,6 +1344,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                         class="space-y-5"
                         @submit.prevent="resetUserPassword"
                     >
+                        <template v-if="!isPasswordChangeRequest">
                         <div>
                             <label class="mb-2 block text-sm font-semibold text-gray-700">
                                 Temporary Password <span class="text-red-600">*</span>
@@ -1384,6 +1411,8 @@ onBeforeUnmount(() => leaveRealtime?.())
                             </div>
                         </div>
 
+                        </template>
+
                         <div
                             v-if="resetTargetRequest"
                         >
@@ -1425,7 +1454,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 :disabled="resetPasswordSaving"
                             >
                                 <KeyRound class="mr-2 h-4 w-4" />
-                                {{ resetPasswordSaving ? 'Saving...' : 'Set Temporary Password' }}
+                                {{ resetPasswordSaving ? 'Saving...' : (isPasswordChangeRequest ? 'Approve Password Change' : 'Set Temporary Password') }}
                             </Button>
                         </div>
                     </form>

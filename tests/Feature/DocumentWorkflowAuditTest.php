@@ -439,6 +439,119 @@ class DocumentWorkflowAuditTest extends TestCase
         );
     }
 
+    public function test_receiving_office_can_reject_and_return_to_the_origin_office_with_auditable_history(): void
+    {
+        Schema::table('document_routes', function (Blueprint $table): void {
+            $table->unsignedBigInteger('rejected_by')->nullable();
+            $table->timestamp('rejected_at')->nullable();
+            $table->text('rejection_reason')->nullable();
+            $table->unsignedBigInteger('return_route_id')->nullable();
+        });
+        $now = now();
+        DB::table('document_statuses')->insert([
+            'status_name' => 'Returned',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        DB::table('route_actions')->insert([
+            ['action_name' => 'Reject', 'created_at' => $now, 'updated_at' => $now],
+            ['action_name' => 'Return', 'created_at' => $now, 'updated_at' => $now],
+        ]);
+
+        $originOfficeId = $this->createOffice('RETURNORIGIN');
+        $forwardingOfficeId = $this->createOffice('RETURNFORWARD');
+        $receivingOfficeId = $this->createOffice('RETURNRECEIVE');
+        $sender = $this->createUser('Office User', $forwardingOfficeId);
+        $receiver = $this->createUser('Office User', $receivingOfficeId);
+        $document = $this->createDocument($receivingOfficeId);
+        $document->update(['origin_office_id' => $originOfficeId]);
+        $rejectedRouteId = $this->createPendingRoute(
+            $document,
+            $forwardingOfficeId,
+            $receivingOfficeId,
+            $sender
+        );
+
+        Sanctum::actingAs($receiver);
+        $this->postJson('/api/documents/'.$document->id.'/reject-receipt', [
+            'return_to' => 'origin_office',
+            'reason' => 'Incorrect approval details require origin-office correction.',
+        ])->assertCreated()
+            ->assertJsonPath('rejected_route.id', $rejectedRouteId)
+            ->assertJsonPath('rejected_route.rejection_reason', 'Incorrect approval details require origin-office correction.')
+            ->assertJsonPath('return_route.from_office_id', $receivingOfficeId)
+            ->assertJsonPath('return_route.to_office_id', $originOfficeId);
+
+        $returnRoute = DB::table('document_routes')
+            ->where('document_id', $document->id)
+            ->where('from_office_id', $receivingOfficeId)
+            ->where('to_office_id', $originOfficeId)
+            ->sole();
+
+        $this->assertDatabaseHas('document_routes', [
+            'id' => $rejectedRouteId,
+            'rejected_by' => $receiver->id,
+            'rejection_reason' => 'Incorrect approval details require origin-office correction.',
+            'return_route_id' => $returnRoute->id,
+            'status_id' => $this->statusId('Returned'),
+        ]);
+        $this->assertSame($originOfficeId, $document->fresh()->current_office_id);
+        $this->assertDatabaseHas('document_processing_logs', [
+            'document_route_id' => $rejectedRouteId,
+            'event_type' => 'receipt_rejected',
+        ]);
+        $this->assertDatabaseHas('document_processing_logs', [
+            'document_route_id' => $returnRoute->id,
+            'event_type' => 'forwarded',
+        ]);
+        $this->assertSingleAudit(
+            AuditLog::MODULE_DOCUMENT_ROUTING,
+            AuditLog::ACTION_REJECTED,
+            $document->id,
+            $receiver->id
+        );
+
+    }
+
+    public function test_rejected_receipt_requires_the_destination_office_and_a_reason_without_mutation(): void
+    {
+        Schema::table('document_routes', function (Blueprint $table): void {
+            $table->unsignedBigInteger('rejected_by')->nullable();
+            $table->timestamp('rejected_at')->nullable();
+            $table->text('rejection_reason')->nullable();
+            $table->unsignedBigInteger('return_route_id')->nullable();
+        });
+
+        $sourceOfficeId = $this->createOffice('REJECTSOURCE');
+        $destinationOfficeId = $this->createOffice('REJECTDEST');
+        $otherOfficeId = $this->createOffice('REJECTOTHER');
+        $sender = $this->createUser('Office User', $sourceOfficeId);
+        $document = $this->createDocument($destinationOfficeId);
+        $routeId = $this->createPendingRoute($document, $sourceOfficeId, $destinationOfficeId, $sender);
+
+        Sanctum::actingAs($this->createUser('Office User', $otherOfficeId));
+        $this->postJson('/api/documents/'.$document->id.'/reject-receipt', [
+            'return_to' => 'forwarding_office',
+            'reason' => 'Wrong office.',
+        ])->assertForbidden();
+
+        Sanctum::actingAs($this->createUser('Office User', $destinationOfficeId));
+        $this->postJson('/api/documents/'.$document->id.'/reject-receipt', [
+            'return_to' => 'forwarding_office',
+            'reason' => '',
+        ])->assertUnprocessable();
+
+        $this->assertSame(1, DB::table('document_routes')->count());
+        $this->assertDatabaseHas('document_routes', [
+            'id' => $routeId,
+            'rejected_at' => null,
+            'return_route_id' => null,
+        ]);
+        $this->assertSame($destinationOfficeId, $document->fresh()->current_office_id);
+        $this->assertSame(0, DB::table('document_processing_logs')->count());
+        $this->assertSame(0, AuditLog::count());
+    }
+
     public function test_forwarding_office_can_undo_a_pending_forward_without_erasing_history(): void
     {
         Schema::table('document_routes', function (Blueprint $table): void {
@@ -592,6 +705,33 @@ class DocumentWorkflowAuditTest extends TestCase
 
         Sanctum::actingAs($this->createUser('Viewer', $officeId));
         $this->getJson('/api/processing-actions')->assertForbidden();
+    }
+
+    public function test_status_backed_action_preserves_office_scope_lifecycle_status_and_history(): void
+    {
+        Schema::table('document_statuses', function (Blueprint $table) {
+            $table->unsignedBigInteger('processing_action_id')->nullable();
+        });
+        $officeId = $this->createOffice('STATUSACTION');
+        $otherOfficeId = $this->createOffice('STATUSOTHER');
+        $document = $this->createDocument($officeId);
+        $originalStatus = $document->status_id;
+
+        Sanctum::actingAs($this->createUser('Administrator', $officeId));
+        $this->postJson('/api/document-statuses', ['status_name' => 'Custom Review', 'color' => 'blue'])->assertCreated();
+        $actionId = DB::table('document_statuses')->where('status_name', 'Custom Review')->value('processing_action_id');
+        $this->assertNotNull($actionId);
+
+        Sanctum::actingAs($this->createUser('Office User', $otherOfficeId));
+        $this->putJson('/api/documents/'.$document->id.'/processing', ['current_action_id' => $actionId])->assertForbidden();
+        $this->assertSame(0, DB::table('document_processing_logs')->count());
+
+        Sanctum::actingAs($this->createUser('Office User', $officeId));
+        $this->getJson('/api/processing-actions')->assertOk()->assertJsonFragment(['id' => $actionId, 'action_name' => 'Custom Review']);
+        $this->putJson('/api/documents/'.$document->id.'/processing', ['current_action_id' => $actionId])->assertOk();
+        $this->assertSame((int) $actionId, (int) $document->fresh()->current_action_id);
+        $this->assertSame($originalStatus, $document->fresh()->status_id);
+        $this->assertDatabaseHas('document_processing_logs', ['document_id' => $document->id, 'processing_action_id' => $actionId, 'event_type' => 'action_updated']);
     }
 
     public function test_bulk_release_offices_exclude_the_users_office_and_require_routing_permission(): void

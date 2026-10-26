@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Accomplishment Report | LGU Tuao</title>
+  <style>
+    :root { --ink: #111827; --line: #374151; --muted: #6b7280; --brand: #0f4c5c; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef2f5; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; padding: 16px; background: #fff; border-bottom: 1px solid #d1d5db; }
+    .toolbar label { display: grid; gap: 5px; font-size: 12px; font-weight: 700; color: #374151; }
+    .toolbar input { width: 190px; padding: 8px 10px; border: 1px solid #9ca3af; border-radius: 4px; font: inherit; }
+    button { border: 0; border-radius: 4px; padding: 10px 15px; color: #fff; background: var(--brand); font-weight: 700; cursor: pointer; }
+    button.secondary { background: #4b5563; }
+    .sheet { width: min(11in, calc(100% - 32px)); min-height: 8.5in; margin: 20px auto; padding: .42in .5in; background: #fff; box-shadow: 0 2px 12px #0002; }
+    .report-header { display: grid; grid-template-columns: 76px 1fr; column-gap: 16px; align-items: center; border-bottom: 2px solid var(--ink); padding-bottom: 14px; }
+    .logo { display: grid; place-items: center; width: 68px; height: 68px; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); font-size: 10px; text-align: center; }
+    .lgu { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: .2px; }
+    .address { margin: 4px 0 0; font-size: 11px; }
+    h1 { margin: 23px 0 4px; text-align: center; font-size: 21px; letter-spacing: .7px; }
+    .period { margin: 0 0 22px; text-align: center; font-size: 12px; }
+    .office-line { display: flex; gap: 8px; align-items: baseline; margin-bottom: 13px; font-size: 12px; }
+    .office-line strong { min-width: 42px; }
+    .office-line span { flex: 1; min-height: 17px; border-bottom: 1px solid var(--ink); }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th, td { border: 1px solid var(--line); padding: 8px 9px; }
+    th { text-align: center; background: #e5eef0; font-size: 10px; text-transform: uppercase; }
+    td:not(:first-child) { width: 14%; text-align: center; }
+    td:first-child { width: 44%; }
+    tbody tr { height: 30px; }
+    .totals td { font-weight: 700; background: #f3f4f6; }
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 70px; margin-top: 54px; font-size: 11px; }
+    .signature-line { margin-top: 35px; border-top: 1px solid var(--ink); text-align: center; padding-top: 4px; }
+    .signature-caption { text-align: center; color: var(--muted); font-size: 10px; }
+    @page { size: landscape; margin: .35in; }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+      input { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <section class="toolbar" aria-label="Report controls">
+    <label>Office <input id="officeInput" placeholder="All Offices"></label>
+    <label>From <input id="fromInput" type="date"></label>
+    <label>To <input id="toInput" type="date"></label>
+    <button type="button" id="applyButton">Apply details</button>
+    <button type="button" class="secondary" id="printButton">Print / Save as PDF</button>
+  </section>
+
+  <main class="sheet">
+    <header class="report-header">
+      <div class="logo">LGU<br>LOGO</div>
+      <div>
+        <p class="lgu">Local Government Unit of Tuao</p>
+        <p class="address">Centro I, Tuao, Cagayan</p>
+      </div>
+    </header>
+    <h1>ACCOMPLISHMENT REPORT</h1>
+    <p class="period" id="periodText">For the Month of ____________________</p>
+    <div class="office-line"><strong>Office:</strong><span id="officeText"></span></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Office</th>
+          <th>Received</th>
+          <th>Released</th>
+          <th>Status Changed</th>
+          <th>Completed</th>
+        </tr>
+      </thead>
+      <tbody id="reportRows">
+        <tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr>
+        <tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr>
+        <tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr>
+        <tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr>
+        <tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr>
+        <tr><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td><td contenteditable="true"></td></tr>
+      </tbody>
+      <tfoot>
+        <tr class="totals"><td>TOTAL</td><td id="receivedTotal">0</td><td id="releasedTotal">0</td><td id="changedTotal">0</td><td id="completedTotal">0</td></tr>
+      </tfoot>
+    </table>
+
+    <section class="signatures">
+      <div><div class="signature-line">Prepared by</div><div class="signature-caption">Name and Signature</div></div>
+      <div><div class="signature-line">Noted by</div><div class="signature-caption">Head of Office / Authorized Signatory</div></div>
+    </section>
+  </main>
+  <script>
+    const formatDate = value => value ? new Intl.DateTimeFormat('en-US', { month: 'long', day: '2-digit', year: 'numeric' }).format(new Date(value + 'T00:00:00')) : '';
+    function updateTotals() {
+      const totals = [0, 0, 0, 0];
+      document.querySelectorAll('#reportRows tr').forEach(row => {
+        row.querySelectorAll('td:not(:first-child)').forEach((cell, index) => {
+          totals[index] += Number(cell.textContent.replace(/[^0-9.-]/g, '')) || 0;
+        });
+      });
+      ['receivedTotal', 'releasedTotal', 'changedTotal', 'completedTotal'].forEach((id, index) => document.getElementById(id).textContent = totals[index]);
+    }
+    document.getElementById('applyButton').addEventListener('click', () => {
+      const office = document.getElementById('officeInput').value.trim() || 'All Offices';
+      const from = formatDate(document.getElementById('fromInput').value);
+      const to = formatDate(document.getElementById('toInput').value);
+      document.getElementById('officeText').textContent = office;
+      document.getElementById('periodText').textContent = from && to ? 'For the Date Range ' + from + ' to ' + to : 'For the Month of ____________________';
+    });
+    document.getElementById('reportRows').addEventListener('input', updateTotals);
+    document.getElementById('printButton').addEventListener('click', () => { updateTotals(); window.print(); });
+  </script>
+</body>
+</html>

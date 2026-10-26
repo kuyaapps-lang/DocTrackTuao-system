@@ -72,7 +72,6 @@ class User extends Authenticatable
             'documents.route',
             'attachments.view',
             'attachments.manage',
-            'qr.request',
             'master_data.view',
             'reports.view',
         ],
@@ -88,6 +87,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'username',
+        'designation',
         'email',
         'password',
         'must_change_password',

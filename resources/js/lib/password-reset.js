@@ -88,6 +88,38 @@ export const submitPasswordResetRequest = async ({
     return data
 }
 
+export const submitPasswordChangeApprovalRequest = async ({
+    fetcher = fetch,
+    token,
+    password,
+    passwordConfirmation,
+}) => {
+    const response = await fetcher('/api/me/password-change-request', {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+            password,
+            password_confirmation: passwordConfirmation,
+        }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+        throw new Error(
+            firstValidationError(data) ||
+            data.message ||
+            'Unable to request a password change.'
+        )
+    }
+
+    return data
+}
+
 export const listPasswordResetRequests = async ({
     fetcher = fetch,
     token,

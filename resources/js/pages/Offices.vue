@@ -42,6 +42,7 @@ const officeForm = ref({
     office_name: '',
     office_code: '',
     description: '',
+    signatory_name: '',
 })
 
 const canManageMasterData = computed(() => {
@@ -85,6 +86,7 @@ const openEditOffice = office => {
         office_name: office.office_name || '',
         office_code: office.office_code || '',
         description: office.description || '',
+        signatory_name: office.signatory_name || '',
     }
     formError.value = ''
 }
@@ -99,6 +101,7 @@ const openAddOffice = () => {
         office_name: '',
         office_code: '',
         description: '',
+        signatory_name: '',
     }
     formError.value = ''
     showOfficeForm.value = true
@@ -143,6 +146,7 @@ const saveOffice = async () => {
                 office_name: officeName,
                 office_code: officeCode,
                 description: officeForm.value.description.trim() || null,
+                signatory_name: officeForm.value.signatory_name.trim() || null,
             }),
         })
         const data = await response.json().catch(() => null)
@@ -302,6 +306,10 @@ onMounted(() => {
                                 </TableHead>
 
                                 <TableHead class="text-white font-semibold">
+                                    Report Signatory
+                                </TableHead>
+
+                                <TableHead class="text-white font-semibold">
                                     Description
                                 </TableHead>
 
@@ -328,6 +336,10 @@ onMounted(() => {
 
                                 <TableCell>
                                     {{ office.office_name }}
+                                </TableCell>
+
+                                <TableCell>
+                                    {{ office.signatory_name || 'N/A' }}
                                 </TableCell>
 
                                 <TableCell>
@@ -387,6 +399,10 @@ onMounted(() => {
                         <label class="block text-sm font-semibold text-gray-700">
                             Office code
                             <Input v-model="officeForm.office_code" class="mt-1" maxlength="20" :disabled="saving" />
+                        </label>
+                        <label class="block text-sm font-semibold text-gray-700">
+                            Report signatory
+                            <Input v-model="officeForm.signatory_name" class="mt-1" maxlength="150" :disabled="saving" placeholder="Name to show under Certified Correct" />
                         </label>
                         <label class="block text-sm font-semibold text-gray-700">
                             Description

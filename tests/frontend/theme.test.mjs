@@ -28,13 +28,13 @@ test('theme preference uses only valid saved light or dark values', () => {
     assert.equal(savedTheme(storage('system')), null)
 })
 
-test('theme falls back to device preference only without a saved choice', () => {
+test('theme always starts in light mode when the application loads', () => {
     const darkDevice = () => ({ matches: true })
     const lightDevice = () => ({ matches: false })
 
-    assert.equal(resolveTheme({ storage: storage(null), matchMedia: darkDevice }), DARK_THEME)
+    assert.equal(resolveTheme({ storage: storage(null), matchMedia: darkDevice }), LIGHT_THEME)
     assert.equal(resolveTheme({ storage: storage(null), matchMedia: lightDevice }), LIGHT_THEME)
-    assert.equal(resolveTheme({ storage: storage(LIGHT_THEME), matchMedia: darkDevice }), LIGHT_THEME)
+    assert.equal(resolveTheme({ storage: storage(DARK_THEME), matchMedia: darkDevice }), LIGHT_THEME)
 })
 
 test('theme application keeps the root class dataset and color scheme aligned', () => {
@@ -54,10 +54,11 @@ test('theme toggle and early boot styling are wired through shared frontend file
         read('resources/js/layouts/AppShell.vue'),
         read('resources/js/components/ThemeToggle.vue'),
         read('resources/css/app.css'),
-        read('resources/views/welcome.blade.php'),
+        read('resources/js/theme.js'),
     ])
 
-    assert.match(shell, /<ThemeToggle/)
+    assert.match(shell, /Dark mode/)
+    assert.match(shell, /toggleTheme\(\)/)
     assert.match(toggle, /Switch to dark theme/)
     assert.match(toggle, /toggleTheme\(\)/)
     assert.match(styles, /\.dark \{/)
@@ -67,6 +68,5 @@ test('theme toggle and early boot styling are wired through shared frontend file
     assert.match(styles, /\.dark :is\(\.bg-green-100, \.bg-emerald-100\)/)
     assert.match(styles, /\.dark \.bg-red-100/)
     assert.match(styles, /outline: 3px solid #93c5fd/)
-    assert.match(boot, /doctrack_theme/)
-    assert.match(boot, /prefers-color-scheme: dark/)
+    assert.match(boot, /const theme = 'light'/)
 })

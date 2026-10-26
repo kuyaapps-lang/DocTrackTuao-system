@@ -24,6 +24,8 @@ class InAppNotificationService
 
     public const TYPE_DOCUMENT_RECEIVED = 'document_received';
 
+    public const TYPE_DOCUMENT_RETURNED = 'document_returned';
+
     public const TYPE_PASSWORD_RESET_SUBMITTED = 'password_reset_submitted';
 
     public const TYPE_PASSWORD_RESET_RESOLVED = 'password_reset_resolved';
@@ -83,31 +85,50 @@ class InAppNotificationService
         );
     }
 
+    public function documentReturned(DocumentRoute $route): void
+    {
+        $this->createForUsers(
+            $this->usersWithPermission('documents.route', $route->to_office_id),
+            self::TYPE_DOCUMENT_RETURNED,
+            'Document Returned',
+            'A document was returned to your office. Review the reason, then confirm receipt when the physical document arrives.',
+            '/documents/'.$route->document_id,
+            $route->document_id
+        );
+    }
+
     public function passwordResetSubmitted(PasswordResetRequest $request): void
     {
+        $isChangeRequest = $request->request_type === PasswordResetRequest::TYPE_CHANGE;
+
         $this->createForUsers(
             $this->usersWithPermission('users.manage'),
             self::TYPE_PASSWORD_RESET_SUBMITTED,
-            'Password reset request submitted',
-            'A password reset request is ready for review.',
+            $isChangeRequest ? 'Password change request submitted' : 'Password reset request submitted',
+            $isChangeRequest
+                ? 'A user-selected password change is ready for approval.'
+                : 'A password reset request is ready for review.',
             '/users'
         );
     }
 
     public function passwordResetReviewed(PasswordResetRequest $request): void
     {
+        $isChangeRequest = $request->request_type === PasswordResetRequest::TYPE_CHANGE;
         $type = $request->status === PasswordResetRequest::STATUS_RESOLVED
             ? self::TYPE_PASSWORD_RESET_RESOLVED
             : self::TYPE_PASSWORD_RESET_REJECTED;
         $title = $request->status === PasswordResetRequest::STATUS_RESOLVED
-            ? 'Password reset request resolved'
-            : 'Password reset request rejected';
+            ? ($isChangeRequest ? 'Password change request approved' : 'Password reset request resolved')
+            : ($isChangeRequest ? 'Password change request rejected' : 'Password reset request rejected');
 
         $this->createForUsers(
             $this->usersByIds([$request->user_id]),
             $type,
             $title,
-            'Your password reset request has been reviewed.',
+            $isChangeRequest
+                ? 'Your password change request has been reviewed.'
+                : 'Your password reset request has been reviewed.',
             '/dashboard'
         );
     }

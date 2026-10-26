@@ -20,11 +20,12 @@ const completedDocument = {
     status: { status_name: 'Completed' },
 }
 
-test('complete action appears only for current-office non-terminal documents without pending route', () => {
+test('complete action appears only after a received route for current-office non-terminal documents', () => {
     assert.equal(canCompleteDocument({
         document: activeDocument,
         routingOptions: { can_act: true },
         pendingRoute: null,
+        hasReceivedRoute: true,
         hasProcessPermission: true,
     }), true)
 
@@ -32,6 +33,7 @@ test('complete action appears only for current-office non-terminal documents wit
         { hasProcessPermission: false },
         { routingOptions: { can_act: false } },
         { pendingRoute: { id: 1 } },
+        { hasReceivedRoute: false },
         { document: { status: { status_name: 'Completed' } } },
         { document: { status: { status_name: 'Archived' } } },
     ]) {
@@ -39,6 +41,7 @@ test('complete action appears only for current-office non-terminal documents wit
             document: activeDocument,
             routingOptions: { can_act: true },
             pendingRoute: null,
+            hasReceivedRoute: true,
             hasProcessPermission: true,
             ...state,
         }), false)
@@ -212,7 +215,7 @@ test('archive failure message stays bounded for expected statuses', () => {
     assert.equal(archiveDocumentFailureMessage(500), 'Unable to archive document.')
 })
 
-test('document details component confirms completion and refreshes after success', async () => {
+test('document details component confirms completion in the app modal and refreshes after success', async () => {
     const source = await readFile(
         new URL('../../resources/js/pages/DocumentDetails.vue', import.meta.url),
         'utf8'
@@ -223,13 +226,14 @@ test('document details component confirms completion and refreshes after success
 
     assert.match(source, /v-if="canComplete"/)
     assert.match(source, /Complete Document/)
-    assert.match(completeFunction, /window\.confirm\(/)
+    assert.match(source, /openActionConfirmation\('complete'\)/)
+    assert.match(source, /confirmationAction === 'complete'/)
     assert.match(completeFunction, /completeDocumentRequest\(/)
     assert.match(completeFunction, /await loadPage\(\)/)
     assert.match(source, /!isTerminalDocument\(document\.value\)/)
 })
 
-test('document details component confirms archive and refreshes after success', async () => {
+test('document details component confirms archive in the app modal and refreshes after success', async () => {
     const source = await readFile(
         new URL('../../resources/js/pages/DocumentDetails.vue', import.meta.url),
         'utf8'
@@ -241,7 +245,8 @@ test('document details component confirms archive and refreshes after success', 
     assert.match(source, /v-if="canArchive"/)
     assert.match(source, /Archive Document/)
     assert.match(source, /canArchiveDocument\(/)
-    assert.match(archiveFunction, /window\.confirm\(/)
+    assert.match(source, /openActionConfirmation\('archive'\)/)
+    assert.match(source, /confirmLabel: 'Yes, Archive Document'/)
     assert.match(archiveFunction, /archiveDocumentRequest\(/)
     assert.match(archiveFunction, /await loadPage\(\)/)
     assert.match(source, /!documentIsTerminal\.value/)

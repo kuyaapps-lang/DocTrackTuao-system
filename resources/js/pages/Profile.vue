@@ -1,6 +1,5 @@
 <script setup>
-import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, ref } from 'vue'
 import {
     Building2,
     KeyRound,
@@ -17,8 +16,14 @@ import {
     CardTitle,
 } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth'
+import { submitPasswordChangeApprovalRequest } from '@/lib/password-reset'
 
-const { currentUser } = useAuth()
+const { currentUser, getToken } = useAuth()
+const requestOpen = ref(false)
+const saving = ref(false)
+const error = ref('')
+const success = ref('')
+const form = ref({ password: '', password_confirmation: '' })
 
 const userName = computed(() => currentUser.value?.name || 'Signed-in user')
 const userInitials = computed(() => userName.value
@@ -51,6 +56,46 @@ const profileFields = computed(() => [
         icon: Building2,
     },
 ])
+
+const openRequest = () => {
+    error.value = ''
+    form.value = { password: '', password_confirmation: '' }
+    requestOpen.value = true
+}
+
+const closeRequest = () => {
+    if (saving.value) return
+    requestOpen.value = false
+    error.value = ''
+}
+
+const submitRequest = async () => {
+    error.value = ''
+    if (form.value.password.length < 8) {
+        error.value = 'New password must be at least 8 characters.'
+        return
+    }
+    if (form.value.password !== form.value.password_confirmation) {
+        error.value = 'Password confirmation does not match.'
+        return
+    }
+
+    saving.value = true
+    try {
+        const data = await submitPasswordChangeApprovalRequest({
+            token: getToken(),
+            password: form.value.password,
+            passwordConfirmation: form.value.password_confirmation,
+        })
+        success.value = data.message
+        requestOpen.value = false
+        form.value = { password: '', password_confirmation: '' }
+    } catch (err) {
+        error.value = err.message || 'Unable to request a password change.'
+    } finally {
+        saving.value = false
+    }
+}
 </script>
 
 <template>
@@ -72,6 +117,7 @@ const profileFields = computed(() => [
                 </CardHeader>
 
                 <CardContent class="p-0">
+                    <p v-if="success" class="mx-5 mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100" role="status">{{ success }}</p>
                     <dl class="divide-y divide-slate-200 dark:divide-slate-700">
                         <div v-for="field in profileFields" :key="field.label" class="flex items-center gap-3 px-5 py-4">
                             <component :is="field.icon" class="size-5 shrink-0 text-blue-800 dark:text-blue-300" aria-hidden="true" />
@@ -83,15 +129,26 @@ const profileFields = computed(() => [
                     </dl>
 
                     <div class="border-t border-slate-200 px-5 py-4 dark:border-slate-700">
-                        <Button as-child size="sm" class="bg-blue-700 text-white hover:bg-blue-800">
-                            <RouterLink to="/change-password">
-                                <KeyRound class="size-4" aria-hidden="true" />
-                                Change Password
-                            </RouterLink>
+                        <Button size="sm" class="bg-blue-700 text-white hover:bg-blue-800" @click="openRequest">
+                            <KeyRound class="size-4" aria-hidden="true" />
+                            Request Password Change
                         </Button>
                     </div>
                 </CardContent>
             </Card>
+        </div>
+
+        <div v-if="requestOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm" @click.self="closeRequest">
+            <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="request-password-title">
+                <h2 id="request-password-title" class="text-xl font-bold text-slate-900 dark:text-white">Request Administrator Approval</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Your existing password remains active unless an administrator approves this change.</p>
+                <form class="mt-5 space-y-4" @submit.prevent="submitRequest">
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-200">New password<input v-model="form.password" :disabled="saving" type="password" minlength="8" autocomplete="new-password" class="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" required></label>
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-200">Confirm new password<input v-model="form.password_confirmation" :disabled="saving" type="password" minlength="8" autocomplete="new-password" class="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" required></label>
+                    <p v-if="error" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-100" role="alert">{{ error }}</p>
+                    <div class="flex justify-end gap-3"><Button type="button" variant="outline" :disabled="saving" @click="closeRequest">Cancel</Button><Button type="submit" :disabled="saving">{{ saving ? 'Sending...' : 'Request approval' }}</Button></div>
+                </form>
+            </section>
         </div>
     </section>
 </template>

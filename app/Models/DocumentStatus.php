@@ -8,8 +8,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class DocumentStatus extends Model
 {
     protected $fillable = [
-        'name',
-        'description',
+        'status_name',
+        'color',
+        'processing_action_id',
     ];
 
     public function documents(): HasMany

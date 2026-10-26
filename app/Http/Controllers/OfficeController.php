@@ -86,7 +86,8 @@ class OfficeController extends Controller
             if ($office->users()->exists() ||
                 DB::table('documents')->where('origin_office_id', $office->id)->orWhere('current_office_id', $office->id)->exists() ||
                 DB::table('document_routes')->where('from_office_id', $office->id)->orWhere('to_office_id', $office->id)->exists() ||
-                DB::table('document_processing_logs')->where('office_id', $office->id)->exists()) {
+                DB::table('document_processing_logs')->where('office_id', $office->id)->exists() ||
+                (\Illuminate\Support\Facades\Schema::hasTable('document_type_route_steps') && DB::table('document_type_route_steps')->where('office_id', $office->id)->exists())) {
                 return response()->json([
                     'message' => 'This office cannot be deleted because it is already being used by one or more records.',
                 ], 409);
@@ -127,7 +128,7 @@ class OfficeController extends Controller
 
     private function validated(Request $request, ?Office $office = null): array
     {
-        $this->rejectUnknownFields($request, ['department_id', 'office_name', 'office_code', 'description']);
+        $this->rejectUnknownFields($request, ['department_id', 'office_name', 'office_code', 'description', 'signatory_name', 'signatory_designation']);
 
         return $request->validate([
             'department_id' => ['bail', 'nullable', function ($attribute, $value, $fail) {
@@ -142,6 +143,8 @@ class OfficeController extends Controller
                     $fail('The description must not exceed 65535 bytes.');
                 }
             }],
+            'signatory_name' => ['nullable', 'string', 'max:150'],
+            'signatory_designation' => ['nullable', 'string', 'max:150'],
         ]);
     }
 
@@ -162,6 +165,8 @@ class OfficeController extends Controller
             'office_name' => $office->office_name,
             'office_code' => $office->office_code,
             'description' => $office->description,
+            'signatory_name' => $office->signatory_name,
+            'signatory_designation' => $office->signatory_designation,
             'department' => $office->department === null ? null : [
                 'department_name' => $office->department->department_name,
             ],

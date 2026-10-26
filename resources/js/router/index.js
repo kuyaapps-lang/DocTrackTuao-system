@@ -17,9 +17,11 @@ import QrResolver from '../pages/QrResolver.vue'
 import QrCodes from '../pages/QrCodes.vue'
 import Offices from '../pages/Offices.vue'
 import DocumentTypes from '../pages/DocumentTypes.vue'
+import DocumentStatuses from '../pages/DocumentStatuses.vue'
 import Users from '../pages/Users.vue'
 import AuditLogs from '../pages/AuditLogs.vue'
 import AccomplishmentReport from '../pages/AccomplishmentReport.vue'
+import ReportSignatories from '../pages/ReportSignatories.vue'
 import Notifications from '../pages/Notifications.vue'
 import AppShell from '../layouts/AppShell.vue'
 
@@ -59,7 +61,7 @@ const routes = [
     },
 
     {
-        path: '/track/:trackingNo',
+        path: '/track/:trackingNo?',
         component: DocumentTracking,
         meta: {
             public: true,
@@ -224,6 +226,15 @@ const routes = [
                 },
             },
             {
+                path: 'document-statuses',
+                component: DocumentStatuses,
+                meta: {
+                    permission: 'master_data.manage',
+                    title: 'Document Statuses',
+                    navKey: 'document-statuses',
+                },
+            },
+            {
                 path: 'users',
                 component: Users,
                 meta: {
@@ -242,6 +253,15 @@ const routes = [
                 },
             },
             {
+                path: 'reports/signatories',
+                component: ReportSignatories,
+                meta: {
+                    permission: 'master_data.manage',
+                    title: 'Report Signatories',
+                    navKey: 'report-signatories',
+                },
+            },
+            {
                 path: 'audit',
                 component: AuditLogs,
                 meta: {
@@ -254,8 +274,21 @@ const routes = [
     },
 ]
 
+const routerBase = (() => {
+    const path = window.location.pathname
+    const publicDirectory = '/public'
+    const publicIndex = path.toLowerCase().indexOf(publicDirectory)
+    const publicEnd = publicIndex + publicDirectory.length
+
+    if (publicIndex >= 0 && (publicEnd === path.length || path[publicEnd] === '/')) {
+        return `${path.slice(0, publicEnd)}/`
+    }
+
+    return import.meta.env.BASE_URL
+})()
+
 const router = createRouter({
-    history: createWebHistory(),
+    history: createWebHistory(routerBase),
     routes,
 })
 

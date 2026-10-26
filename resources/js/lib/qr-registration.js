@@ -1,3 +1,25 @@
+export const qrTokenFromPublicUrl = value => {
+    if (typeof value !== 'string') {
+        return ''
+    }
+
+    const input = value.trim()
+
+    try {
+        const url = new URL(input)
+
+        if (!['http:', 'https:'].includes(url.protocol)) {
+            return ''
+        }
+
+        const match = url.pathname.match(/^\/q\/([^/]+)\/?$/i)
+
+        return match ? decodeURIComponent(match[1]).trim() : ''
+    } catch {
+        return ''
+    }
+}
+
 export const normalizeRegistrationQrInput = value => {
     if (typeof value !== 'string') {
         return ''
@@ -5,26 +27,7 @@ export const normalizeRegistrationQrInput = value => {
 
     const input = value.trim()
 
-    if (!input) {
-        return ''
-    }
-
-    try {
-        const url = new URL(input)
-
-        if (!['http:', 'https:'].includes(url.protocol)) {
-            return input
-        }
-
-        const segment = url.pathname
-            .split('/')
-            .filter(Boolean)
-            .at(-1)
-
-        return segment ? decodeURIComponent(segment).trim() : input
-    } catch {
-        return input
-    }
+    return qrTokenFromPublicUrl(input) || input
 }
 
 export const publicQrUrl = (token, locationRef = window.location) => {

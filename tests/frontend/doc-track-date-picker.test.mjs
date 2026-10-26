@@ -34,6 +34,7 @@ test('reusable picker supports selection, today, optional clearing, keyboard esc
 
     assert.match(picker, /emit\('update:modelValue', formatDateValue\(date\)\)/)
     assert.match(picker, /chooseToday/)
+    assert.match(picker, /const now = currentDate\(\)/)
     assert.match(picker, /v-if="clearable"/)
     assert.match(picker, /event\.key !== 'Escape'/)
     assert.match(picker, /document\.addEventListener\('pointerdown'/)

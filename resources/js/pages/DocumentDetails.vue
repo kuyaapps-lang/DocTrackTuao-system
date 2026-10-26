@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
 
@@ -64,6 +64,7 @@ const successMessage = ref('')
 const completeError = ref('')
 const archiveError = ref('')
 const updatedElsewhere = ref(false)
+const confirmationAction = ref(null)
 
 /*
 |--------------------------------------------------------------------------
@@ -129,9 +130,12 @@ const forwardError = ref('')
 */
 
 const showReceiveModal = ref(false)
+const showRejectReceiptModal = ref(false)
 let leaveRealtime = null
 const receiveError = ref('')
+const rejectReceiptError = ref('')
 const undoForwardError = ref('')
+const rejectReceiptForm = ref({ return_to: 'forwarding_office', reason: '' })
 
 /*
 |--------------------------------------------------------------------------
@@ -822,6 +826,7 @@ const processingEventLabel = (eventType) => {
         action_updated: 'Processing Update',
         forwarded: 'Route Forward',
         received: 'Route Receive',
+        receipt_rejected: 'Receipt Rejected',
         forwarding_undone: 'Forwarding Undone',
         completed: 'Document Complete',
     }
@@ -1069,6 +1074,15 @@ const historyRows = computed(() => {
 
                 byOffice =
                     toOffice
+            }
+
+            if (item?.event_type === 'receipt_rejected') {
+                status = 'Returned'
+                actionTaken = linkedRoute?.return_route_id
+                    ? 'Returned for receipt'
+                    : 'Receipt rejected'
+                detail = linkedRoute?.rejection_reason || item?.event_note || ''
+                byOffice = item?.office?.office_name || toOffice
             }
 
             if (
@@ -1454,7 +1468,8 @@ const pendingRoute = computed(() => {
             .find(
                 item =>
                     !item.received_at &&
-                    !item.cancelled_at
+                    !item.cancelled_at &&
+                    !item.rejected_at
             ) || null
     )
 })
@@ -1483,6 +1498,21 @@ const canReceive = computed(() => {
             routingOptions.value.user.office_id
         )
     )
+})
+
+const canRejectReceipt = computed(() => canReceive.value &&
+    pendingRoute.value?.action?.action_name !== 'Return')
+
+const pendingReturnReason = computed(() => {
+    if (!pendingRoute.value?.id) {
+        return ''
+    }
+
+    const rejectedRoute = history.value.find(item =>
+        Number(item?.return_route_id) === Number(pendingRoute.value.id)
+    )
+
+    return rejectedRoute?.rejection_reason || ''
 })
 
 const documentIsTerminal = computed(() => (
@@ -1529,10 +1559,6 @@ const undoForward = async () => {
         return
     }
 
-    if (!window.confirm('Undo this forwarding? The document will return to your office and the destination office will no longer be able to receive it.')) {
-        return
-    }
-
     actionLoading.value = true
 
     try {
@@ -1567,6 +1593,7 @@ const canComplete = computed(() => canCompleteDocument({
     document: document.value,
     routingOptions: routingOptions.value,
     pendingRoute: pendingRoute.value,
+    hasReceivedRoute: history.value.some(item => Boolean(item?.received_at)),
     hasProcessPermission: can('documents.process'),
 }))
 
@@ -1577,6 +1604,60 @@ const canArchive = computed(() => canArchiveDocument({
     hasProcessPermission: can('documents.process'),
 }))
 
+const confirmationDetails = computed(() => ({
+    undo: {
+        title: 'Undo Forwarding?',
+        description: 'The document will return to your office and the destination office will no longer be able to receive it.',
+        confirmLabel: 'Yes, Undo Forwarding',
+    },
+    complete: {
+        title: 'Complete Document?',
+        description: 'After completion, this document can no longer be forwarded or updated. Continue only if processing is finished.',
+        confirmLabel: 'Yes, Complete Document',
+    },
+    archive: {
+        title: 'Archive Document?',
+        description: 'Archived documents stay in the record but can no longer be forwarded or updated.',
+        confirmLabel: 'Yes, Archive Document',
+    },
+}[confirmationAction.value] || null))
+
+const openActionConfirmation = action => {
+    if (
+        (action === 'undo' && !canUndoForward.value) ||
+        (action === 'complete' && !canComplete.value) ||
+        (action === 'archive' && !canArchive.value)
+    ) {
+        return
+    }
+
+    confirmationAction.value = action
+}
+
+const closeActionConfirmation = () => {
+    if (!actionLoading.value) {
+        confirmationAction.value = null
+    }
+}
+
+const confirmAction = async () => {
+    const action = confirmationAction.value
+
+    if (!action || actionLoading.value) {
+        return
+    }
+
+    confirmationAction.value = null
+
+    if (action === 'undo') {
+        await undoForward()
+    } else if (action === 'complete') {
+        await completeDocument()
+    } else if (action === 'archive') {
+        await archiveDocument()
+    }
+}
+
 const completeDocument = async () => {
     completeError.value = ''
     archiveError.value = ''
@@ -1586,14 +1667,6 @@ const completeDocument = async () => {
         completeError.value =
             'This document cannot be completed in its current state.'
 
-        return
-    }
-
-    const confirmed = window.confirm(
-        'Complete this document now?\n\nAfter completion, it can no longer be forwarded or updated. Continue only if processing is finished.'
-    )
-
-    if (!confirmed) {
         return
     }
 
@@ -1630,14 +1703,6 @@ const archiveDocument = async () => {
         archiveError.value =
             'This document cannot be archived in its current state.'
 
-        return
-    }
-
-    const confirmed = window.confirm(
-        'Archive this completed document now?\n\nArchived documents stay in the record but can no longer be forwarded or updated.'
-    )
-
-    if (!confirmed) {
         return
     }
 
@@ -1802,6 +1867,59 @@ const closeReceiveModal = () => {
     receiveError.value = ''
 }
 
+const openRejectReceiptModal = () => {
+    rejectReceiptForm.value = { return_to: 'forwarding_office', reason: '' }
+    rejectReceiptError.value = ''
+    receiveError.value = ''
+    showReceiveModal.value = false
+    showRejectReceiptModal.value = true
+}
+
+const closeRejectReceiptModal = () => {
+    if (actionLoading.value) return
+    showRejectReceiptModal.value = false
+    rejectReceiptError.value = ''
+}
+
+const rejectReceipt = async () => {
+    rejectReceiptError.value = ''
+    successMessage.value = ''
+
+    if (!rejectReceiptForm.value.reason.trim()) {
+        rejectReceiptError.value = 'Please provide a reason for rejecting this receipt.'
+        return
+    }
+
+    actionLoading.value = true
+    try {
+        const response = await fetch(`/api/documents/${route.params.id}/reject-receipt`, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({
+                return_to: rejectReceiptForm.value.return_to,
+                reason: rejectReceiptForm.value.reason.trim(),
+            }),
+        })
+        const data = await response.json()
+        if (!response.ok) {
+            const validation = data?.errors ? Object.values(data.errors)[0] : null
+            throw new Error(Array.isArray(validation) ? validation[0] : data.message || 'Unable to reject receipt.')
+        }
+
+        showRejectReceiptModal.value = false
+        successMessage.value = data.message || 'Receipt rejected and document returned.'
+        await loadPage()
+    } catch (err) {
+        rejectReceiptError.value = err.message || 'Unable to reject receipt.'
+    } finally {
+        actionLoading.value = false
+    }
+}
+
 /*
 |--------------------------------------------------------------------------
 | Receive Document
@@ -1900,11 +2018,16 @@ const formatSimpleDate = (date) => {
 |--------------------------------------------------------------------------
 */
 
+watch(
+    () => [route.params.id, route.query.notification],
+    () => loadPage(),
+    { immediate: true }
+)
+
 onMounted(() => {
-    loadPage()
     leaveRealtime = listenForRealtimeInvalidation([`doc-track.document.${route.params.id}`], event => {
         if (event.resource_id !== Number(route.params.id)) return
-        if (processingSaving.value || uploadingAttachment.value || actionLoading.value || showForwardModal.value || showReceiveModal.value || showDeleteAttachmentModal.value) { updatedElsewhere.value = true; return }
+        if (processingSaving.value || uploadingAttachment.value || actionLoading.value || showForwardModal.value || showReceiveModal.value || showRejectReceiptModal.value || showDeleteAttachmentModal.value || confirmationAction.value) { updatedElsewhere.value = true; return }
         loadPage()
     })
 })
@@ -1942,6 +2065,7 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                 <Button
                         variant="outline"
+                        class="border-blue-900 bg-blue-900 text-white hover:bg-blue-800 hover:text-white dark:border-blue-900 dark:bg-blue-900 dark:text-white dark:hover:bg-blue-800 dark:hover:text-white"
                         @click="goBack"
                     >
                         <ArrowLeft class="mr-2 h-4 w-4" />
@@ -1996,7 +2120,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 <p
                                     class="mt-1 text-sm font-medium text-gray-500"
                                 >
-                                    {{ document.tracking_no }}
+                                    {{ document.qr_code?.qr_token || 'QR not assigned' }}
                                 </p>
 
                             </div>
@@ -2014,6 +2138,14 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     Receive Document
                                 </Button>
 
+                                <Button
+                                    v-if="canRejectReceipt"
+                                    class="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-500"
+                                    @click="openRejectReceiptModal"
+                                >
+                                    Reject / Return
+                                </Button>
+
                                  <Button
                                      v-if="canForward"
                                     class="bg-blue-900 text-white hover:bg-blue-950"
@@ -2026,9 +2158,9 @@ onBeforeUnmount(() => leaveRealtime?.())
                                  <Button
                                      v-if="canUndoForward"
                                      variant="outline"
-                                     class="border-amber-500 text-amber-800 hover:bg-amber-50"
+                                     class="border-orange-300 bg-orange-100 text-orange-700 hover:bg-orange-200 hover:text-orange-800 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300 dark:hover:bg-orange-950/70 dark:hover:text-orange-200"
                                      :disabled="actionLoading"
-                                     @click="undoForward"
+                                     @click="openActionConfirmation('undo')"
                                  >
                                      <RotateCcw class="mr-2 h-4 w-4" />
                                      Undo Forwarding
@@ -2038,7 +2170,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     v-if="canComplete"
                                     class="bg-emerald-600 text-white hover:bg-emerald-700"
                                     :disabled="actionLoading"
-                                    @click="completeDocument"
+                                    @click="openActionConfirmation('complete')"
                                 >
                                     <CheckCircle class="mr-2 h-4 w-4" />
                                     {{
@@ -2052,7 +2184,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     v-if="canArchive"
                                     class="bg-slate-700 text-white hover:bg-slate-800"
                                     :disabled="actionLoading"
-                                    @click="archiveDocument"
+                                    @click="openActionConfirmation('archive')"
                                 >
                                     <Archive class="mr-2 h-4 w-4" />
                                     {{
@@ -2141,20 +2273,6 @@ onBeforeUnmount(() => leaveRealtime?.())
                                             {{
                                                 document.priority
                                                     ?.priority_name
-                                                || 'N/A'
-                                            }}
-                                        </p>
-                                    </div>
-
-                                    <div class="min-w-0">
-                                        <p class="inline text-[11pt] font-semibold uppercase text-gray-500">
-                                            Confidentiality:
-                                        </p>
-
-                                        <p class="ml-1 inline break-words font-medium text-gray-900">
-                                            {{
-                                                document.confidentiality
-                                                    ?.level_name
                                                 || 'N/A'
                                             }}
                                         </p>
@@ -2344,12 +2462,6 @@ onBeforeUnmount(() => leaveRealtime?.())
                                         class="mt-3 font-mono text-sm font-bold text-gray-800"
                                     >
                                         {{ document.qr_code.qr_token }}
-                                    </p>
-
-                                    <p
-                                        class="mt-1 break-all text-xs text-gray-500"
-                                    >
-                                        {{ document.tracking_no }}
                                     </p>
 
                                 </div>
@@ -2847,6 +2959,12 @@ onBeforeUnmount(() => leaveRealtime?.())
                                                 v-if="row.detail"
                                                 class="mt-1 max-w-md whitespace-pre-line text-xs leading-5 text-gray-500"
                                             >
+                                                <span
+                                                    v-if="row.status === 'Returned'"
+                                                    class="font-semibold text-gray-700 dark:text-gray-200"
+                                                >
+                                                    Reason:
+                                                </span>
                                                 {{ row.detail }}
                                             </p>
 
@@ -3350,6 +3468,14 @@ onBeforeUnmount(() => leaveRealtime?.())
                 </div>
 
                 <div
+                    v-if="pendingReturnReason"
+                    class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                >
+                    <p class="font-semibold">Reason for return</p>
+                    <p class="mt-1 whitespace-pre-line">{{ pendingReturnReason }}</p>
+                </div>
+
+                <div
                     v-if="receiveError"
                     class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600"
                 >
@@ -3366,7 +3492,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                         :disabled="actionLoading"
                         @click="closeReceiveModal"
                     >
-                        Cancel
+                        No, Not Yet Received
                     </button>
 
                     <button
@@ -3386,6 +3512,79 @@ onBeforeUnmount(() => leaveRealtime?.())
 
             </div>
 
+        </div>
+
+        <!-- Reject Receipt Modal -->
+        <div v-if="showRejectReceiptModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white">Reject and Return Document</h2>
+                <p class="mt-3 text-sm text-gray-600 dark:text-slate-300">The document will be returned in transit and must be received by the selected office.</p>
+
+                <label class="mt-4 block text-sm font-semibold text-gray-800 dark:text-slate-100" for="return-office">Return to</label>
+                <select id="return-office" v-model="rejectReceiptForm.return_to" :disabled="actionLoading" class="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                    <option value="forwarding_office">Forwarding office — {{ pendingRoute?.from_office?.office_name || 'N/A' }}</option>
+                    <option v-if="document?.origin_office?.id && Number(document.origin_office.id) !== Number(pendingRoute?.from_office_id) && Number(document.origin_office.id) !== Number(routingOptions?.user?.office_id)" value="origin_office">Origin office — {{ document?.origin_office?.office_name || 'N/A' }}</option>
+                </select>
+
+                <label class="mt-4 block text-sm font-semibold text-gray-800 dark:text-slate-100" for="rejection-reason">Reason for rejection</label>
+                <textarea id="rejection-reason" v-model="rejectReceiptForm.reason" :disabled="actionLoading" maxlength="2000" rows="4" class="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" placeholder="Explain why this document is being returned."></textarea>
+                <p class="mt-1 text-right text-xs text-gray-500 dark:text-slate-400">{{ rejectReceiptForm.reason.length }}/2000</p>
+
+                <div v-if="rejectReceiptError" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">{{ rejectReceiptError }}</div>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" class="rounded-md bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600" :disabled="actionLoading" @click="closeRejectReceiptModal">Cancel</button>
+                    <button type="button" class="rounded-md bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 dark:bg-red-600 dark:text-white dark:hover:bg-red-500" :disabled="actionLoading" @click="rejectReceipt">{{ actionLoading ? 'Returning...' : 'Reject and Return' }}</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Document Action Confirmation Modal -->
+        <div
+            v-if="confirmationDetails"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="document-action-confirmation-title"
+        >
+            <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+                <h2
+                    id="document-action-confirmation-title"
+                    class="text-xl font-bold text-gray-900 dark:text-white"
+                >
+                    {{ confirmationDetails.title }}
+                </h2>
+
+                <p class="mt-3 text-sm text-gray-600 dark:text-slate-300">
+                    {{ confirmationDetails.description }}
+                </p>
+
+                <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <button
+                        type="button"
+                        class="rounded-md bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
+                        :disabled="actionLoading"
+                        @click="closeActionConfirmation"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="button"
+                        :class="[
+                            'rounded-md px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50',
+                            confirmationAction === 'undo'
+                                ? 'bg-orange-600 hover:bg-orange-700'
+                                : confirmationAction === 'complete'
+                                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                                    : 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500',
+                        ]"
+                        :disabled="actionLoading"
+                        @click="confirmAction"
+                    >
+                        {{ confirmationDetails.confirmLabel }}
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Delete Attachment Confirmation Modal -->

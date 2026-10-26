@@ -20,3 +20,12 @@ test('document inquiry lists authorized documents and opens status in a modal', 
     assert.match(source, /closeInquiryDocument/)
     assert.doesNotMatch(source, /trackingNumber\.value = result\.qr_code \|\| trackingNo/)
 })
+
+test('public tracking resolves an external scanner URL through the QR resolver', async () => {
+    const source = await readInquiry()
+
+    assert.match(source, /qrTokenFromPublicUrl\(value\)/)
+    assert.match(source, /await scanPublicQr\(qrToken\)/)
+    assert.match(source, /@input="handleTrackingInput"/)
+    assert.match(source, /trackingNumber\.value = qrToken/)
+})

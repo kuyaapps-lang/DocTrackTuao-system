@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Caddy terminates HTTPS locally and proxies only from this loopback address.
+        // Trust its forwarded scheme so generated asset and redirect URLs stay HTTPS.
+        $middleware->trustProxies(at: ['127.0.0.1']);
+
         $middleware->redirectGuestsTo(function (Request $request): ?string {
             return $request->is('api', 'api/*') ? null : '/login';
         });

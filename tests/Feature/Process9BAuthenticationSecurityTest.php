@@ -39,6 +39,7 @@ class Process9BAuthenticationSecurityTest extends TestCase
             $table->id();
             $table->string('name');
             $table->string('username', 50)->nullable()->unique();
+            $table->string('designation', 150)->nullable();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');

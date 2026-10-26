@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 
-export const THEME_STORAGE_KEY = 'doctrack_theme'
+// A new key resets pre-dark-mode browser preferences during this rollout.
+export const THEME_STORAGE_KEY = 'doctrack_theme_v2'
 export const LIGHT_THEME = 'light'
 export const DARK_THEME = 'dark'
 
@@ -17,12 +18,9 @@ export const savedTheme = storage => {
 }
 
 export const resolveTheme = ({ storage, matchMedia } = {}) => {
-    const saved = savedTheme(storage)
-    if (saved) return saved
-
-    return matchMedia?.('(prefers-color-scheme: dark)').matches
-        ? DARK_THEME
-        : LIGHT_THEME
+    // Every URL load starts in light mode. The toggle remains available for
+    // the current visit, but a previous browser preference is not restored.
+    return LIGHT_THEME
 }
 
 export const applyTheme = (nextTheme, root = document.documentElement) => {

@@ -27,6 +27,11 @@ class AttachmentStorageIntegrityTest extends TestCase
 
         Storage::fake('local');
 
+        Schema::create('document_routes', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('document_id');
+            $table->unsignedBigInteger('from_office_id')->nullable(); $table->unsignedBigInteger('to_office_id')->nullable();
+        });
+
         Schema::create('roles', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -67,6 +72,7 @@ class AttachmentStorageIntegrityTest extends TestCase
     protected function tearDown(): void
     {
         Schema::dropIfExists('document_attachments');
+        Schema::dropIfExists('document_routes');
         Schema::dropIfExists('documents');
         Schema::dropIfExists('users');
         Schema::dropIfExists('roles');

@@ -12,6 +12,7 @@ import {
     rejectPasswordResetRequest,
     resolvePasswordResetRequest,
     resetPasswordRequest,
+    submitPasswordChangeApprovalRequest,
     submitPasswordResetRequest,
     validatePasswordChangeForm,
 } from '../../resources/js/lib/password-reset.js'
@@ -39,6 +40,7 @@ const loadSetup = async (path, bindings, exposed) => {
         resolvePasswordResetRequest,
         resetPasswordRequest,
         submitPasswordResetRequest,
+        submitPasswordChangeApprovalRequest,
         changePasswordRequest,
         validatePasswordChangeForm,
         ...bindings,
@@ -136,6 +138,26 @@ test('public password reset request helper posts request fields without authenti
         email: 'requester@example.test',
         name: 'Requester',
         message: 'Cannot log in.',
+    })
+})
+
+test('password change approval request sends a new password only to the authenticated endpoint', async () => {
+    const calls = []
+    await submitPasswordChangeApprovalRequest({
+        token: 'test-token',
+        password: 'user-selected-secret',
+        passwordConfirmation: 'user-selected-secret',
+        fetcher: async (...args) => {
+            calls.push(args)
+            return response(202, { message: 'Request submitted.' })
+        },
+    })
+
+    assert.equal(calls[0][0], '/api/me/password-change-request')
+    assert.equal(calls[0][1].headers.Authorization, 'Bearer test-token')
+    assert.deepEqual(JSON.parse(calls[0][1].body), {
+        password: 'user-selected-secret',
+        password_confirmation: 'user-selected-secret',
     })
 })
 

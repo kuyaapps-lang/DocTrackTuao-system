@@ -12,6 +12,7 @@ use App\Http\Controllers\DocumentQrCodeController;
 use App\Http\Controllers\DocumentRoutingController;
 use App\Http\Controllers\DocumentTrackingController;
 use App\Http\Controllers\DocumentTypeController;
+use App\Http\Controllers\DocumentStatusController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\PasswordResetRequestController;
@@ -206,6 +207,11 @@ Route::middleware([
         [UserManagementController::class, 'destroy']
     )->middleware('can:users.manage');
 
+    Route::post(
+        'me/password-change-request',
+        [PasswordResetRequestController::class, 'storeChangeRequest']
+    );
+
     Route::get(
         'password-reset-requests',
         [PasswordResetRequestController::class, 'index']
@@ -362,6 +368,11 @@ Route::middleware([
     )->middleware('can:documents.route');
 
     Route::post(
+        'documents/{document}/reject-receipt',
+        [DocumentRoutingController::class, 'rejectReceipt']
+    )->middleware('can:documents.route');
+
+    Route::post(
         'documents/{document}/undo-forward',
         [DocumentRoutingController::class, 'undoForward']
     )->middleware('can:documents.route');
@@ -477,6 +488,11 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
+    Route::get('document-statuses', [DocumentStatusController::class, 'index'])->middleware('can:master_data.manage');
+    Route::post('document-statuses', [DocumentStatusController::class, 'store'])->middleware('can:master_data.manage');
+    Route::put('document-statuses/{id}', [DocumentStatusController::class, 'update'])->middleware('can:master_data.manage');
+    Route::delete('document-statuses/{id}', [DocumentStatusController::class, 'destroy'])->middleware('can:master_data.manage');
+
     Route::get(
         'document-types',
         [DocumentTypeController::class, 'index']
@@ -491,6 +507,9 @@ Route::middleware([
         'document-types/{documentType}',
         [DocumentTypeController::class, 'show']
     )->middleware('can:master_data.view');
+
+    Route::get('document-types/{documentType}/suggested-route', [DocumentTypeController::class, 'suggestedRoute'])->middleware('can:master_data.view');
+    Route::put('document-types/{documentType}/suggested-route', [DocumentTypeController::class, 'updateSuggestedRoute'])->middleware('can:master_data.manage');
 
     Route::match(
         ['put', 'patch'],

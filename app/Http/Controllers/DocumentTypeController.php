@@ -51,6 +51,34 @@ class DocumentTypeController extends Controller
         return response()->json($this->shape($documentType));
     }
 
+    public function suggestedRoute($id)
+    {
+        $type = $this->record($id);
+        return response()->json(['office_ids' => DB::table('document_type_route_steps')
+            ->where('document_type_id', $type->id)->orderBy('position')->pluck('office_id')->map(fn ($id) => (int) $id)->all()]);
+    }
+
+    public function updateSuggestedRoute(Request $request, AuditLogger $auditLogger, $id)
+    {
+        $this->rejectUnknownFields($request, ['office_ids']);
+        $validated = $request->validate([
+            'office_ids' => ['present', 'array', 'list', 'max:100'],
+            'office_ids.*' => ['required', 'integer', 'exists:offices,id'],
+        ]);
+        DB::transaction(function () use ($id, $validated, $request, $auditLogger) {
+            $type = $this->record($id, true);
+            DB::table('document_type_route_steps')->where('document_type_id', $type->id)->delete();
+            foreach ($validated['office_ids'] as $index => $officeId) {
+                DB::table('document_type_route_steps')->insert([
+                    'document_type_id' => $type->id, 'office_id' => $officeId,
+                    'position' => $index + 1, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+            $this->requireAudit($auditLogger, $request, 'document_type_route_updated', 'Suggested document type route updated.', $type->id);
+        });
+        return response()->json(['message' => 'Suggested route updated successfully.']);
+    }
+
     /**
      * Update a document type.
      */

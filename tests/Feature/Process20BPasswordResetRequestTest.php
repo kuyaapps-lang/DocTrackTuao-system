@@ -67,6 +67,8 @@ class Process20BPasswordResetRequestTest extends TestCase
             $table->string('email');
             $table->string('name')->nullable();
             $table->text('message')->nullable();
+            $table->string('request_type', 30)->default('reset');
+            $table->string('requested_password_hash')->nullable();
             $table->string('status', 20)->default('pending');
             $table->string('requested_ip', 45)->nullable();
             $table->string('requested_user_agent')->nullable();
@@ -239,6 +241,62 @@ class Process20BPasswordResetRequestTest extends TestCase
 
         $this->assertNoSensitiveLeak($response->getContent());
         $this->assertNoSensitiveLeak(AuditLog::query()->pluck('description')->implode("\n"));
+    }
+
+    public function test_user_selected_password_change_requires_admin_approval_and_never_exposes_the_password(): void
+    {
+        $admin = $this->user('Administrator', 'admin@example.test');
+        $target = $this->user('Office User', 'target@example.test');
+        $target->createToken('existing-session');
+
+        Sanctum::actingAs($target);
+        $submission = $this->postJson('/api/me/password-change-request', [
+            'password' => 'user-selected-secret-20b',
+            'password_confirmation' => 'user-selected-secret-20b',
+        ])->assertAccepted();
+
+        $changeRequest = PasswordResetRequest::query()->sole();
+        $this->assertSame(PasswordResetRequest::TYPE_CHANGE, $changeRequest->request_type);
+        $this->assertTrue(Hash::check('user-selected-secret-20b', $changeRequest->requested_password_hash));
+        $this->assertNoSensitiveLeak($submission->getContent());
+
+        Sanctum::actingAs($admin);
+        $approval = $this->postJson(
+            "/api/password-reset-requests/{$changeRequest->id}/resolve",
+            ['resolution_note' => 'Approved.']
+        )->assertOk()
+            ->assertJsonPath('message', 'Password change request approved successfully.');
+
+        $freshTarget = $target->fresh();
+        $this->assertTrue(Hash::check('user-selected-secret-20b', $freshTarget->password));
+        $this->assertFalse($freshTarget->must_change_password);
+        $this->assertSame(0, $freshTarget->tokens()->count());
+        $this->assertSame(PasswordResetRequest::STATUS_RESOLVED, $changeRequest->fresh()->status);
+        $this->assertNoSensitiveLeak($approval->getContent());
+    }
+
+    public function test_rejected_password_change_keeps_the_existing_password(): void
+    {
+        $admin = $this->user('Administrator', 'admin@example.test');
+        $target = $this->user('Office User', 'target@example.test');
+
+        Sanctum::actingAs($target);
+        $this->postJson('/api/me/password-change-request', [
+            'password' => 'rejected-secret-20b',
+            'password_confirmation' => 'rejected-secret-20b',
+        ])->assertAccepted();
+
+        $changeRequest = PasswordResetRequest::query()->sole();
+        Sanctum::actingAs($admin);
+        $this->postJson(
+            "/api/password-reset-requests/{$changeRequest->id}/reject",
+            ['resolution_note' => 'Not approved.']
+        )->assertOk();
+
+        $freshTarget = $target->fresh();
+        $this->assertTrue(Hash::check('original-secret-20b', $freshTarget->password));
+        $this->assertFalse($freshTarget->must_change_password);
+        $this->assertSame(PasswordResetRequest::STATUS_REJECTED, $changeRequest->fresh()->status);
     }
 
     public function test_reject_marks_request_rejected_and_audits(): void

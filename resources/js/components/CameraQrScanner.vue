@@ -1,6 +1,6 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref } from 'vue'
-import { ScanLine, X } from 'lucide-vue-next'
+import { ImageUp, ScanLine, X } from 'lucide-vue-next'
 import { BrowserQRCodeReader } from '@zxing/browser'
 
 import { normalizeRegistrationQrInput } from '@/lib/qr-registration'
@@ -12,9 +12,14 @@ defineProps({
 const emit = defineEmits(['scan', 'error'])
 const open = ref(false)
 const video = ref(null)
+const imageInput = ref(null)
 const message = ref('')
+const decodingImage = ref(false)
 let controls = null
 let stream = null
+// ZXing may report the same frame more than once before its controls stop.
+// Accept only the first valid result for each live-camera session.
+let hasLiveScanResult = false
 
 const stop = () => {
     controls?.stop()
@@ -49,23 +54,60 @@ const beginDecoding = async constraints => {
         video.value,
         result => {
             const token = normalizeRegistrationQrInput(result?.getText?.() || '')
-            if (!token) return
+            if (!token || hasLiveScanResult) return
+
+            hasLiveScanResult = true
             emit('scan', token)
             stop()
         }
     )
 }
 
+const openImageCapture = () => imageInput.value?.click()
+
+const decodeImage = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    message.value = ''
+    decodingImage.value = true
+    const imageUrl = URL.createObjectURL(file)
+
+    try {
+        const image = new Image()
+        image.src = imageUrl
+        await image.decode()
+
+        const result = await new BrowserQRCodeReader().decodeFromImageElement(image)
+        const token = normalizeRegistrationQrInput(result?.getText?.() || '')
+
+        if (!token) {
+            throw new Error('Invalid QR image')
+        }
+
+        emit('scan', token)
+    } catch {
+        message.value = 'No readable QR code was found in that photo. Take a clear, well-lit photo of the QR code and try again.'
+        emit('error', message.value)
+    } finally {
+        URL.revokeObjectURL(imageUrl)
+        decodingImage.value = false
+    }
+}
+
 const start = async () => {
     message.value = ''
-    open.value = true
+    hasLiveScanResult = false
 
     if (!window.isSecureContext) {
-        message.value = 'Camera access requires localhost or HTTPS. This page is currently using an insecure address; open it through localhost on this PC or configure HTTPS for the LAN address.'
-        open.value = false
-        emit('error', message.value)
+        // Android blocks live getUserMedia on HTTP, but its native image capture
+        // can still provide a QR photo for local decoding.
+        openImageCapture()
         return
     }
+
+    open.value = true
 
     if (!navigator.mediaDevices?.getUserMedia) {
         message.value = 'This browser cannot access a camera. Use a current browser over localhost or HTTPS, or type the code instead.'
@@ -102,9 +144,13 @@ onBeforeUnmount(stop)
 
 <template>
     <div class="relative">
-        <button type="button" :disabled="disabled" class="inline-flex size-11 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-800 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Open camera QR scanner" title="Open camera QR scanner" @click="start">
+        <button type="button" :disabled="disabled || decodingImage" class="inline-flex size-11 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-800 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Open camera QR scanner" title="Open camera QR scanner" @click="start">
             <ScanLine class="size-5" aria-hidden="true" />
         </button>
+        <button type="button" :disabled="disabled || decodingImage" class="ml-1 inline-flex size-11 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Capture QR code photo" title="Capture QR code photo" @click="openImageCapture">
+            <ImageUp class="size-5" aria-hidden="true" />
+        </button>
+        <input ref="imageInput" class="sr-only" type="file" accept="image/*" capture="environment" @change="decodeImage">
         <Teleport to="body">
             <div v-if="open" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4" role="dialog" aria-modal="true" aria-labelledby="camera-preview-title">
                 <section class="rounded-2xl bg-white p-5 shadow-2xl" style="width: min(96vw, 1152px)">

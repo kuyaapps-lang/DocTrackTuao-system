@@ -52,8 +52,8 @@ const processScan = async qrToken => {
             headers: { Accept: 'application/json', Authorization: `Bearer ${token()}` },
         })
         const list = await listResponse.json().catch(() => ({}))
-        const document = Array.isArray(list.data)
-            ? list.data.find(item => item.qr_code === qrToken)
+        const document = listResponse.ok && Array.isArray(list.data)
+            ? list.data[0] || null
             : null
         if (!listResponse.ok || !document) throw new Error('The scanned QR code does not identify a document you can process.')
 

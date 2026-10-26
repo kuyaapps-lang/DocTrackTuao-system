@@ -1,0 +1,634 @@
+{
+  "tables": {
+    "users": {
+      "id": "PK",
+      "name": "",
+      "email": "UQ",
+      "email_verified_at": "",
+      "password": "",
+      "remember_token": "",
+      "created_at": "",
+      "updated_at": "",
+      "role_id": "FK",
+      "department_id": "FK",
+      "office_id": "FK",
+      "must_change_password": "",
+      "username": "UQ",
+      "deactivated_at": "",
+      "designation": ""
+    },
+    "password_reset_tokens": {
+      "email": "PK",
+      "token": "",
+      "created_at": ""
+    },
+    "sessions": {
+      "id": "PK",
+      "user_id": "",
+      "ip_address": "",
+      "user_agent": "",
+      "payload": "",
+      "last_activity": ""
+    },
+    "cache": {
+      "key": "PK",
+      "value": "",
+      "expiration": ""
+    },
+    "cache_locks": {
+      "key": "PK",
+      "owner": "",
+      "expiration": ""
+    },
+    "jobs": {
+      "id": "PK",
+      "queue": "",
+      "payload": "",
+      "attempts": "",
+      "reserved_at": "",
+      "available_at": "",
+      "created_at": ""
+    },
+    "job_batches": {
+      "id": "PK",
+      "name": "",
+      "total_jobs": "",
+      "pending_jobs": "",
+      "failed_jobs": "",
+      "failed_job_ids": "",
+      "options": "",
+      "cancelled_at": "",
+      "created_at": "",
+      "finished_at": ""
+    },
+    "failed_jobs": {
+      "id": "PK",
+      "uuid": "UQ",
+      "connection": "",
+      "queue": "",
+      "payload": "",
+      "exception": "",
+      "failed_at": ""
+    },
+    "personal_access_tokens": {
+      "id": "PK",
+      "tokenable_type": "",
+      "tokenable_id": "",
+      "name": "",
+      "token": "UQ",
+      "abilities": "",
+      "last_used_at": "",
+      "expires_at": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "documents": {
+      "id": "PK",
+      "tracking_no": "UQ",
+      "title": "",
+      "description": "",
+      "status": "",
+      "created_at": "",
+      "updated_at": "",
+      "document_type_id": "FK",
+      "status_id": "FK",
+      "priority_id": "FK",
+      "origin_office_id": "FK",
+      "current_office_id": "FK",
+      "created_by": "FK",
+      "document_date": "",
+      "due_date": "",
+      "current_action_id": "FK",
+      "processing_note": "",
+      "current_action_updated_by": "FK",
+      "current_action_updated_at": "",
+      "completed_at": "",
+      "completed_by": "FK",
+      "archived_at": "",
+      "archived_by": "FK"
+    },
+    "departments": {
+      "id": "PK",
+      "department_name": "",
+      "department_code": "UQ",
+      "description": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "roles": {
+      "id": "PK",
+      "name": "",
+      "description": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "document_types": {
+      "id": "PK",
+      "type_name": "UQ",
+      "description": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "document_statuses": {
+      "id": "PK",
+      "status_name": "UQ",
+      "color": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "priorities": {
+      "id": "PK",
+      "priority_name": "UQ",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "offices": {
+      "id": "PK",
+      "department_id": "FK",
+      "office_name": "",
+      "office_code": "UQ",
+      "description": "",
+      "created_at": "",
+      "updated_at": "",
+      "signatory_name": "",
+      "signatory_designation": ""
+    },
+    "document_routes": {
+      "id": "PK",
+      "document_id": "FK",
+      "from_office_id": "FK",
+      "to_office_id": "FK",
+      "forwarded_by": "FK",
+      "received_by": "FK",
+      "forwarded_at": "",
+      "received_at": "",
+      "status_id": "FK",
+      "remarks": "",
+      "created_at": "",
+      "updated_at": "",
+      "action_id": "FK",
+      "cancelled_by": "FK",
+      "cancelled_at": "",
+      "cancellation_reason": "",
+      "rejected_by": "FK",
+      "rejected_at": "",
+      "rejection_reason": "",
+      "return_route_id": "FK"
+    },
+    "document_attachments": {
+      "id": "PK",
+      "document_id": "FK",
+      "original_filename": "",
+      "stored_filename": "",
+      "file_path": "",
+      "mime_type": "",
+      "file_size": "",
+      "uploaded_by": "FK",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "document_comments": {
+      "id": "PK",
+      "document_id": "FK",
+      "user_id": "FK",
+      "comment": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "route_actions": {
+      "id": "PK",
+      "action_name": "UQ",
+      "description": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "notifications": {
+      "id": "PK",
+      "document_id": "FK",
+      "user_id": "FK",
+      "title": "",
+      "message": "",
+      "is_read": "",
+      "read_at": "",
+      "created_at": "",
+      "updated_at": "",
+      "type": "",
+      "link": ""
+    },
+    "audit_logs": {
+      "id": "PK",
+      "user_id": "FK",
+      "module": "",
+      "action": "",
+      "record_id": "",
+      "description": "",
+      "ip_address": "",
+      "user_agent": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "document_qr_codes": {
+      "id": "PK",
+      "qr_token": "UQ",
+      "status": "",
+      "document_id": "FK / UQ",
+      "generated_by": "FK",
+      "generated_at": "",
+      "registered_at": "",
+      "created_at": "",
+      "updated_at": "",
+      "qr_code_request_id": "FK",
+      "assigned_office_id": "FK"
+    },
+    "processing_actions": {
+      "id": "PK",
+      "action_code": "UQ",
+      "action_name": "",
+      "is_active": "",
+      "sort_order": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "document_processing_logs": {
+      "id": "PK",
+      "document_id": "FK",
+      "office_id": "FK",
+      "user_id": "FK",
+      "processing_action_id": "FK",
+      "document_route_id": "FK",
+      "event_type": "",
+      "processing_note": "",
+      "event_note": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "password_reset_requests": {
+      "id": "PK",
+      "user_id": "FK",
+      "email": "",
+      "name": "",
+      "message": "",
+      "status": "",
+      "requested_ip": "",
+      "requested_user_agent": "",
+      "resolved_by_user_id": "FK",
+      "resolved_at": "",
+      "resolution_note": "",
+      "created_at": "",
+      "updated_at": "",
+      "request_type": "",
+      "requested_password_hash": ""
+    },
+    "qr_code_requests": {
+      "id": "PK",
+      "requested_by_user_id": "FK",
+      "requested_office_id": "FK",
+      "quantity": "",
+      "purpose": "",
+      "status": "",
+      "reviewed_by_user_id": "FK",
+      "reviewed_at": "",
+      "review_note": "",
+      "created_at": "",
+      "updated_at": ""
+    },
+    "document_office_tags": {
+      "id": "PK",
+      "document_id": "FK",
+      "office_id": "FK",
+      "created_at": "",
+      "updated_at": ""
+    }
+  },
+  "foreign_keys": [
+    [
+      "offices",
+      "department_id",
+      "departments",
+      true,
+      false
+    ],
+    [
+      "document_routes",
+      "document_id",
+      "documents",
+      false,
+      false
+    ],
+    [
+      "document_routes",
+      "from_office_id",
+      "offices",
+      false,
+      false
+    ],
+    [
+      "document_routes",
+      "to_office_id",
+      "offices",
+      false,
+      false
+    ],
+    [
+      "document_routes",
+      "forwarded_by",
+      "users",
+      false,
+      false
+    ],
+    [
+      "document_routes",
+      "received_by",
+      "users",
+      true,
+      false
+    ],
+    [
+      "document_routes",
+      "status_id",
+      "document_statuses",
+      false,
+      false
+    ],
+    [
+      "document_attachments",
+      "document_id",
+      "documents",
+      false,
+      false
+    ],
+    [
+      "document_attachments",
+      "uploaded_by",
+      "users",
+      false,
+      false
+    ],
+    [
+      "document_comments",
+      "document_id",
+      "documents",
+      false,
+      false
+    ],
+    [
+      "document_comments",
+      "user_id",
+      "users",
+      false,
+      false
+    ],
+    [
+      "document_routes",
+      "action_id",
+      "route_actions",
+      true,
+      false
+    ],
+    [
+      "notifications",
+      "document_id",
+      "documents",
+      true,
+      false
+    ],
+    [
+      "notifications",
+      "user_id",
+      "users",
+      false,
+      false
+    ],
+    [
+      "audit_logs",
+      "user_id",
+      "users",
+      true,
+      false
+    ],
+    [
+      "users",
+      "role_id",
+      "roles",
+      true,
+      false
+    ],
+    [
+      "users",
+      "department_id",
+      "departments",
+      true,
+      false
+    ],
+    [
+      "users",
+      "office_id",
+      "offices",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "document_type_id",
+      "document_types",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "status_id",
+      "document_statuses",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "priority_id",
+      "priorities",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "origin_office_id",
+      "offices",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "current_office_id",
+      "offices",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "created_by",
+      "users",
+      true,
+      false
+    ],
+    [
+      "document_qr_codes",
+      "document_id",
+      "documents",
+      true,
+      true
+    ],
+    [
+      "document_qr_codes",
+      "generated_by",
+      "users",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "current_action_id",
+      "processing_actions",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "current_action_updated_by",
+      "users",
+      true,
+      false
+    ],
+    [
+      "document_processing_logs",
+      "document_id",
+      "documents",
+      false,
+      false
+    ],
+    [
+      "document_processing_logs",
+      "office_id",
+      "offices",
+      true,
+      false
+    ],
+    [
+      "document_processing_logs",
+      "user_id",
+      "users",
+      true,
+      false
+    ],
+    [
+      "document_processing_logs",
+      "processing_action_id",
+      "processing_actions",
+      true,
+      false
+    ],
+    [
+      "document_processing_logs",
+      "document_route_id",
+      "document_routes",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "completed_by",
+      "users",
+      true,
+      false
+    ],
+    [
+      "documents",
+      "archived_by",
+      "users",
+      true,
+      false
+    ],
+    [
+      "password_reset_requests",
+      "user_id",
+      "users",
+      true,
+      false
+    ],
+    [
+      "password_reset_requests",
+      "resolved_by_user_id",
+      "users",
+      true,
+      false
+    ],
+    [
+      "qr_code_requests",
+      "requested_by_user_id",
+      "users",
+      false,
+      false
+    ],
+    [
+      "qr_code_requests",
+      "requested_office_id",
+      "offices",
+      true,
+      false
+    ],
+    [
+      "qr_code_requests",
+      "reviewed_by_user_id",
+      "users",
+      true,
+      false
+    ],
+    [
+      "document_qr_codes",
+      "qr_code_request_id",
+      "qr_code_requests",
+      true,
+      false
+    ],
+    [
+      "document_qr_codes",
+      "assigned_office_id",
+      "offices",
+      true,
+      false
+    ],
+    [
+      "document_office_tags",
+      "document_id",
+      "documents",
+      false,
+      false
+    ],
+    [
+      "document_office_tags",
+      "office_id",
+      "offices",
+      false,
+      false
+    ],
+    [
+      "document_routes",
+      "cancelled_by",
+      "users",
+      true,
+      false
+    ],
+    [
+      "document_routes",
+      "rejected_by",
+      "users",
+      true,
+      false
+    ],
+    [
+      "document_routes",
+      "return_route_id",
+      "document_routes",
+      true,
+      false
+    ]
+  ]
+}

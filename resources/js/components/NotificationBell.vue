@@ -74,7 +74,10 @@ const openNotification = async (notification) => {
     await markRead(notification)
     if (notification.link) {
         open.value = false
-        await router.push(notification.link)
+        await router.push({
+            path: notification.link,
+            query: { notification: String(notification.id) },
+        })
     }
 }
 
@@ -110,18 +113,26 @@ onBeforeUnmount(() => {
 
 <template>
     <div ref="root" class="relative">
-        <Button
-            type="button"
-            size="icon"
-            class="relative rounded-full"
-            aria-label="Open notifications"
-            aria-haspopup="menu"
-            :aria-expanded="open"
-            @click="toggle"
+        <slot
+            name="trigger"
+            :toggle="toggle"
+            :open="open"
+            :unread-count="unreadCount"
+            :badge-label="badgeLabel"
         >
-            <Bell aria-hidden="true" class="size-5" />
-            <span v-if="unreadCount" class="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{{ badgeLabel }}</span>
-        </Button>
+            <Button
+                type="button"
+                size="icon"
+                class="relative rounded-full"
+                aria-label="Open notifications"
+                aria-haspopup="menu"
+                :aria-expanded="open"
+                @click="toggle"
+            >
+                <Bell aria-hidden="true" class="size-5" />
+                <span v-if="unreadCount" class="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold leading-none text-white shadow-sm" :aria-label="`${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`">{{ badgeLabel }}</span>
+            </Button>
+        </slot>
 
         <div v-if="open" class="absolute right-0 z-40 mt-3 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-[0_18px_42px_rgb(67_86_119/0.16)] backdrop-blur-xl" role="menu" aria-label="Notifications">
             <div class="border-b border-slate-200 px-1 pb-2">
@@ -132,10 +143,10 @@ onBeforeUnmount(() => {
             <p v-else-if="!notifications.length" class="px-1 py-5 text-center text-sm text-slate-500">You have no notifications.</p>
             <ul v-else class="max-h-96 divide-y divide-slate-100 overflow-auto">
                 <li v-for="notification in notifications" :key="notification.id">
-                    <button type="button" class="w-full px-2 py-3 text-left transition-colors hover:bg-blue-50" :class="notification.is_read ? 'text-slate-600' : 'bg-blue-50/60 text-slate-900'" @click="openNotification(notification)">
-                        <span class="block text-sm font-semibold">{{ notification.title }}</span>
+                    <button type="button" class="w-full bg-transparent px-2 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset" :class="notification.is_read ? 'font-normal text-slate-600 dark:text-slate-300' : 'font-semibold text-slate-900 dark:text-slate-100'" @click="openNotification(notification)">
+                        <span class="block text-sm">{{ notification.title }}</span>
                         <span class="mt-1 block text-xs leading-5">{{ notification.message }}</span>
-                        <time class="mt-1 block text-[11px] text-slate-500">{{ formatTime(notification.created_at) }}</time>
+                        <time class="mt-1 block text-[11px] font-normal text-slate-500 dark:text-slate-400">{{ formatTime(notification.created_at) }}</time>
                     </button>
                 </li>
             </ul>

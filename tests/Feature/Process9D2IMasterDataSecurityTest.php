@@ -61,7 +61,7 @@ class Process9D2IMasterDataSecurityTest extends TestCase
         $this->actingRole($role);
         $before = $this->snapshot();
         $office = ['id' => $this->officeId, 'department_id' => $this->departmentId,
-            'office_name' => 'Office', 'office_code' => 'OFF', 'description' => 'Office description',
+            'office_name' => 'Office', 'office_code' => 'OFF', 'description' => 'Office description', 'signatory_name' => null, 'signatory_designation' => null,
             'department' => ['department_name' => 'Department']];
         $type = ['id' => $this->typeId, 'type_name' => 'Letter', 'description' => 'Type description'];
         foreach (['/api/offices' => [$office], '/api/offices/'.$this->officeId => $office,
@@ -133,7 +133,7 @@ class Process9D2IMasterDataSecurityTest extends TestCase
             $id = $created->json($field.'.id');
             $this->assertAudit($auditCount, $field.'_created', $label.' created.', $id);
             $expected = $resource === 'offices'
-                ? ['id' => $id, 'office_name' => 'New office', 'office_code' => 'NEW', 'department_id' => null, 'description' => null, 'department' => null]
+                ? ['id' => $id, 'office_name' => 'New office', 'office_code' => 'NEW', 'department_id' => null, 'description' => null, 'signatory_name' => null, 'signatory_designation' => null, 'department' => null]
                 : ['id' => $id, 'type_name' => 'New type', 'description' => null];
             $created->assertExactJson(['message' => $label.' created successfully', $field => $expected]);
             $this->safe($created);
@@ -205,17 +205,23 @@ class Process9D2IMasterDataSecurityTest extends TestCase
         $office = $this->postJson('/api/offices', [
             'office_name' => str_repeat('n', 150), 'office_code' => str_repeat('c', 20),
             'department_id' => (string) $this->departmentId, 'description' => $description,
+            'signatory_name' => str_repeat('s', 150),
+            'signatory_designation' => str_repeat('d', 150),
         ])->assertCreated();
         $id = $office->json('office.id');
         $this->assertAudit($auditCount, 'office_created', 'Office created.', $id);
         $office->assertJsonPath('office.department_id', $this->departmentId)
-            ->assertJsonPath('office.department.department_name', 'Department');
+            ->assertJsonPath('office.department.department_name', 'Department')
+            ->assertJsonPath('office.signatory_name', str_repeat('s', 150))
+            ->assertJsonPath('office.signatory_designation', str_repeat('d', 150));
         $this->safe($office);
         $auditCount = DB::table('audit_logs')->count();
         $updated = $this->putJson('/api/offices/'.$id, [
             'office_name' => 'Office', 'office_code' => str_repeat('c', 20),
         ])->assertOk()->assertJsonPath('office.description', $description)
-            ->assertJsonPath('office.department_id', $this->departmentId);
+            ->assertJsonPath('office.department_id', $this->departmentId)
+            ->assertJsonPath('office.signatory_name', str_repeat('s', 150))
+            ->assertJsonPath('office.signatory_designation', str_repeat('d', 150));
         $this->assertAudit($auditCount, 'office_updated', 'Office updated.', $id);
         $this->safe($updated);
         $auditCount = DB::table('audit_logs')->count();
@@ -374,7 +380,7 @@ class Process9D2IMasterDataSecurityTest extends TestCase
         Schema::create('offices', function (Blueprint $table) {
             $table->id(); $table->foreignId('department_id')->nullable()->constrained()->nullOnDelete();
             $table->string('office_name', 150); $table->string('office_code', 20)->unique();
-            $table->text('description')->nullable(); $table->string('internal')->nullable(); $table->timestamps();
+            $table->text('description')->nullable(); $table->string('signatory_name', 150)->nullable(); $table->string('signatory_designation', 150)->nullable(); $table->string('internal')->nullable(); $table->timestamps();
         });
         Schema::create('document_types', function (Blueprint $table) {
             $table->id(); $table->string('type_name', 100)->unique(); $table->text('description')->nullable();

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { computed, ref } from 'vue'
 import { buildDashboardQuery, buildDashboardRequestUrl, calculateDashboardPercentage, currentDashboardDateRange, currentDashboardMonth, dashboardRequestKey, isValidDashboardResponse, isValidDashboardTimestamp, normalizeDashboardMonth } from '../../resources/js/lib/dashboard.js'
+import { formatDateDisplay } from '../../resources/js/lib/date-picker.js'
 
 const validResponse = {
     filters: { month: null, date_from: null, date_to: null, timezone: 'Asia/Manila' }, scope: { type: 'system', office: null },
@@ -27,17 +28,10 @@ test('calculates the current dashboard month in the reporting timezone', () => {
     assert.equal(currentDashboardMonth(new Date('2026-09-30T16:01:00Z')), '2026-10')
     assert.equal(currentDashboardMonth(new Date('2026-09-30T15:59:00Z')), '2026-09')
 })
-test('dashboard defaults to today through the final day of the current month', async () => {
-    const replacements = []
+test('dashboard defaults to all records for the current user', async () => {
     const requests = []
-    let watcher = null
     await loadDashboardSetup({
-        route: { path: '/dashboard', query: {} },
-        router: { replace: value => replacements.push(value), push: () => {} },
-        watch: (getter, callback, options) => {
-            watcher = { getter, callback }
-            if (options?.immediate) return callback(getter())
-        },
+        router: { replace: () => {} },
         fetch: async url => {
             requests.push(url)
             return {
@@ -45,23 +39,33 @@ test('dashboard defaults to today through the final day of the current month', a
                 status: 200,
                 json: async () => ({
                     ...validResponse,
-                    filters: { ...validResponse.filters, date_from: '2026-09-10', date_to: '2026-09-30' },
+                    filters: validResponse.filters,
                 }),
             }
         },
     })
 
-    assert.ok(watcher)
     await new Promise(resolve => setTimeout(resolve, 0))
-    assert.deepEqual(JSON.parse(JSON.stringify(replacements)), [])
-    assert.equal(requests.at(-1), '/api/dashboard/summary?date_from=2026-09-10&date_to=2026-09-30')
+    assert.equal(requests.at(-1), '/api/dashboard/summary')
 })
-test('dashboard applies and clears a complete date range through the URL', async () => {
-    const pushes = []
+test('dashboard shows today through month-end as the empty date-filter watermark without filtering results', async () => {
+    const source = await readFile(new URL('../../resources/js/pages/Dashboard.vue', import.meta.url), 'utf8')
+
+    assert.match(source, /const watermarkRange = currentDashboardDateRange\(\)/)
+    assert.match(source, /const datePlaceholder = `\$\{formatDateDisplay\(watermarkRange\.from\)\} - \$\{formatDateDisplay\(watermarkRange\.to\)\}`/)
+    assert.match(source, /<DashboardDateRangePicker :from="dateFrom" :to="dateTo" aria-label="Dashboard date range" :placeholder="datePlaceholder"/)
+})
+test('dashboard applies a date range temporarily and clears back to all records', async () => {
+    const requests = []
     const page = await loadDashboardSetup({
-        route: { path: '/dashboard', query: { date_from: '2026-09-01', date_to: '2026-09-30' } },
-        router: { replace: () => {}, push: value => pushes.push(value) },
-        watch: () => {},
+        router: { replace: () => {} },
+        fetch: async url => ({ ok: true, status: 200, json: async () => {
+            requests.push(url)
+            const filters = url.includes('?')
+                ? { ...validResponse.filters, date_from: '2026-09-10', date_to: '2026-09-20' }
+                : validResponse.filters
+            return { ...validResponse, filters }
+        } }),
     })
 
     page.dateFrom.value = '2026-09-10'
@@ -69,9 +73,9 @@ test('dashboard applies and clears a complete date range through the URL', async
     await page.updateDateRange()
     await page.clearDateRange()
 
-    assert.deepEqual(JSON.parse(JSON.stringify(pushes)), [
-        { path: '/dashboard', query: { date_from: '2026-09-10', date_to: '2026-09-20' } },
-        { path: '/dashboard', query: { date_from: '2026-09-10', date_to: '2026-09-30' } },
+    assert.deepEqual(requests.slice(-2), [
+        '/api/dashboard/summary?date_from=2026-09-10&date_to=2026-09-20',
+        '/api/dashboard/summary',
     ])
 })
 test('formats dashboard timestamps in the reporting timezone', async () => {
@@ -323,12 +327,10 @@ test('percentage and response validation helpers do not mutate inputs', () => {
 })
 
 const loadDashboardSetup = async ({
-    route,
     router,
-    watch,
     fetch = async () => ({ ok: true, status: 200, json: async () => validResponse }),
     currentDashboardMonth: currentMonth = () => '2026-09',
-    currentDashboardDateRange: currentRange = () => ({ from: '2026-09-10', to: '2026-09-30' }),
+    currentDashboardDateRange: currentRange = () => ({ from: '2026-09-10', to: '2026-09-10' }),
 }) => {
     const source = await readFile(new URL('../../resources/js/pages/Dashboard.vue', import.meta.url), 'utf8')
     const setup = source.match(/<script setup>([\s\S]*?)<\/script>/)[1]
@@ -336,9 +338,7 @@ const loadDashboardSetup = async ({
 
     return runInNewContext(`${setup}\n;({ clearDateRange, dateFrom, dateTo, formatDashboardDateTime, updateDateRange })`, {
         ref, computed,
-        onBeforeUnmount: () => {}, onMounted: () => {},
-        watch,
-        useRoute: () => route,
+        onBeforeUnmount: () => {}, onMounted: callback => callback(),
         useRouter: () => router,
         useAuth: () => ({ clearCurrentUser: () => {}, getToken: () => 'test-token', ensureCurrentUser: async () => null }),
         buildDashboardQuery,
@@ -346,6 +346,7 @@ const loadDashboardSetup = async ({
         calculateDashboardPercentage,
         currentDashboardMonth: currentMonth,
         currentDashboardDateRange: currentRange,
+        formatDateDisplay,
         dashboardRequestKey,
         isValidDashboardResponse,
         normalizeDashboardMonth,

@@ -49,10 +49,11 @@ export const currentDashboardDateRange = (date = new Date(), timeZone = 'Asia/Ma
     const year = Number(part('year'))
     const month = Number(part('month'))
     const day = part('day')
+    const today = `${year}-${String(month).padStart(2, '0')}-${day}`
     const endDay = String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')
 
     return {
-        from: `${year}-${String(month).padStart(2, '0')}-${day}`,
+        from: today,
         to: `${year}-${String(month).padStart(2, '0')}-${endDay}`,
     }
 }

@@ -47,6 +47,7 @@ class Process5CAuthUserAuditTest extends TestCase
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->string('designation', 150)->nullable();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
@@ -200,7 +201,7 @@ class Process5CAuthUserAuditTest extends TestCase
             'module' => AuditLog::MODULE_USERS,
             'action' => AuditLog::ACTION_CREATED,
             'record_id' => $targetId,
-            'description' => 'Changed fields: name, username, email, role_id, office_id, department_id; password changed: yes.',
+            'description' => 'Changed fields: name, username, designation, email, role_id, office_id, department_id; password changed: yes.',
         ]);
     }
 
@@ -645,6 +646,7 @@ class Process5CAuthUserAuditTest extends TestCase
             'id',
             'name',
             'username',
+            'designation',
             'email',
             'role_id',
             'must_change_password',
@@ -669,7 +671,7 @@ class Process5CAuthUserAuditTest extends TestCase
     {
         return [
             'users' => DB::table('users')->orderBy('id')->get([
-                'id', 'name', 'email', 'role_id', 'department_id', 'office_id',
+                'id', 'name', 'designation', 'email', 'role_id', 'department_id', 'office_id',
                 'deactivated_at', 'email_verified_at', 'created_at', 'updated_at',
             ])->map(fn ($row): array => [
                 'id' => (int) $row->id,

@@ -68,7 +68,7 @@ const createStorage = () => {
     }
 }
 
-test('login reset request modal submits public request fields and shows generic success', async () => {
+test('login reset request modal submits public request fields, closes, and confirms success', async () => {
     const submissions = []
     const page = await loadSetup('../../resources/js/pages/Login.vue', {
         useRoute: () => ({ query: {} }),
@@ -81,6 +81,7 @@ test('login reset request modal submits public request fields and shows generic 
         },
     }, [
         'loginIdentifier',
+        'success',
         'resetRequestOpen',
         'resetRequestForm',
         'resetRequestSuccess',
@@ -96,11 +97,11 @@ test('login reset request modal submits public request fields and shows generic 
 
     await page.submitResetRequest()
 
-    assert.equal(page.resetRequestOpen.value, true)
+    assert.equal(page.resetRequestOpen.value, false)
     assert.equal(page.resetRequestError.value, '')
     assert.equal(
-        page.resetRequestSuccess.value,
-        'If the account exists, an administrator will review the password reset request.'
+        page.success.value,
+        'Password reset request sent. An administrator will review the password reset request.'
     )
     assert.deepEqual(JSON.parse(JSON.stringify(submissions)), [{
         email: 'person@example.test',

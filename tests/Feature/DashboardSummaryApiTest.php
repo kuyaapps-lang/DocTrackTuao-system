@@ -31,6 +31,8 @@ class DashboardSummaryApiTest extends TestCase
             $table->id();
             $table->string('office_name');
             $table->string('office_code')->unique();
+            $table->string('signatory_name', 150)->nullable();
+            $table->string('signatory_designation', 150)->nullable();
             $table->timestamps();
         });
         Schema::create('users', function (Blueprint $table): void {
@@ -73,6 +75,10 @@ class DashboardSummaryApiTest extends TestCase
             $table->unsignedBigInteger('created_by')->nullable();
             $table->date('document_date')->nullable();
             $table->date('due_date')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->unsignedBigInteger('completed_by')->nullable();
+            $table->timestamp('archived_at')->nullable();
+            $table->unsignedBigInteger('archived_by')->nullable();
             $table->timestamps();
         });
         Schema::create('document_routes', function (Blueprint $table): void {
@@ -163,6 +169,10 @@ class DashboardSummaryApiTest extends TestCase
     public function test_accomplishment_report_is_office_scoped_and_counts_activity(): void
     {
         $office = $this->office('REPORT');
+        DB::table('offices')->where('id', $office)->update([
+            'signatory_name' => 'Maria Santos',
+            'signatory_designation' => 'Municipal Budget Officer',
+        ]);
         $otherOffice = $this->office('OTHERREPORT');
         $document = $this->document(null, $office, $office);
         $this->route($document, $office, $otherOffice, '2026-10-05 01:00:00', '2026-10-06 02:00:00');
@@ -173,15 +183,23 @@ class DashboardSummaryApiTest extends TestCase
             'created_at' => '2026-10-06 03:00:00',
             'updated_at' => '2026-10-06 03:00:00',
         ]);
+        DB::table('documents')->where('id', $document)->update([
+            'completed_at' => '2026-10-06 04:00:00',
+            'archived_at' => '2026-10-07 05:00:00',
+        ]);
         Sanctum::actingAs($this->user('Office User', $office));
 
         $this->getJson('/api/reports/accomplishment?date_from=2026-10-05&date_to=2026-10-11')
             ->assertOk()
             ->assertJsonPath('scope.type', 'office')
             ->assertJsonPath('scope.office.id', $office)
+            ->assertJsonPath('scope.office.signatory_name', 'Maria Santos')
+            ->assertJsonPath('scope.office.signatory_designation', 'Municipal Budget Officer')
             ->assertJsonPath('summary.received_documents', 0)
             ->assertJsonPath('summary.outgoing_documents', 1)
-            ->assertJsonPath('summary.status_changes', 1);
+            ->assertJsonPath('summary.status_changes', 1)
+            ->assertJsonPath('summary.completed_documents', 1)
+            ->assertJsonPath('summary.archived_documents', 1);
     }
 
     public function test_role_without_reports_permission_is_forbidden(): void
@@ -192,7 +210,7 @@ class DashboardSummaryApiTest extends TestCase
         )->assertForbidden();
     }
 
-    public function test_administrator_and_records_officer_have_system_scope(): void
+    public function test_administrator_has_system_scope_and_records_officer_has_office_scope(): void
     {
         $status = $this->documentStatus('Received');
         $office = $this->office('SYSTEM');
@@ -231,6 +249,30 @@ class DashboardSummaryApiTest extends TestCase
                 ->assertJsonPath('scope.office.id', $office)
                 ->assertJsonPath('scope.office.name', 'Office SCOPE');
         }
+    }
+
+    public function test_records_officer_and_office_user_in_the_same_office_share_dashboard_data(): void
+    {
+        $office = $this->office('SHARED');
+        $otherOffice = $this->office('OTHER');
+        $status = $this->documentStatus('Received');
+        $document = $this->document($status, $office, $otherOffice);
+        $this->route($document, $office, $otherOffice);
+
+        Sanctum::actingAs($this->user('Records Officer', $office));
+        $recordsOfficer = $this->readOnlyRequest(
+            fn (): TestResponse => $this->getJson('/api/dashboard/summary')
+        )->assertOk()->assertJsonPath('scope.type', 'office')
+            ->assertJsonPath('scope.office.id', $office);
+
+        Sanctum::actingAs($this->user('Office User', $office));
+        $officeUser = $this->readOnlyRequest(
+            fn (): TestResponse => $this->getJson('/api/dashboard/summary')
+        )->assertOk()->assertJsonPath('scope.type', 'office')
+            ->assertJsonPath('scope.office.id', $office);
+
+        $this->assertSame($recordsOfficer->json('summary'), $officeUser->json('summary'));
+        $this->assertSame($recordsOfficer->json('recent_documents'), $officeUser->json('recent_documents'));
     }
 
     public function test_office_scoped_user_without_office_is_forbidden(): void

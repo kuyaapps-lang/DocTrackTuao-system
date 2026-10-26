@@ -20,6 +20,17 @@ const submit = () => {
     emit('scan', token)
 }
 
+const normalizeScannedUrl = event => {
+    const inputValue = typeof event?.target?.value === 'string'
+        ? event.target.value
+        : value.value
+    const token = normalizeRegistrationQrInput(inputValue)
+
+    if (token !== inputValue.trim()) {
+        value.value = token
+    }
+}
+
 const focus = async () => {
     await nextTick()
     input.value?.$el?.focus()
@@ -38,8 +49,9 @@ defineExpose({ focus })
                 v-model="value"
                 :disabled="disabled"
                 placeholder="Scan a document QR code, then press Enter"
-                class="h-12 pr-14"
+                class="h-12 pr-28"
                 autocomplete="off"
+                @input="normalizeScannedUrl"
                 @keydown.enter.prevent="submit"
             />
             <div class="absolute right-1 top-1/2 -translate-y-1/2">

@@ -12,6 +12,7 @@ import {
 const props = defineProps({
     from: { type: String, default: '' },
     to: { type: String, default: '' },
+    placeholder: { type: String, default: 'Select date range' },
     disabled: { type: Boolean, default: false },
     ariaLabel: { type: String, default: 'Choose date range' },
 })
@@ -143,7 +144,7 @@ onBeforeUnmount(() => {
             aria-haspopup="dialog"
             @click="toggle"
         >
-            <span>{{ displayValue || 'Select date range' }}</span>
+            <span>{{ displayValue || placeholder }}</span>
             <CalendarDays :size="18" aria-hidden="true" />
         </button>
 

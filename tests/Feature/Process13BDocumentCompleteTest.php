@@ -46,8 +46,24 @@ class Process13BDocumentCompleteTest extends TestCase
     public function test_current_office_user_can_complete_document_with_history_and_audit(): void
     {
         $officeId = $this->createOffice('MAYOR');
+        $originOfficeId = $this->createOffice('ORIGIN');
         $user = $this->createUser('Office User', $officeId);
-        $document = $this->createDocument($officeId);
+        $document = $this->createDocument($officeId, overrides: [
+            'origin_office_id' => $originOfficeId,
+        ]);
+        DB::table('document_routes')->insert([
+            'document_id' => $document->id,
+            'from_office_id' => $originOfficeId,
+            'to_office_id' => $officeId,
+            'forwarded_by' => $user->id,
+            'received_by' => $user->id,
+            'forwarded_at' => now()->subMinute(),
+            'received_at' => now(),
+            'status_id' => $this->statusId('Received'),
+            'action_id' => $this->routeActionId('Forward'),
+            'created_at' => now()->subMinute(),
+            'updated_at' => now(),
+        ]);
         Sanctum::actingAs($user);
 
         $response = $this->postJson("/api/documents/{$document->id}/complete")
@@ -83,7 +99,22 @@ class Process13BDocumentCompleteTest extends TestCase
 
         $this->assertSame(1, DB::table('document_processing_logs')->count());
         $this->assertSame(1, AuditLog::count());
-        $this->assertSame(0, DB::table('document_routes')->count());
+        $this->assertSame(1, DB::table('document_routes')->count());
+    }
+
+    public function test_initial_document_without_a_received_route_cannot_be_completed(): void
+    {
+        $officeId = $this->createOffice('INITIAL');
+        $user = $this->createUser('Office User', $officeId);
+        $document = $this->createDocument($officeId);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/documents/{$document->id}/complete")
+            ->assertConflict();
+
+        $this->assertIncompleteState($document->id);
+        $this->assertSame(0, DB::table('document_processing_logs')->count());
+        $this->assertSame(0, AuditLog::count());
     }
 
     public function test_wrong_office_no_office_and_viewer_cannot_complete(): void

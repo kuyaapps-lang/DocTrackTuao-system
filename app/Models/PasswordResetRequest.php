@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PasswordResetRequest extends Model
 {
+    public const TYPE_RESET = 'reset';
+    public const TYPE_CHANGE = 'change';
     public const STATUS_PENDING = 'pending';
     public const STATUS_RESOLVED = 'resolved';
     public const STATUS_REJECTED = 'rejected';
@@ -24,12 +26,18 @@ class PasswordResetRequest extends Model
         'email',
         'name',
         'message',
+        'request_type',
+        'requested_password_hash',
         'status',
         'requested_ip',
         'requested_user_agent',
         'resolved_by_user_id',
         'resolved_at',
         'resolution_note',
+    ];
+
+    protected $hidden = [
+        'requested_password_hash',
     ];
 
     protected $casts = [

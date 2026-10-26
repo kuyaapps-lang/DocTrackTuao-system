@@ -19,6 +19,7 @@ const permissionSets = {
         'qr.approve',
         'qr.void',
         'master_data.view',
+        'master_data.manage',
         'users.manage',
         'audit.view',
         'reports.view',
@@ -38,7 +39,6 @@ const permissionSets = {
         'documents.view',
         'documents.process',
         'documents.route',
-        'qr.request',
         'master_data.view',
         'reports.view',
     ],
@@ -72,24 +72,26 @@ test('administrator sees every current sidebar destination', () => {
             'master-data',
             'offices',
             'document-types',
+            'document-statuses',
             'reports',
             'accomplishment-report',
+            'report-signatories',
             'users',
             'audit',
         ]
     )
 })
 
-test('records officer sees every current link except users', () => {
+test('records officer sees registration, review, and reporting links without bulk transactions', () => {
     assert.deepEqual(
-        flattenKeys(visibleNavigation(permissionSets.recordsOfficer)),
+        flattenKeys(visibleNavigation(
+            permissionSets.recordsOfficer,
+            'Records Officer'
+        )),
         [
             'dashboard',
             'outgoing-documents',
             'incoming-documents',
-            'received-document',
-            'change-status',
-            'release-document',
             'document-inquiry',
             'qr-codes',
             'master-data',
@@ -102,7 +104,7 @@ test('records officer sees every current link except users', () => {
     )
 })
 
-test('office user sees QR requests but not master data links', () => {
+test('office user does not see QR requests or master data links', () => {
     assert.deepEqual(
         flattenKeys(visibleNavigation(permissionSets.officeUser)),
         [
@@ -113,7 +115,6 @@ test('office user sees QR requests but not master data links', () => {
             'change-status',
             'release-document',
             'document-inquiry',
-            'qr-codes',
             'reports',
             'accomplishment-report',
         ]
@@ -165,6 +166,11 @@ test('master data remains one group with stable child metadata', () => {
                 group: 'master-data',
                 permission: 'master_data.view',
             },
+            {
+                key: 'document-statuses',
+                group: 'master-data',
+                permission: 'master_data.manage',
+            },
         ]
     )
 })
@@ -202,6 +208,7 @@ test('each other sidebar destination resolves to its own key', () => {
         ['/users', 'users'],
         ['/audit', 'audit'],
         ['/reports/accomplishment', 'accomplishment-report'],
+        ['/reports/signatories', 'report-signatories'],
     ]) {
         assert.equal(resolveActiveNavigationKey(path), key)
     }
@@ -220,8 +227,9 @@ test('public and unknown routes have no active sidebar key', () => {
     }
 })
 
-test('navigation definitions include the reports group and accomplishment report', () => {
+test('navigation definitions include the reports group, accomplishment report, and signatories', () => {
     const serialized = JSON.stringify(navigationItems).toLowerCase()
 
     assert.equal(serialized.includes('accomplishment report'), true)
+    assert.equal(serialized.includes('report signatories'), true)
 })

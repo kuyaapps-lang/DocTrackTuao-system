@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import {
     CheckCircle2,
     Filter,
@@ -16,16 +16,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DashboardSkeleton from '@/components/loaders/DashboardSkeleton.vue'
 import DashboardDateRangePicker from '@/components/DashboardDateRangePicker.vue'
 import { useAuth } from '@/lib/auth'
+import { formatDateDisplay } from '@/lib/date-picker'
 import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import { currentDashboardDateRange, isValidDashboardResponse } from '@/lib/dashboard'
 
-const route = useRoute()
 const router = useRouter()
 const { clearCurrentUser, getToken, ensureCurrentUser } = useAuth()
 const dashboard = ref(null)
 const dateFrom = ref('')
 const dateTo = ref('')
-const defaultDateRange = currentDashboardDateRange()
 const loading = ref(true)
 const state = ref('loading')
 let activeController = null
@@ -41,6 +40,8 @@ const metrics = computed(() => dashboard.value ? [
     { label: 'Received', value: dashboard.value.summary.received_documents, icon: CheckCircle2, tone: 'from-rose-500 to-rose-700' },
 ] : [])
 const scopeLabel = computed(() => !dashboard.value ? '' : dashboard.value.scope.type === 'system' ? 'All offices' : dashboard.value.scope.office.name)
+const watermarkRange = currentDashboardDateRange()
+const datePlaceholder = `${formatDateDisplay(watermarkRange.from)} - ${formatDateDisplay(watermarkRange.to)}`
 const formatDashboardDateTime = value => {
     if (!value) return 'N/A'
 
@@ -78,20 +79,31 @@ const dateRangeLabel = computed(() => {
         ? dashboard.value.filters.date_from
         : `${dashboard.value.filters.date_from} to ${dashboard.value.filters.date_to}`
 })
+const piePalette = [
+    { from: '#60a5fa', to: '#1d4ed8' },
+    { from: '#4ade80', to: '#15803d' },
+    { from: '#fb923c', to: '#c2410c' },
+    { from: '#a78bfa', to: '#6d28d9' },
+    { from: '#fb7185', to: '#be123c' },
+    { from: '#22d3ee', to: '#0e7490' },
+]
 const pieStyle = items => {
-    const colors = ['#2563eb', '#16a34a', '#f97316', '#7c3aed', '#e11d48', '#0891b2']
     const total = items.reduce((sum, item) => sum + item.count, 0)
     if (!total) return { background: '#e2e8f0' }
     let position = 0
     const segments = items.map((item, index) => {
         const next = position + (item.count / total) * 100
-        const segment = `${colors[index % colors.length]} ${position}% ${next}%`
+        const tone = piePalette[index % piePalette.length]
+        const segment = `${tone.from} ${position}%, ${tone.to} ${next}%`
         position = next
         return segment
     })
     return { background: `conic-gradient(${segments.join(', ')})` }
 }
-const pieColor = index => ['#2563eb', '#16a34a', '#f97316', '#7c3aed', '#e11d48', '#0891b2'][index % 6]
+const pieLegendStyle = index => {
+    const tone = piePalette[index % piePalette.length]
+    return { background: `linear-gradient(135deg, ${tone.from}, ${tone.to})` }
+}
 const documentStatusClass = status => {
     switch (String(status).toLowerCase()) {
         case 'received':
@@ -116,12 +128,12 @@ const documentStatusClass = status => {
     }
 }
 const routingEventLabel = eventType => eventType === 'received' ? 'Received' : 'Forwarded'
-const priorityClass = priority => ({
-    urgent: 'bg-red-100 text-red-700 dark:bg-red-950/70 dark:text-red-200',
-    high: 'bg-orange-100 text-orange-700 dark:bg-orange-950/70 dark:text-orange-200',
-    normal: 'bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-200',
-    low: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
-}[String(priority).toLowerCase()] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200')
+const priorityClass = priority => String(priority).toLowerCase() === 'urgent'
+    ? 'bg-red-100 text-red-700 dark:bg-red-950/70 dark:text-red-200'
+    : 'bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-200'
+const priorityLabel = priority => String(priority || '').toLowerCase() === 'urgent'
+    ? 'Urgent'
+    : priority ? 'Normal' : 'Unassigned'
 const isUrgent = document => String(document.priority?.name).toLowerCase() === 'urgent'
 
 const clearLocalAuthentication = async () => {
@@ -190,29 +202,16 @@ const loadDashboard = async (from = '', to = '') => {
     }
 }
 
-const updateDateRange = () => router.push({
-    path: route.path,
-    query: { date_from: dateFrom.value, date_to: dateTo.value },
-})
+const updateDateRange = () => loadDashboard(dateFrom.value, dateTo.value)
 const clearDateRange = () => {
-    dateFrom.value = defaultDateRange.from
-    dateTo.value = defaultDateRange.to
-    return router.push({
-        path: route.path,
-        query: { date_from: dateFrom.value, date_to: dateTo.value },
-    })
+    dateFrom.value = ''
+    dateTo.value = ''
+    return loadDashboard()
 }
 const retry = () => loadDashboard(dateFrom.value, dateTo.value)
 
-watch(() => [route.query.date_from, route.query.date_to], ([from, to]) => {
-    const hasCompleteRange = typeof from === 'string' && typeof to === 'string'
-    dateFrom.value = hasCompleteRange ? from : defaultDateRange.from
-    dateTo.value = hasCompleteRange ? to : defaultDateRange.to
-
-    return loadDashboard(dateFrom.value, dateTo.value)
-}, { immediate: true })
-
 onMounted(() => {
+    loadDashboard()
     ensureCurrentUser().then(user => {
         if (!user) return
         const channel = ['Administrator', 'Records Officer'].includes(user.role?.role_name || user.role?.name)
@@ -240,7 +239,7 @@ onBeforeUnmount(() => {
                         <span class="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[11pt] font-semibold text-blue-700 dark:bg-blue-950/70 dark:text-blue-200">{{ scopeLabel || 'Loading report scope...' }}</span>
                     </div>
                     <form class="flex w-full flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/90 sm:w-auto" @submit.prevent="updateDateRange">
-                        <DashboardDateRangePicker :from="dateFrom" :to="dateTo" aria-label="Dashboard date range" :disabled="loading" @update:from="dateFrom = $event" @update:to="dateTo = $event" />
+                        <DashboardDateRangePicker :from="dateFrom" :to="dateTo" aria-label="Dashboard date range" :placeholder="datePlaceholder" :disabled="loading" @update:from="dateFrom = $event" @update:to="dateTo = $event" />
                         <Button type="submit" class="border border-blue-900 bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="loading || !dateFrom || !dateTo">
                             <Filter class="mr-2 h-4 w-4" />
                             Apply
@@ -281,9 +280,9 @@ onBeforeUnmount(() => {
                 </div>
 
                 <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/95">
-                    <div class="mb-4"><h3 class="text-lg font-bold text-slate-800 dark:text-slate-100">Document distribution</h3><p class="text-sm text-slate-500 dark:text-slate-400">Status, current office, and origin office</p></div>
+                    <div class="mb-4"><h3 class="text-lg font-bold text-slate-800 dark:text-slate-100">Document Distribution Overview</h3><p class="text-sm text-slate-500 dark:text-slate-400">Status, current custody, and originating office</p></div>
                     <div class="grid gap-6 xl:grid-cols-3">
-                    <Card v-for="distribution in [['Documents by status', dashboard.status_distribution, 'status'], ['Documents by current office', dashboard.current_office_distribution, 'office'], ['Documents by origin office', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]" class="gap-0 overflow-hidden border-slate-200 py-0 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                    <Card v-for="distribution in [['Status Breakdown', dashboard.status_distribution, 'status'], ['Current Custody by Office', dashboard.current_office_distribution, 'office'], ['Originating Office', dashboard.origin_office_distribution, 'office']]" :key="distribution[0]" class="gap-0 overflow-hidden border-slate-200 py-0 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                         <CardHeader class="border-b border-slate-100 bg-white px-5 py-3 !pb-3 dark:border-slate-700 dark:bg-slate-800"><CardTitle class="text-[11pt] font-bold text-slate-800 dark:text-slate-100">{{ distribution[0] }}</CardTitle></CardHeader>
                         <CardContent class="px-4 pb-4 pt-3">
                             <p v-if="distribution[1].length === 0" class="py-4 text-center text-[12pt] text-gray-500 dark:text-slate-400">No matching documents for this period.</p>
@@ -292,7 +291,7 @@ onBeforeUnmount(() => {
                             <ul class="min-w-0 flex-1 space-y-2.5">
                                 <li v-for="(item, index) in distribution[1]" :key="`${distribution[0]}-${item[distribution[2]].id ?? 'none'}`" class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                                     <div class="min-w-0">
-                                        <div class="flex items-start gap-2 text-[12pt] leading-snug text-slate-800 dark:text-slate-200"><span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: pieColor(index) }" aria-hidden="true"></span><span class="break-words">{{ item[distribution[2]].name }}</span></div>
+                                        <div class="flex items-start gap-2 text-[12pt] leading-snug text-slate-800 dark:text-slate-200"><span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" :style="pieLegendStyle(index)" aria-hidden="true"></span><span class="break-words">{{ item[distribution[2]].name }}</span></div>
                                     </div>
                                     <span class="text-[12pt] font-semibold leading-none text-slate-900 dark:text-white">{{ item.count }}</span>
                                 </li>
@@ -330,7 +329,7 @@ onBeforeUnmount(() => {
                                         </td>
                                         <td class="px-5 py-3 align-top font-medium text-slate-800 dark:text-slate-100">{{ document.document_details }}</td>
                                         <td class="px-5 py-3 align-top"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="documentStatusClass(document.status.name)">{{ document.status.name }}</span></td>
-                                        <td class="px-5 py-3 align-top"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="priorityClass(document.priority?.name)">{{ document.priority?.name || 'Unassigned' }}</span></td>
+                                        <td class="px-5 py-3 align-top"><span class="inline-flex rounded-full px-2.5 py-1 text-[10.5pt] font-semibold" :class="priorityClass(document.priority?.name)">{{ priorityLabel(document.priority?.name) }}</span></td>
                                         <td class="px-5 py-3 text-center align-top text-slate-600 dark:text-slate-300">
                                             <time :datetime="document.created_at" class="block">
                                                 <span class="block">{{ formatDashboardDate(document.created_at) }}</span>

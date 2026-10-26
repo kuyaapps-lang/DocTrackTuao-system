@@ -15,8 +15,12 @@ class DocumentRoute extends Model
         'to_office_id',
         'forwarded_by',
         'received_by',
+        'rejected_by',
         'forwarded_at',
         'received_at',
+        'rejected_at',
+        'rejection_reason',
+        'return_route_id',
         'cancelled_by',
         'cancelled_at',
         'cancellation_reason',
@@ -40,6 +44,9 @@ class DocumentRoute extends Model
             'received_at' =>
                 'datetime',
 
+            'rejected_at' =>
+                'datetime',
+
             'cancelled_at' =>
                 'datetime',
         ];
@@ -55,6 +62,10 @@ class DocumentRoute extends Model
 
         if (Schema::hasColumn($this->getTable(), 'cancelled_at')) {
             $query->whereNull('cancelled_at');
+        }
+
+        if (Schema::hasColumn($this->getTable(), 'rejected_at')) {
+            $query->whereNull('rejected_at');
         }
 
         return $query;
@@ -114,6 +125,22 @@ class DocumentRoute extends Model
         return $this->belongsTo(
             User::class,
             'received_by'
+        );
+    }
+
+    public function rejectedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'rejected_by'
+        );
+    }
+
+    public function returnRoute(): BelongsTo
+    {
+        return $this->belongsTo(
+            self::class,
+            'return_route_id'
         );
     }
 

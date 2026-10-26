@@ -279,16 +279,16 @@ class DocumentListApiContractTest extends TestCase
 
         $this->assertPaginationShape($response->json());
 
-        $this->assertSame([$received->id, $pending->id], array_column($data, 'id'));
+        $this->assertSame([$pending->id, $received->id], array_column($data, 'id'));
         $this->assertNotContains($originOnly->id, array_column($data, 'id'));
         $this->assertNotContains($custodyOnly->id, array_column($data, 'id'));
-        $this->assertSame('NEW Office', $data[0]['routes'][0]['from_office']['office_name']);
-        $this->assertNull($data[1]['routes'][0]['received_at']);
+        $this->assertNull($data[0]['routes'][0]['received_at']);
+        $this->assertSame('NEW Office', $data[1]['routes'][0]['from_office']['office_name']);
         $this->assertSame([
             'id', 'tracking_no', 'qr_code', 'title', 'type', 'priority', 'routes',
         ], array_keys($data[0]));
-        $this->assertSame('QR-INCOMING-PENDING', $data[1]['qr_code']);
-        $this->assertNull($data[1]['priority']);
+        $this->assertSame('QR-INCOMING-PENDING', $data[0]['qr_code']);
+        $this->assertNull($data[0]['priority']);
         $this->assertSame([
             'from_office', 'received_at',
         ], array_keys($data[0]['routes'][0]));
@@ -298,7 +298,7 @@ class DocumentListApiContractTest extends TestCase
             ->assertJsonMissingPath('data.0.description');
     }
 
-    public function test_incoming_orders_equal_unreceived_routes_by_newer_document_date(): void
+    public function test_incoming_prioritizes_urgent_documents_before_newer_normal_documents(): void
     {
         $office = $this->createOffice('USER');
         $sender = $this->createOffice('SENDER');
@@ -315,9 +315,34 @@ class DocumentListApiContractTest extends TestCase
             ->assertOk()
             ->json('data');
 
-        $this->assertSame([$normal->id, $urgent->id], array_column($data, 'id'));
-        $this->assertSame('Normal', $data[0]['priority']['priority_name']);
-        $this->assertSame('Urgent', $data[1]['priority']['priority_name']);
+        $this->assertSame([$urgent->id, $normal->id], array_column($data, 'id'));
+        $this->assertSame('Urgent', $data[0]['priority']['priority_name']);
+        $this->assertSame('Normal', $data[1]['priority']['priority_name']);
+    }
+
+    public function test_incoming_orders_urgent_then_awaiting_receipt_then_other_documents(): void
+    {
+        $office = $this->createOffice('ORDER');
+        $sender = $this->createOffice('ORDER-SENDER');
+        $normalPriority = $this->createLookup('priorities', 'priority_name', 'Normal');
+        $urgentPriority = $this->createLookup('priorities', 'priority_name', 'Urgent');
+        $urgentReceived = $this->createDocument($sender, $office, now()->subDays(2), 'Urgent received', priorityId: $urgentPriority);
+        $awaitingReceipt = $this->createDocument($sender, $office, now(), 'Normal awaiting receipt', priorityId: $normalPriority);
+        $normalReceived = $this->createDocument($sender, $office, now()->subDay(), 'Normal received', priorityId: $normalPriority);
+        $this->createRoute($urgentReceived, $sender, $office, now()->subDays(2), now()->subDay());
+        $this->createRoute($awaitingReceipt, $sender, $office, now(), null);
+        $this->createRoute($normalReceived, $sender, $office, now()->subDay(), now()->subHours(2));
+
+        Sanctum::actingAs($this->createUser('Office User', $office));
+
+        $data = $this->getJson('/api/documents/incoming')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(
+            [$urgentReceived->id, $awaitingReceipt->id, $normalReceived->id],
+            array_column($data, 'id')
+        );
     }
 
     public function test_outgoing_uses_historical_senders_includes_pending_and_received_and_selects_newest_route(): void

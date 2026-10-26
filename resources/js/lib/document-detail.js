@@ -14,11 +14,13 @@ export const canCompleteDocument = ({
     document,
     routingOptions,
     pendingRoute,
+    hasReceivedRoute,
     hasProcessPermission,
 } = {}) => (
     hasProcessPermission === true &&
     routingOptions?.can_act === true &&
     pendingRoute === null &&
+    hasReceivedRoute === true &&
     !isTerminalDocument(document)
 )
 

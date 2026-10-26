@@ -50,7 +50,7 @@ const monthYearLabel = computed(() => new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
 }).format(viewDate.value))
 const monthNames = Array.from({ length: 12 }, (_, index) => new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(2024, index, 1)))
-const today = new Date()
+const currentDate = () => new Date()
 
 watch(selectedDate, date => {
     if (!isOpen.value && date) viewDate.value = date
@@ -121,7 +121,8 @@ const chooseMonth = month => {
     close()
 }
 const chooseToday = () => {
-    emit('update:modelValue', props.mode === 'month' ? formatMonthValue(today) : formatDateValue(today))
+    const now = currentDate()
+    emit('update:modelValue', props.mode === 'month' ? formatMonthValue(now) : formatDateValue(now))
     close()
 }
 const clear = () => {
@@ -197,7 +198,7 @@ onBeforeUnmount(() => {
                         :class="{
                             'is-outside': date.getMonth() !== viewDate.getMonth(),
                             'is-selected': sameDate(date, selectedDate),
-                            'is-today': sameDate(date, today),
+                            'is-today': sameDate(date, currentDate()),
                         }"
                         role="gridcell"
                         :aria-label="new Intl.DateTimeFormat('en-US', { dateStyle: 'full' }).format(date)"
@@ -213,7 +214,7 @@ onBeforeUnmount(() => {
                     :key="month"
                     type="button"
                     class="doctrack-date-picker-month"
-                    :class="{ 'is-selected': selectedDate?.getFullYear() === viewDate.getFullYear() && selectedDate?.getMonth() === index, 'is-today': today.getFullYear() === viewDate.getFullYear() && today.getMonth() === index }"
+                    :class="{ 'is-selected': selectedDate?.getFullYear() === viewDate.getFullYear() && selectedDate?.getMonth() === index, 'is-today': currentDate().getFullYear() === viewDate.getFullYear() && currentDate().getMonth() === index }"
                     role="gridcell"
                     :aria-selected="selectedDate?.getFullYear() === viewDate.getFullYear() && selectedDate?.getMonth() === index"
                     @click="chooseMonth(index)"

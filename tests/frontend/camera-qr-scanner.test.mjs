@@ -13,9 +13,16 @@ test('camera QR scanner requests a camera through the cross-browser decoder and 
     assert.match(source, /facingMode: \{ ideal: 'environment' \}/)
     assert.match(source, /controls\?\.stop\(\)/)
     assert.match(source, /stream\?\.getTracks\(\)\.forEach\(track => track\.stop\(\)\)/)
+    assert.match(source, /let hasLiveScanResult = false/)
+    assert.match(source, /if \(!token \|\| hasLiveScanResult\) return/)
+    assert.match(source, /hasLiveScanResult = true/)
     assert.match(source, /emit\('scan', token\)/)
     assert.match(source, /Camera preview/)
     assert.match(source, /role="dialog"/)
+    assert.match(source, /type="file" accept="image\/\*" capture="environment"/)
+    assert.match(source, /decodeFromImageElement\(image\)/)
+    assert.match(source, /Capture QR code photo/)
+    assert.match(source, /if \(!window\.isSecureContext\) \{\s*\/\/ Android blocks live getUserMedia[\s\S]*?openImageCapture\(\)/)
 })
 
 test('QR entry screens expose the camera scanner beside their existing inputs', async () => {

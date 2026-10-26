@@ -13,6 +13,8 @@ class Office extends Model
         'office_name',
         'office_code',
         'description',
+        'signatory_name',
+        'signatory_designation',
     ];
 
     public function department(): BelongsTo
@@ -24,4 +26,5 @@ class Office extends Model
     {
         return $this->hasMany(User::class);
     }
+
 }

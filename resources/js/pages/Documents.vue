@@ -9,7 +9,6 @@ import {
 } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
-    FileText,
     Flag,
     ListFilter,
     RotateCcw,
@@ -36,6 +35,7 @@ import { Button } from '@/components/ui/button'
 import TableSkeleton from '@/components/loaders/TableSkeleton.vue'
 import { Input } from '@/components/ui/input'
 import CameraQrScanner from '@/components/CameraQrScanner.vue'
+import DocumentTypeCombobox from '@/components/DocumentTypeCombobox.vue'
 import DocTrackDatePicker from '@/components/DocTrackDatePicker.vue'
 import { formatDateValue } from '@/lib/date-picker'
 import { can } from '@/lib/auth'
@@ -43,6 +43,7 @@ import { ensureCurrentUser } from '@/lib/auth'
 import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import { formatDocumentDateTime } from '@/lib/document-dates'
 import { normalizeRegistrationQrInput } from '@/lib/qr-registration'
+import { uploadRegistrationAttachments, validateRegistrationAttachments } from '@/lib/registration-attachments'
 import {
     buildDocumentListQuery,
     buildDocumentListRequestQuery,
@@ -143,6 +144,11 @@ const paginationItems = computed(() => {
 
 const documentTypes = ref([])
 const priorities = ref([])
+const registrationPriorities = computed(() => priorities.value.filter(priority => {
+    return ['urgent', 'normal'].includes(
+        String(priority.priority_name || '').toLowerCase()
+    )
+}))
 const offices = ref([])
 const officeTagSearch = ref('')
 
@@ -199,6 +205,11 @@ const creating = ref(false)
 const createError = ref('')
 const createSuccess = ref('')
 const updatedElsewhere = ref(false)
+const registrationFiles = ref([])
+const registrationAttachmentInput = ref(null)
+const savedDocumentId = ref(null)
+const registrationUncertain = ref(false)
+const uploadedRegistrationFiles = ref([])
 
 /*
 |--------------------------------------------------------------------------
@@ -237,9 +248,18 @@ const canCreateDocuments = computed(() => {
     return can('documents.create')
 })
 
+const canUploadRegistrationAttachments = computed(() => can('attachments.manage'))
+
+const selectRegistrationFiles = event => {
+    registrationFiles.value = Array.from(event.target.files || [])
+    createError.value = validateRegistrationAttachments(registrationFiles.value)
+}
+
 const canSubmitRegistration = computed(() => {
     return Boolean(
         qrVerified.value &&
+        !savedDocumentId.value &&
+        !registrationUncertain.value &&
         qrToken.value &&
         form.value.title.trim() &&
         form.value.document_type_id &&
@@ -512,7 +532,16 @@ const scanRegistrationCamera = async token => {
     await verifyQrForRegistration()
 }
 
-const clearQrVerificationWhenChanged = () => {
+const clearQrVerificationWhenChanged = event => {
+    const inputValue = typeof event?.target?.value === 'string'
+        ? event.target.value
+        : qrInput.value
+    const normalizedInput = normalizeRegistrationQrInput(inputValue)
+
+    if (normalizedInput !== inputValue.trim()) {
+        qrInput.value = normalizedInput
+    }
+
     if (normalizeRegistrationQrInput(qrInput.value) === qrToken.value) {
         return
     }
@@ -590,6 +619,10 @@ const resetForm = () => {
     createError.value = ''
     createSuccess.value = ''
     officeTagSearch.value = ''
+    registrationFiles.value = []
+    savedDocumentId.value = null
+    registrationUncertain.value = false
+    uploadedRegistrationFiles.value = []
 }
 
 const loadRegistrationOptions = async () => {
@@ -655,6 +688,7 @@ const closeCreateForm = () => {
 */
 
 const createDocument = async () => {
+    if (savedDocumentId.value || registrationUncertain.value) return
     if (!canCreateDocuments.value) {
         createError.value =
             'You do not have permission to register documents.'
@@ -663,6 +697,13 @@ const createDocument = async () => {
 
     createError.value = ''
     createSuccess.value = ''
+
+    if (registrationFiles.value.length && !canUploadRegistrationAttachments.value) {
+        createError.value = 'You do not have permission to upload attachments.'
+        return
+    }
+    const fileError = validateRegistrationAttachments(registrationFiles.value)
+    if (fileError) { createError.value = fileError; return }
 
     if (!qrVerified.value || !qrToken.value) {
         createError.value = 'Verify a valid QR code before registering this document.'
@@ -700,7 +741,9 @@ const createDocument = async () => {
     creating.value = true
 
     try {
-        const response = await fetch(
+        let response
+        try {
+            response = await fetch(
             '/api/documents',
             {
                 method: 'POST',
@@ -742,11 +785,22 @@ const createDocument = async () => {
                         qrToken.value,
                 }),
             }
-        )
+            )
+        } catch {
+            registrationUncertain.value = true
+            throw new Error('The registration response was lost. Check the document list or QR before trying again.')
+        }
 
-        const data = await response.json()
+        const data = await response.json().catch(() => {
+            if (response.ok) registrationUncertain.value = true
+            return {}
+        })
 
         if (!response.ok) {
+            if (response.status >= 500 || response.status === 408) {
+                registrationUncertain.value = true
+                throw new Error('Registration could not be confirmed. Check the document list or QR before trying again.')
+            }
             if (data.errors) {
                 if (data.errors.qr_token?.[0]) {
                     qrVerified.value = false
@@ -772,9 +826,25 @@ const createDocument = async () => {
             )
         }
 
+        if (!data.document?.id) {
+            registrationUncertain.value = true
+            throw new Error('The server did not return the document ID. Check the document list or QR before trying again.')
+        }
+        savedDocumentId.value = data.document.id
         createSuccess.value =
             data.message ||
             'Document registered successfully.'
+
+        if (registrationFiles.value.length) {
+            const result = await uploadRegistrationAttachments(savedDocumentId.value, registrationFiles.value, getToken())
+            uploadedRegistrationFiles.value = result.uploaded
+            if (result.failed) {
+                createError.value = `${result.failed}: ${result.message} Open the saved document and check its attachments before uploading remaining files.`
+                await fetchDocuments()
+                return
+            }
+            createSuccess.value = `Document registered and ${result.uploaded.length} attachment(s) uploaded.`
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -934,25 +1004,22 @@ const statusClass = (status) => {
 */
 
 const priorityClass = (priority) => {
-    switch (
-        String(priority)
-            .toLowerCase()
-    ) {
-        case 'urgent':
-            return 'bg-red-100 text-red-700'
+    return String(priority).toLowerCase() === 'urgent'
+        ? 'bg-red-100 text-red-700'
+        : 'bg-blue-100 text-blue-700'
+}
 
-        case 'high':
-            return 'bg-orange-100 text-orange-700'
+const priorityLabel = priority => String(priority || '').toLowerCase() === 'urgent'
+    ? 'Urgent'
+    : priority ? 'Normal' : 'N/A'
 
-        case 'normal':
-            return 'bg-blue-100 text-blue-700'
+const hasActiveUrgentHighlight = (document) => {
+    const priority = String(document.priority?.priority_name || document.priority?.name || '').toLowerCase()
+    const status = String(
+        document.status?.status_name || document.status?.name || document.status || ''
+    ).toLowerCase()
 
-        case 'low':
-            return 'bg-gray-100 text-gray-700'
-
-        default:
-            return 'bg-gray-100 text-gray-700'
-    }
+    return priority === 'urgent' && !['completed', 'archived'].includes(status)
 }
 
 /*
@@ -1227,7 +1294,12 @@ onBeforeUnmount(() => {
                 >
 
                     <!-- Loading -->
-                    <TableSkeleton v-if="loading" :columns="6" />
+                    <TableSkeleton v-if="loading" :columns="6" :headers="activeTab === 'all'
+                            ? ['QR Code', 'Type', 'Title / Subject', 'Priority', 'Status', 'Current Office', 'Date']
+                            : activeTab === 'incoming'
+                                ? ['QR Code', 'Type', 'Title / Subject', 'From Office', 'Priority', 'Status', 'Received']
+                                : ['QR Code', 'Type', 'Title / Subject', 'To Office', 'Status', 'Released']"
+                    />
 
                     <!-- Error -->
                     <div
@@ -1341,7 +1413,7 @@ onBeforeUnmount(() => {
                                     v-for="document in documents"
                                     :key="document.id"
                                     class="border-b border-slate-200 hover:bg-gray-50 last:border-b-0"
-                                    :class="activeTab === 'incoming' && String(document.priority?.priority_name).toLowerCase() === 'urgent' ? 'bg-red-400/25 hover:bg-red-400/30' : ''"
+                                    :class="activeTab === 'incoming' && hasActiveUrgentHighlight(document) ? 'bg-red-400/25 hover:bg-red-400/30' : ''"
                                 >
 
                                     <!-- Tracking -->
@@ -1412,9 +1484,7 @@ onBeforeUnmount(() => {
                                             "
                                         >
                                             {{
-                                                document.priority
-                                                    ?.priority_name
-                                                || 'N/A'
+                                                priorityLabel(document.priority?.priority_name)
                                             }}
                                         </span>
                                     </TableCell>
@@ -1577,7 +1647,7 @@ onBeforeUnmount(() => {
         >
 
                 <Card
-                class="doctrack-date-picker-boundary w-full max-w-3xl max-h-[90vh]
+                class="doctrack-date-picker-boundary w-full max-w-5xl max-h-[90vh]
                        overflow-y-auto bg-white"
             >
 
@@ -1601,21 +1671,22 @@ onBeforeUnmount(() => {
                             <label for="registration-qr-token" class="mb-2 block text-sm font-semibold text-gray-700">
                                 QR Code <span class="text-red-600">*</span>
                             </label>
-                            <Input
-                                ref="qrInputElement"
-                                id="registration-qr-token"
-                                v-model="qrInput"
-                                type="text"
-                                autocomplete="off"
-                                autofocus
-                                placeholder="Scan QR here"
-                                :disabled="qrVerifying || creating"
-                                class="h-11 text-center font-mono"
-                                @input="clearQrVerificationWhenChanged"
-                                @keydown.enter.prevent="verifyQrForRegistration"
-                            />
-                            <div class="mt-3 flex justify-center">
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <Input
+                                    ref="qrInputElement"
+                                    id="registration-qr-token"
+                                    v-model="qrInput"
+                                    type="text"
+                                    autocomplete="off"
+                                    autofocus
+                                    placeholder="Scan QR here"
+                                    :disabled="qrVerifying || creating"
+                                    class="h-11 flex-1 text-center font-mono"
+                                    @input="clearQrVerificationWhenChanged"
+                                    @keydown.enter.stop.prevent="verifyQrForRegistration"
+                                />
                                 <CameraQrScanner
+                                    class="shrink-0"
                                     :disabled="qrVerifying || creating"
                                     @scan="scanRegistrationCamera"
                                 />
@@ -1624,6 +1695,22 @@ onBeforeUnmount(() => {
                             <p v-else-if="qrVerified" class="mt-2 text-sm font-medium text-green-700" role="status">QR code verified.</p>
                             <p v-if="qrVerificationError" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-left text-sm text-red-700" role="alert">{{ qrVerificationError }}</p>
                         </div>
+
+                    <div v-if="canUploadRegistrationAttachments" class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <Button type="button" :disabled="creating || qrVerifying || !qrVerified || Boolean(savedDocumentId) || registrationUncertain" @click="registrationAttachmentInput?.click()">
+                                Add attachments
+                            </Button>
+                            <span class="text-sm text-gray-600">{{ registrationFiles.length ? `${registrationFiles.length} file(s) selected` : 'No files selected' }}</span>
+                        </div>
+                        <input ref="registrationAttachmentInput" id="registration-attachments" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                            :disabled="creating || qrVerifying || !qrVerified || Boolean(savedDocumentId) || registrationUncertain" class="hidden" @change="selectRegistrationFiles" />
+                        <p class="text-sm text-gray-500">PDF, Word, Excel, JPG or PNG; maximum 10 MB per file. The current and originating offices may view attachments.</p>
+                        <ul v-if="registrationFiles.length" class="list-disc pl-5 text-sm text-gray-700">
+                            <li v-for="(file, index) in registrationFiles" :key="index">{{ file.name }}</li>
+                        </ul>
+                        <p v-if="uploadedRegistrationFiles.length" class="text-sm text-green-700">Uploaded: {{ uploadedRegistrationFiles.join(', ') }}</p>
+                    </div>
 
                     <div
                         v-if="optionsLoading"
@@ -1644,7 +1731,7 @@ onBeforeUnmount(() => {
                         >
 
                             <div>
-                                <label
+                                <label for="registration-document-type"
                                     class="block mb-2 text-sm
                                            font-semibold
                                            text-gray-700"
@@ -1652,32 +1739,7 @@ onBeforeUnmount(() => {
                                     Document Type <span class="text-red-600">*</span>
                                 </label>
 
-                                <div class="relative">
-                                    <FileText class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                                    <select
-                                        v-model="form.document_type_id"
-                                        :disabled="creating"
-                                        class="w-full h-11 rounded-md
-                                               border border-gray-300
-                                               bg-white pl-10 pr-3 text-sm
-                                               outline-none
-                                               focus:border-blue-500
-                                               focus:ring-1
-                                               focus:ring-blue-500"
-                                    >
-                                        <option value="">
-                                            Select Document Type
-                                        </option>
-
-                                        <option
-                                            v-for="type in documentTypes"
-                                            :key="type.id"
-                                            :value="type.id"
-                                        >
-                                            {{ type.type_name }}
-                                        </option>
-                                    </select>
-                                </div>
+                                <DocumentTypeCombobox v-model="form.document_type_id" :types="documentTypes" :disabled="creating" />
                             </div>
 
                             <div>
@@ -1707,7 +1769,7 @@ onBeforeUnmount(() => {
                                         </option>
 
                                         <option
-                                            v-for="priority in priorities"
+                                            v-for="priority in registrationPriorities"
                                             :key="priority.id"
                                             :value="priority.id"
                                         >
@@ -1783,11 +1845,9 @@ onBeforeUnmount(() => {
                                         aria-label="Search offices to tag"
                                     />
                                 </div>
-                                <div class="mt-2 max-h-40 overflow-y-auto rounded-md border border-gray-200 bg-white">
-                                    <p v-if="!officeTagSearch.trim()" class="px-3 py-2 text-xs text-gray-500">
-                                        Type an office name or code to search.
-                                    </p>
-                                    <p v-else-if="filteredTagOffices.length === 0" class="px-3 py-2 text-xs text-gray-500">
+                                <p class="mt-1 text-xs text-gray-500">Type an office name or code to search.</p>
+                                <div v-if="officeTagSearch.trim()" class="mt-2 max-h-40 overflow-y-auto rounded-md border border-gray-200 bg-white min-[1200px]:hidden">
+                                    <p v-if="filteredTagOffices.length === 0" class="px-3 py-2 text-xs text-gray-500">
                                         No matching offices.
                                     </p>
                                     <label
@@ -1861,6 +1921,10 @@ onBeforeUnmount(() => {
                             {{ createError }}
                         </div>
 
+                        <RouterLink v-if="savedDocumentId && createError" :to="`/documents/${savedDocumentId}`" class="inline-block font-semibold text-blue-800 underline">
+                            Open saved document and review attachments
+                        </RouterLink>
+
                         <!-- Success -->
                         <div
                             v-if="createSuccess"
@@ -1885,7 +1949,7 @@ onBeforeUnmount(() => {
                                 @click="closeCreateForm"
                                 :disabled="creating"
                             >
-                                Cancel
+                                {{ savedDocumentId ? 'Close' : 'Cancel' }}
                             </Button>
 
                             <Button
@@ -1906,6 +1970,31 @@ onBeforeUnmount(() => {
                 </CardContent>
 
             </Card>
+
+            <aside
+                v-if="officeTagSearch.trim()"
+                class="absolute left-[calc(50%+22rem)] top-1/2 z-10 hidden w-80 -translate-y-1/2 overflow-hidden rounded-lg border border-blue-200 bg-white shadow-xl min-[1200px]:block"
+                aria-label="Matching offices"
+            >
+                <p class="border-b border-blue-100 bg-blue-900 px-4 py-3 text-sm font-semibold text-white">Matching offices</p>
+                <div class="max-h-80 overflow-y-auto">
+                    <p v-if="filteredTagOffices.length === 0" class="px-4 py-3 text-sm text-gray-500">No matching offices.</p>
+                    <label
+                        v-for="office in filteredTagOffices"
+                        :key="office.id"
+                        class="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 text-sm last:border-b-0 hover:bg-blue-50"
+                    >
+                        <input
+                            type="checkbox"
+                            :checked="isTaggedOfficeSelected(office.id)"
+                            :disabled="creating"
+                            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            @change="toggleTaggedOffice(office.id)"
+                        />
+                        <span>{{ office.office_name }} ({{ office.office_code }})</span>
+                    </label>
+                </div>
+            </aside>
 
         </div>
 

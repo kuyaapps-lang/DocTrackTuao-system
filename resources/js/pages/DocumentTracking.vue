@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import CameraQrScanner from '@/components/CameraQrScanner.vue'
+import { qrTokenFromPublicUrl } from '@/lib/qr-registration'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,6 +33,14 @@ const loading = ref(false)
 const searchLoading = ref(false)
 const error = ref('')
 let inquiryObserver = null
+
+const displayDocumentCode = value => {
+    const qrCode = typeof value?.qr_code === 'string'
+        ? value.qr_code
+        : value?.qr_code?.qr_token
+
+    return qrCode || linkedQrCode.value || 'QR not assigned'
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -194,13 +203,20 @@ const searchDocument = async () => {
         return
     }
 
-    const value =
-        trackingNumber.value.trim()
+    const value = trackingNumber.value.trim()
 
     if (!value) {
         error.value =
             'Please enter a tracking number.'
 
+        return
+    }
+
+    const qrToken = qrTokenFromPublicUrl(value)
+
+    if (qrToken) {
+        trackingNumber.value = qrToken
+        await scanPublicQr(qrToken)
         return
     }
 
@@ -220,6 +236,25 @@ const searchDocument = async () => {
 const scanInquiryCamera = async token => {
     trackingNumber.value = token
     await searchInquiryDocuments()
+}
+
+const scanPublicQr = async token => {
+    await router.push(`/q/${encodeURIComponent(token)}`)
+}
+
+const handleTrackingInput = async event => {
+    const inputValue = event?.target?.value
+    const qrToken = qrTokenFromPublicUrl(inputValue)
+
+    if (!qrToken) {
+        return
+    }
+
+    trackingNumber.value = qrToken
+
+    if (!isInquiry.value) {
+        await scanPublicQr(qrToken)
+    }
 }
 
 /*
@@ -374,18 +409,18 @@ onBeforeUnmount(() => inquiryObserver?.disconnect())
                                 :placeholder="isInquiry ? 'Scan QR code or enter subject / description' : 'Tracking number'"
                                 class="h-11 pl-10"
                                 :disabled="loading || searchLoading"
+                                @input="handleTrackingInput"
                             />
                         </div>
 
                         <CameraQrScanner
-                            v-if="isInquiry"
                             :disabled="loading || searchLoading"
-                            @scan="scanInquiryCamera"
+                            @scan="isInquiry ? scanInquiryCamera : scanPublicQr"
                         />
 
                         <Button
                             type="submit"
-                            class="h-11 bg-blue-600 px-6 hover:bg-blue-700"
+                            class="h-11 bg-blue-900 px-6 text-white hover:bg-blue-800 hover:text-white dark:bg-blue-900 dark:text-white dark:hover:bg-blue-800 dark:hover:text-white"
                             :disabled="loading || searchLoading"
                         >
                             <Search class="mr-2 h-4 w-4" />
@@ -430,7 +465,7 @@ onBeforeUnmount(() => inquiryObserver?.disconnect())
                                     @keydown.enter="selectInquiryDocument(result)"
                                     @keydown.space.prevent="selectInquiryDocument(result)"
                                 >
-                                    <td class="whitespace-nowrap px-4 py-3 font-mono font-medium text-blue-700">{{ result.qr_code || result.tracking_no || 'N/A' }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 font-mono font-medium text-blue-700">{{ result.qr_code || 'QR not assigned' }}</td>
                                     <td class="px-4 py-3 text-slate-900">{{ result.title || result.description || 'Untitled document' }}</td>
                                     <td class="px-4 py-3 text-slate-600">{{ result.current_office?.office_name || 'N/A' }}</td>
                                     <td class="px-4 py-3">
@@ -482,9 +517,7 @@ onBeforeUnmount(() => inquiryObserver?.disconnect())
                                     class="text-sm font-semibold text-blue-600"
                                 >
                                     {{
-                                        isInquiry
-                                            ? linkedQrCode || document.tracking_no
-                                            : document.tracking_no
+                                        displayDocumentCode(document)
                                     }}
                                 </p>
 
@@ -853,14 +886,14 @@ onBeforeUnmount(() => inquiryObserver?.disconnect())
                 @click.self="closeInquiryDocument"
             >
                 <section
-                    class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+                    class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl md:px-[31px]"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="inquiry-document-title"
                 >
                     <div class="flex items-start justify-between gap-4">
                         <div>
-                            <p class="font-mono text-sm font-semibold text-blue-700">{{ linkedQrCode || document.tracking_no }}</p>
+                            <p class="font-mono text-sm font-semibold text-blue-700">{{ displayDocumentCode(document) }}</p>
                             <h2 id="inquiry-document-title" class="mt-2 text-xl font-bold text-slate-900">{{ document.title }}</h2>
                         </div>
                         <span class="inline-flex shrink-0 rounded-full px-3 py-1 text-sm font-semibold" :class="statusClass(document.status)">
@@ -869,8 +902,8 @@ onBeforeUnmount(() => inquiryObserver?.disconnect())
                     </div>
 
                     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div><p class="text-xs font-semibold uppercase text-slate-500">Current Office</p><p class="mt-1 font-medium text-slate-900">{{ document.current_office || 'N/A' }}</p></div>
-                        <div><p class="text-xs font-semibold uppercase text-slate-500">Origin Office</p><p class="mt-1 font-medium text-slate-900">{{ document.origin_office || 'N/A' }}</p></div>
+                        <div><p class="text-xs font-semibold uppercase text-slate-500">Current Office</p><p class="mt-1 font-bold text-slate-900">{{ document.current_office || 'N/A' }}</p></div>
+                        <div><p class="text-xs font-semibold uppercase text-slate-500">Origin Office</p><p class="mt-1 font-bold text-slate-900">{{ document.origin_office || 'N/A' }}</p></div>
                         <div><p class="text-xs font-semibold uppercase text-slate-500">Document Type</p><p class="mt-1 font-medium text-slate-900">{{ document.document_type || 'N/A' }}</p></div>
                         <div><p class="text-xs font-semibold uppercase text-slate-500">Priority</p><p class="mt-1 font-medium text-slate-900">{{ document.priority || 'N/A' }}</p></div>
                     </div>
@@ -886,8 +919,8 @@ onBeforeUnmount(() => inquiryObserver?.disconnect())
                         <div v-else class="mt-3 space-y-3">
                             <div v-for="movement in document.movement_history" :key="movement.id" class="rounded-lg border border-slate-200 p-3">
                                 <p class="font-medium text-slate-900">{{ movement.from_office || 'N/A' }} → {{ movement.to_office || 'N/A' }}</p>
-                                <p class="mt-1 text-sm text-slate-600">Forwarded: {{ formatDate(movement.forwarded_at) }}</p>
-                                <p class="text-sm text-slate-600">{{ movement.received_at ? `Received: ${formatDate(movement.received_at)}` : 'Awaiting receipt' }}</p>
+                                <div class="mt-2 flex flex-wrap items-center gap-2"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="statusClass(movement.status)">{{ movement.status || 'N/A' }}</span><span class="text-sm text-slate-600">{{ formatDate(movement.received_at || movement.forwarded_at) }}</span></div>
+                                <span v-if="!movement.received_at" class="mt-2 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">Awaiting receipt</span>
                             </div>
                         </div>
                     </div>

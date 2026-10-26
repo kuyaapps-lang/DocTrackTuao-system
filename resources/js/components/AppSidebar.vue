@@ -9,16 +9,18 @@ import {
 } from 'vue-router'
 import {
     Building2,
-    FileBarChart,
-    FileText,
+    ChartNoAxesCombined,
+    ClipboardCheck,
+    FileOutput,
     FileSearch,
     Inbox,
     LayoutDashboard,
-    ListChecks,
-    LogOut,
+    PackageCheck,
     QrCode,
+    Signature,
     ScrollText,
     Send,
+    Tags,
     Users,
     X,
 } from 'lucide-vue-next'
@@ -32,9 +34,8 @@ import {
 } from '@/lib/navigation'
 
 const route = useRoute()
-const { currentUser, permissions } = useAuth()
+const { permissions, roleName } = useAuth()
 const mobileCloseButton = ref(null)
-const profileMenuOpen = ref(false)
 
 defineProps({
     desktopCollapsed: {
@@ -45,20 +46,11 @@ defineProps({
         type: Boolean,
         default: false,
     },
-    logoutPending: {
-        type: Boolean,
-        default: false,
-    },
-    logoutError: {
-        type: String,
-        default: '',
-    },
 })
 
 defineEmits([
     'close-mobile',
     'navigate',
-    'logout',
     'toggle-desktop',
 ])
 
@@ -70,20 +62,22 @@ const navigationIcons = {
     dashboard: LayoutDashboard,
     'outgoing-documents': Send,
     'incoming-documents': Inbox,
-    'received-document': Inbox,
-    'change-status': ListChecks,
-    'release-document': Send,
+    'received-document': PackageCheck,
+    'change-status': ClipboardCheck,
+    'release-document': FileOutput,
     'document-inquiry': FileSearch,
     'qr-codes': QrCode,
     offices: Building2,
-    'document-types': FileText,
+    'document-types': Tags,
+    'document-statuses': ClipboardCheck,
     users: Users,
     audit: ScrollText,
-    'accomplishment-report': FileBarChart,
+    'accomplishment-report': ChartNoAxesCombined,
+    'report-signatories': Signature,
 }
 
 const items = computed(() => {
-    return visibleNavigation(permissions.value)
+    return visibleNavigation(permissions.value, roleName.value)
 })
 
 const activeKey = computed(() => {
@@ -91,29 +85,7 @@ const activeKey = computed(() => {
         route.meta?.navKey
 })
 
-const userName = computed(() => currentUser.value?.name || 'Signed-in user')
-
-const officeName = computed(() => {
-    return currentUser.value?.office?.office_name ||
-        currentUser.value?.office?.name ||
-        'No office assigned'
-})
-
-const userInitials = computed(() => {
-    return userName.value
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map(name => name[0])
-        .join('')
-        .toUpperCase() || 'U'
-})
-
 const iconFor = (key) => navigationIcons[key]
-
-const closeProfileMenu = () => {
-    profileMenuOpen.value = false
-}
 
 const linkClasses = (key, grouped = false, collapsed = false) => {
     const base = grouped
@@ -160,7 +132,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     v-if="!desktopCollapsed"
                     class="mt-1 pb-5 text-[12.5pt] text-slate-500"
                 >
-                    Document Management System
+                    Document Tracking System
                 </p>
             </button>
         </div>
@@ -238,40 +210,6 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
             </template>
         </nav>
 
-        <div class="relative mt-auto border-t border-white/80 p-4">
-            <div
-                v-if="profileMenuOpen"
-                class="absolute bottom-full left-4 z-40 mb-3 w-56 rounded-2xl border border-white/80 bg-white/95 p-3 text-sm shadow-[0_18px_42px_rgb(67_86_119/0.16),inset_0_1px_0_rgb(255_255_255/0.92)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-black/30"
-                :class="desktopCollapsed ? 'left-full ml-3' : 'right-4'"
-                role="menu"
-                aria-label="Profile menu"
-                @keydown.esc="closeProfileMenu"
-            >
-                <Button type="button" variant="ghost" size="sm" class="h-9 w-full justify-start bg-blue-900 px-3 py-1.5 text-white hover:bg-blue-800 hover:text-white dark:bg-blue-900 dark:text-white dark:hover:bg-blue-800 dark:hover:text-white" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
-                    <LogOut class="mr-2 size-4" aria-hidden="true" />
-                    {{ logoutPending ? 'Logging out...' : 'Logout' }}
-                </Button>
-                <p v-if="logoutError" class="mt-2 text-sm text-red-600 dark:text-red-300" role="alert">{{ logoutError }}</p>
-            </div>
-            <button
-                type="button"
-                class="flex w-full items-center gap-3 rounded-2xl bg-blue-50/80 p-3 text-left shadow-sm outline-none transition-colors hover:bg-blue-100/80 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 dark:focus-visible:ring-offset-slate-900"
-                aria-label="Open profile menu"
-                aria-haspopup="menu"
-                :aria-expanded="profileMenuOpen"
-                @click="profileMenuOpen = !profileMenuOpen"
-                :class="desktopCollapsed ? 'justify-center px-2' : ''"
-                :title="desktopCollapsed ? `${userName} — ${officeName}` : undefined"
-            >
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-900 text-sm font-bold text-white shadow-sm" aria-hidden="true">
-                    {{ userInitials }}
-                </div>
-                <div v-if="!desktopCollapsed" class="min-w-0">
-                    <p class="truncate text-sm font-semibold text-blue-950 dark:text-slate-100">{{ userName }}</p>
-                    <p class="truncate text-xs text-slate-600 dark:text-slate-300">{{ officeName }}</p>
-                </div>
-            </button>
-        </div>
     </aside>
 
     <div
@@ -299,7 +237,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                         class="h-[80px] w-[80px] shrink-0 rounded-xl border bg-white object-cover p-1 shadow-sm"
                     >
                     <p class="mt-1 pb-5 text-[12.5pt] text-gray-500">
-                        Document Management System
+                        Document Tracking System
                     </p>
                 </div>
 
@@ -378,37 +316,6 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 </template>
             </nav>
 
-            <div class="relative mt-auto border-t border-slate-200 p-4">
-                <div
-                    v-if="profileMenuOpen"
-                    class="absolute bottom-full left-4 right-4 z-10 mb-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:shadow-black/30"
-                    role="menu"
-                    aria-label="Profile menu"
-                    @keydown.esc="closeProfileMenu"
-                >
-                    <Button type="button" variant="ghost" size="sm" class="h-9 w-full justify-start bg-blue-900 px-3 py-1.5 text-white hover:bg-blue-800 hover:text-white dark:bg-blue-900 dark:text-white dark:hover:bg-blue-800 dark:hover:text-white" :disabled="logoutPending" role="menuitem" @click="$emit('logout')">
-                        <LogOut class="mr-2 size-4" aria-hidden="true" />
-                        {{ logoutPending ? 'Logging out...' : 'Logout' }}
-                    </Button>
-                    <p v-if="logoutError" class="mt-2 text-sm text-red-600 dark:text-red-300" role="alert">{{ logoutError }}</p>
-                </div>
-                <button
-                    type="button"
-                    class="flex w-full items-center gap-3 rounded-2xl bg-blue-50 p-3 text-left outline-none transition-colors hover:bg-blue-100 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-slate-800 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900"
-                    aria-label="Open profile menu"
-                    aria-haspopup="menu"
-                    :aria-expanded="profileMenuOpen"
-                    @click="profileMenuOpen = !profileMenuOpen"
-                >
-                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-900 text-sm font-bold text-white shadow-sm" aria-hidden="true">
-                        {{ userInitials }}
-                    </div>
-                    <div class="min-w-0">
-                        <p class="truncate text-sm font-semibold text-blue-950 dark:text-slate-100">{{ userName }}</p>
-                        <p class="truncate text-xs text-slate-600 dark:text-slate-300">{{ officeName }}</p>
-                    </div>
-                </button>
-            </div>
         </aside>
     </div>
 </template>

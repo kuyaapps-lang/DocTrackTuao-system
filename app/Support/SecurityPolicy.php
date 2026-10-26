@@ -36,7 +36,9 @@ final class SecurityPolicy
 
         $normalized = self::normalizeRequestHost($host);
 
-        return $normalized !== null && in_array($normalized, $trusted, true);
+        return $normalized !== null && (
+            in_array($normalized, $trusted, true) || self::isLocalDevelopmentAddress($normalized)
+        );
     }
 
     public static function contentSecurityPolicy(bool $local): string
@@ -45,6 +47,7 @@ final class SecurityPolicy
         $style = ["'self'", "'unsafe-inline'"];
         $image = ["'self'", 'data:', 'blob:'];
         $connect = ["'self'"];
+        $worker = ["'self'"];
 
         if ($local && ($origin = self::viteOrigin()) !== null) {
             $script[] = $origin;
@@ -52,6 +55,8 @@ final class SecurityPolicy
             $image[] = $origin;
             $connect[] = $origin;
             $connect[] = preg_replace('/^http/', 'ws', $origin);
+            // Vite's development client uses a Blob worker to recover its HMR connection.
+            $worker[] = 'blob:';
             // Reverb is allowed only for a configured loopback development endpoint.
             // Production remains limited to same-origin HTTPS/WSS through Apache.
             array_push($connect, ...self::reverbClientOrigins());
@@ -68,7 +73,7 @@ final class SecurityPolicy
             'img-src '.implode(' ', $image),
             "font-src 'self'",
             'connect-src '.implode(' ', $connect),
-            "worker-src 'self'",
+            'worker-src '.implode(' ', $worker),
             "media-src 'self' blob:",
             "frame-src 'none'",
             "manifest-src 'self'",
@@ -102,6 +107,17 @@ final class SecurityPolicy
             '/\A(?=.{1,253}\z)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*\z/D',
             $host
         ) === 1;
+    }
+
+    private static function isLocalDevelopmentAddress(string $host): bool
+    {
+        if (!app()->environment('local') || filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            return false;
+        }
+
+        $addresses = @gethostbynamel(gethostname());
+
+        return is_array($addresses) && in_array($host, $addresses, true);
     }
 
     private static function normalizeHost(string $host): string
@@ -164,16 +180,23 @@ final class SecurityPolicy
         }
 
         if (preg_match(
-            '/\A(https?):\/\/(localhost|127\.0\.0\.1|\[::1])(?::([0-9]+))?\z/iD',
+            '/\A(https?):\/\/(?:([A-Za-z0-9.-]+)|\[([0-9A-Fa-f:.]+)\])(?::([0-9]+))?\z/iD',
             $url,
             $match
-        ) !== 1 || (isset($match[3]) && !self::validCanonicalPort($match[3]))) {
+        ) !== 1) {
             return null;
         }
 
-        $port = isset($match[3]) ? ':'.$match[3] : '';
+        $host = $match[2] !== '' ? $match[2] : $match[3];
+        $port = isset($match[4]) ? ':'.$match[4] : '';
 
-        return strtolower($match[1]).'://'.strtolower($match[2]).$port;
+        if (!self::hostIsTrusted($host) || (isset($match[4]) && !self::validCanonicalPort($match[4]))) {
+            return null;
+        }
+
+        $displayHost = str_contains($host, ':') ? '['.$host.']' : $host;
+
+        return strtolower($match[1]).'://'.strtolower($displayHost).$port;
     }
 
     private static function reverbClientOrigins(): array

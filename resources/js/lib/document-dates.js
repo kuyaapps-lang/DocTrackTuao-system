@@ -22,5 +22,9 @@ export const formatDocumentDateTime = value => {
 export const formatDocumentDateField = value => {
     if (!value) return 'N/A'
 
-    return formatDocumentDateTime(`${value}T00:00:00+08:00`)
+    const date = String(value).slice(0, 10)
+
+    return /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? formatDocumentDateTime(`${date}T00:00:00+08:00`)
+        : 'N/A'
 }

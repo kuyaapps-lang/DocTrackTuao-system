@@ -29,12 +29,15 @@ test('user management keeps one confirm-password visibility toggle per form', as
     assert.equal(toggles.length, 2)
 })
 
-test('document details keeps terminal action confirms with clearer warning copy', async () => {
+test('document details keeps terminal action confirmation modal with clearer warning copy', async () => {
     const source = await readSource('resources/js/pages/DocumentDetails.vue')
 
-    assert.match(source, /window\.confirm\(/)
-    assert.match(source, /Complete this document now\?\\n\\nAfter completion/)
-    assert.match(source, /Archive this completed document now\?\\n\\nArchived documents/)
+    assert.match(source, /const openActionConfirmation = action =>/)
+    assert.match(source, /const confirmAction = async \(\) =>/)
+    assert.match(source, /Complete Document\?'/)
+    assert.match(source, /Archive Document\?'/)
+    assert.match(source, /Undo Forwarding\?'/)
+    assert.match(source, /Terminal Document Action Confirmation Modal/)
     assert.match(source, /Permanent QR assigned to this physical document/)
     assert.doesNotMatch(source, /Registered QR &middot; Linked to this document|Print Linked QR/)
     assert.match(source, /&times;/)
@@ -45,7 +48,7 @@ test('dashboard documents and public tracking show clearer helper copy', async (
     const documents = await readSource('resources/js/pages/Documents.vue')
     const tracking = await readSource('resources/js/pages/DocumentTracking.vue')
 
-    assert.match(dashboard, /Documents by status/)
+    assert.match(dashboard, /Status Breakdown/)
     assert.match(dashboard, /No routing activity yet/)
     assert.match(documents, /Try a different keyword or clear the filter/)
     assert.match(documents, /placeholder="Tracking number, QR code, title, type, or office"/)
@@ -92,7 +95,7 @@ test('dashboard and shell polish copy stays user friendly', async () => {
     assert.match(sidebar, /aria-label="Profile menu"/)
     assert.match(sidebar, /Profile/)
     assert.match(sidebar, /Settings/)
-    assert.match(sidebar, /Document Management System/)
+    assert.match(sidebar, /Document Tracking System/)
     assert.match(sidebar, /aria-controls="desktop-navigation"/)
     assert.match(sidebar, /@click="\$emit\('toggle-desktop'\)"/)
     assert.match(sidebar, /h-\[80px\] w-\[80px\]/)
@@ -100,7 +103,7 @@ test('dashboard and shell polish copy stays user friendly', async () => {
     assert.match(sidebar, /@click="\$emit\('logout'\)"/)
     assert.doesNotMatch(shell, /CircleUserRound/)
     assert.match(shell, /<ThemeToggle \/>/)
-    assert.doesNotMatch(`${sidebar}\n${login}\n${resolver}`, /Document Tracking System/)
+    assert.match(`${sidebar}\n${login}\n${resolver}`, /Document Tracking System/)
 })
 
 test('QR UI keeps compact blue header palette', async () => {
@@ -137,7 +140,8 @@ test('process 23c dashboard and users polish keeps alignment scoped to frontend'
     assert.match(dashboard, /bg-gradient-to-br py-0 text-white/)
     assert.match(dashboard, /<component :is="metric\.icon"/)
     assert.match(dashboard, /\{\{ metric\.value \}\}/)
-    assert.match(dashboard, /:style="\{ backgroundColor: pieColor\(index\) \}"/)
+    assert.match(dashboard, /const piePalette = \[/)
+    assert.match(dashboard, /:style="pieLegendStyle\(index\)"/)
     assert.match(dashboard, /<span class="break-words">\{\{ item\[distribution\[2\]\]\.name \}\}<\/span>/)
     assert.match(dashboard, /<span class="text-\[12pt\] font-semibold leading-none text-slate-900 dark:text-white">\{\{ item\.count \}\}<\/span>/)
     assert.match(dashboard, /aria-label="Recent documents in the selected reporting period"/)

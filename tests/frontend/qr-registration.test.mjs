@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises'
 import {
     normalizeRegistrationQrInput,
     publicQrUrl,
+    qrTokenFromPublicUrl,
 } from '../../resources/js/lib/qr-registration.js'
 
 test('normalizes raw and legacy scanned QR values without accepting events', () => {
@@ -14,6 +15,11 @@ test('normalizes raw and legacy scanned QR values without accepting events', () 
         '246FC-Y9EHJR8'
     )
     assert.equal(normalizeRegistrationQrInput({ type: 'click' }), '')
+    assert.equal(
+        qrTokenFromPublicUrl('http://192.168.100.107/q/ABCDE-2345678'),
+        'ABCDE-2345678'
+    )
+    assert.equal(qrTokenFromPublicUrl('http://192.168.100.107/track/DOC-1'), '')
 })
 
 test('new QR labels use the Apache URL instead of a legacy Artisan port', () => {
@@ -39,9 +45,13 @@ test('registration modal resets scanner input and verifies the normalized QR val
     assert.doesNotMatch(source, /This QR is currently unused and will become registered after this form is saved successfully\./)
     assert.match(source, /<CardTitle>Register New Document<\/CardTitle>/)
     assert.match(source, /placeholder="Scan QR here"/)
-    assert.match(source, /class="h-11 text-center font-mono"/)
-    assert.match(source, /@keydown\.enter\.prevent="verifyQrForRegistration"/)
-    assert.match(source, /const clearQrVerificationWhenChanged = \(\) => \{[\s\S]*?qrVerified\.value = false/)
+    assert.match(source, /class="h-11 flex-1 text-center font-mono"/)
+    assert.match(source, /class="flex flex-col gap-2 sm:flex-row sm:items-center"/)
+    assert.match(source, /@keydown\.enter\.stop\.prevent="verifyQrForRegistration"/)
+    assert.match(source, /const normalizedInput = normalizeRegistrationQrInput\(inputValue\)/)
+    assert.match(source, /event\?\.target\?\.value/)
+    assert.match(source, /qrInput\.value = normalizedInput/)
+    assert.match(source, /const clearQrVerificationWhenChanged = event => \{[\s\S]*?qrVerified\.value = false/)
     assert.match(source, /<fieldset\s+v-else\s+:disabled="creating \|\| qrVerifying \|\| !qrVerified"\s+class="contents"/)
     assert.match(source, /const canSubmitRegistration = computed\(\(\) => \{[\s\S]*?form\.value\.priority_id[\s\S]*?form\.value\.document_date/)
     assert.doesNotMatch(source, /Confidentiality <span/)

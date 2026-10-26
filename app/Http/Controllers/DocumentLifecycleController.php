@@ -49,6 +49,13 @@ class DocumentLifecycleController extends Controller
                     abort(409, 'This document must be received before it can be completed.');
                 }
 
+                if (!DocumentRoute::where('document_id', $document->id)
+                    ->whereNotNull('received_at')
+                    ->lockForUpdate()
+                    ->exists()) {
+                    abort(409, 'This document must be routed and received before it can be completed.');
+                }
+
                 $currentStatus = DocumentStatus::whereKey($document->status_id)
                     ->lockForUpdate()
                     ->first();

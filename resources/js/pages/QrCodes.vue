@@ -185,10 +185,10 @@ const assignedQrCardLabel = request => request.status === 'pending'
         : 'Rejected QR Request'
 
 const qrStatusClass = qr => qr.status === 'registered' || qr.linked
-    ? 'border-red-300 bg-red-50 text-red-800'
+    ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/60 dark:text-red-100'
     : qr.status === 'void'
-        ? 'border-slate-300 bg-slate-100 text-slate-600 line-through'
-        : 'border-emerald-300 bg-emerald-50 text-emerald-800'
+        ? 'border-slate-300 bg-slate-100 text-slate-600 line-through dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'
+        : 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/70 dark:bg-emerald-950/70 dark:text-emerald-100'
 
 /*
 |--------------------------------------------------------------------------
@@ -1029,7 +1029,7 @@ onBeforeUnmount(() => {
                     <div v-if="summaryLoading" class="space-y-2 py-1"><SkeletonBlock v-for="item in 3" :key="item" class-name="h-14 w-full" /></div>
                     <div v-else class="space-y-2 text-center">
                         <div class="rounded-md border bg-gray-50 px-2 py-1"><p class="text-xs font-semibold text-gray-500">Issued</p><p class="!text-[18pt] font-bold text-gray-900">{{ summary.total_issued }}</p></div>
-                        <div class="rounded-md border bg-green-50 px-2 py-1"><p class="text-xs font-semibold text-green-700">Registered</p><p class="!text-[18pt] font-bold text-green-700">{{ summary.counts.registered }}</p></div>
+                        <div class="rounded-md border bg-green-50 px-2 py-1 dark:border-emerald-700 dark:bg-emerald-950/60"><p class="text-xs font-semibold text-green-700 dark:text-emerald-100">Registered</p><p class="!text-[18pt] font-bold text-green-700 dark:text-emerald-100">{{ summary.counts.registered }}</p></div>
                         <div class="rounded-md border bg-yellow-50 px-2 py-1"><p class="text-xs font-semibold text-yellow-700">Unused</p><p class="!text-[18pt] font-bold text-yellow-700">{{ summary.counts.unused }}</p></div>
                     </div>
                     <p v-if="summaryError" class="mt-2 text-sm text-red-600">{{ summaryError }}</p>
@@ -1062,7 +1062,7 @@ onBeforeUnmount(() => {
                     <div class="mt-5">
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Generated Tokens</p>
                         <div class="mt-2 flex flex-wrap gap-2">
-                            <span v-for="qr in lastGeneratedBatch" :key="qr.id" class="rounded-md border bg-white px-3 py-1.5 font-mono text-sm font-semibold text-gray-700">{{ qr.qr_token }}</span>
+                            <span v-for="qr in lastGeneratedBatch" :key="qr.id" class="rounded-md border border-emerald-300 bg-white px-3 py-1.5 font-mono text-sm font-semibold text-gray-700 dark:border-emerald-500/70 dark:bg-emerald-950/70 dark:text-emerald-100">{{ qr.qr_token }}</span>
                         </div>
                     </div>
                 </CardContent>
@@ -1119,7 +1119,7 @@ onBeforeUnmount(() => {
                         {{ requestsError }}
                     </p>
 
-                    <TableSkeleton v-if="requestsLoading" :columns="canApproveQr ? 4 : 3" :rows="4" />
+                    <TableSkeleton v-if="requestsLoading" :columns="canApproveQr ? 5 : 3" :headers="canApproveQr ? ['Requesting Office', 'Requesting Account', 'Date Requested', 'Assigned QR', 'Action'] : []" :rows="4" />
 
                     <div v-else-if="requests.length === 0" class="py-6 text-center text-gray-500">
                         No QR requests found.
@@ -1146,7 +1146,37 @@ onBeforeUnmount(() => {
                                         <td class="whitespace-nowrap px-3 py-1 text-sm text-slate-700 dark:text-slate-300">{{ formatDateTime(request.created_at) }}</td>
                                         <td class="px-3 py-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{{ assignedQrCount(request) }}</td>
                                         <td class="px-3 py-1 text-right">
-                                            <Button type="button" class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :aria-expanded="expandedRequestId === request.id" @click="toggleRequestQrCodes(request.id)">
+                                            <div v-if="request.status === 'pending'" class="flex justify-end gap-2">
+                                                <Button
+                                                    type="button"
+                                                    class="h-9 w-9 bg-emerald-600 p-0 text-white hover:bg-emerald-700 hover:text-white"
+                                                    :disabled="reviewPendingId !== null"
+                                                    aria-label="Approve QR request"
+                                                    title="Approve QR request"
+                                                    @click="reviewRequest(request, 'approve')"
+                                                >
+                                                    <Check class="h-4 w-4" />
+                                                    <span class="sr-only">Approve</span>
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    class="h-9 w-9 bg-red-600 p-0 text-white hover:bg-red-700 hover:text-white"
+                                                    :disabled="reviewPendingId !== null"
+                                                    aria-label="Reject QR request"
+                                                    title="Reject QR request"
+                                                    @click="reviewRequest(request, 'reject')"
+                                                >
+                                                    <X class="h-4 w-4" />
+                                                    <span class="sr-only">Reject</span>
+                                                </Button>
+                                            </div>
+                                            <Button
+                                                v-else
+                                                type="button"
+                                                class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white"
+                                                :aria-expanded="expandedRequestId === request.id"
+                                                @click="toggleRequestQrCodes(request.id)"
+                                            >
                                                 <EyeOff v-if="expandedRequestId === request.id" class="mr-2 h-4 w-4" />
                                                 <Eye v-else class="mr-2 h-4 w-4" />
                                                 {{ expandedRequestId === request.id ? 'Hide QR Codes' : 'Show QR Codes' }}
@@ -1160,16 +1190,6 @@ onBeforeUnmount(() => {
                                                     <span v-for="qr in request.qr_codes" :key="qr.id" class="rounded-md border px-3 py-1.5 font-mono text-xs font-semibold" :class="qrStatusClass(qr)">{{ qr.qr_token }}</span>
                                                 </div>
                                                 <p v-else class="text-sm text-slate-500 dark:text-slate-400">No QR codes have been assigned yet.</p>
-                                                <div v-if="request.status === 'pending'" class="flex gap-2">
-                                                    <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'approve')">
-                                                        <Check class="mr-2 h-4 w-4" />
-                                                        {{ reviewPendingId === request.id ? 'Reviewing...' : 'Approve' }}
-                                                    </Button>
-                                                    <Button class="bg-blue-900 text-white hover:bg-blue-950 hover:text-white" :disabled="reviewPendingId !== null" @click="reviewRequest(request, 'reject')">
-                                                        <X class="mr-2 h-4 w-4" />
-                                                        Reject
-                                                    </Button>
-                                                </div>
                                             </div>
                                         </td>
                                     </tr>
@@ -1424,7 +1444,7 @@ onBeforeUnmount(() => {
                         {{ inventoryError }}
                     </p>
 
-                    <TableSkeleton v-if="inventoryLoading" :columns="5" :rows="5" />
+                    <TableSkeleton v-if="inventoryLoading" :columns="5" :headers="['Record ID', 'Issued', 'Status', 'Link State', 'Action']" :rows="5" />
 
                     <div v-else-if="!inventoryError && inventory.length === 0" class="py-6 text-center text-gray-500">
                         {{ inventoryStatus

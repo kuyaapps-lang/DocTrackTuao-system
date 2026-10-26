@@ -44,6 +44,8 @@ class DocumentController extends Controller
 
         $this->applyAllDocumentSearch($query, $filters['search']);
 
+        $this->orderUrgentFirst($query);
+
         if ($filters['sort'] === 'received_desc') {
             $query->orderByRaw('(SELECT MAX(document_routes.received_at) FROM document_routes WHERE document_routes.document_id = documents.id) DESC');
         }
@@ -115,6 +117,9 @@ class DocumentController extends Controller
             $user->office_id
         );
 
+        $this->orderUrgentFirst($query);
+        $this->orderIncomingAwaitingReceiptFirst($query, (int) $user->office_id);
+
         $documents = $query
             ->select('documents.*')
             ->orderByRaw('(SELECT MAX(document_routes.received_at) FROM document_routes WHERE document_routes.document_id = documents.id AND document_routes.to_office_id = ?) DESC', [$user->office_id])
@@ -177,6 +182,8 @@ class DocumentController extends Controller
             'toOffice',
             'offices.office_name'
         );
+
+        $this->orderUrgentFirst($query);
 
         $documents = $query
             ->orderByDesc('documents.created_at')
@@ -251,6 +258,24 @@ class DocumentController extends Controller
                 ->orWhereHas('currentOffice', fn ($query) =>
                     $query->whereRaw("offices.office_name LIKE ? ESCAPE '!'", [$pattern]));
         });
+    }
+
+    /** Keep urgent documents at the top without changing stored priority values. */
+    private function orderUrgentFirst($query): void
+    {
+        $query->orderByRaw("CASE WHEN EXISTS (SELECT 1 FROM priorities WHERE priorities.id = documents.priority_id AND LOWER(priorities.priority_name) = 'urgent') THEN 0 ELSE 1 END");
+    }
+
+    /** Put documents awaiting receipt ahead of other non-urgent incoming records. */
+    private function orderIncomingAwaitingReceiptFirst($query, int $officeId): void
+    {
+        $query->orderByRaw(
+            'CASE WHEN (SELECT latest_route.received_at FROM document_routes as latest_route '.
+            'WHERE latest_route.document_id = documents.id '.
+            'AND latest_route.to_office_id = ? '.
+            'ORDER BY latest_route.id DESC LIMIT 1) IS NULL THEN 0 ELSE 1 END',
+            [$officeId]
+        );
     }
 
     /** Public documents are system-visible; private documents require an involved office. */
@@ -346,6 +371,9 @@ class DocumentController extends Controller
 
                 if (Schema::hasColumn('document_routes', 'cancelled_at')) {
                     $query->whereNull('cancelled_at');
+                }
+                if (Schema::hasColumn('document_routes', 'rejected_at')) {
+                    $query->whereNull('rejected_at');
                 }
             } else {
                 $query->whereNotNull('received_at');

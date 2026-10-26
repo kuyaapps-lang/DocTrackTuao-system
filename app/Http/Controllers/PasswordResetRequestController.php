@@ -70,6 +70,7 @@ class PasswordResetRequestController extends Controller
 
             $resetRequest = PasswordResetRequest::query()
                 ->where('email', $email)
+                ->where('request_type', PasswordResetRequest::TYPE_RESET)
                 ->where('status', PasswordResetRequest::STATUS_PENDING)
                 ->lockForUpdate()
                 ->first();
@@ -79,6 +80,8 @@ class PasswordResetRequestController extends Controller
                 'email' => $email,
                 'name' => $name,
                 'message' => $message,
+                'request_type' => PasswordResetRequest::TYPE_RESET,
+                'requested_password_hash' => null,
                 'status' => PasswordResetRequest::STATUS_PENDING,
                 'requested_ip' => $request->ip(),
                 'requested_user_agent' => $this->boundedUserAgent($request),
@@ -107,6 +110,64 @@ class PasswordResetRequestController extends Controller
 
         return response()->json([
             'message' => self::GENERIC_PUBLIC_MESSAGE,
+        ], 202);
+    }
+
+    /** Store a user-selected password only as a hash until an administrator approves it. */
+    public function storeChangeRequest(
+        Request $request,
+        AuditLogger $auditLogger,
+        InAppNotificationService $notifications,
+        RealtimeBroadcaster $realtime
+    ): JsonResponse {
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user = $request->user();
+
+        $changeRequest = DB::transaction(function () use ($request, $user, $validated): PasswordResetRequest {
+            $pendingRequest = PasswordResetRequest::query()
+                ->where('user_id', $user->id)
+                ->where('request_type', PasswordResetRequest::TYPE_CHANGE)
+                ->where('status', PasswordResetRequest::STATUS_PENDING)
+                ->lockForUpdate()
+                ->first();
+
+            $attributes = [
+                'email' => $this->normalizeEmail((string) $user->email),
+                'name' => $user->name,
+                'message' => 'User requested a password change.',
+                'request_type' => PasswordResetRequest::TYPE_CHANGE,
+                'requested_password_hash' => Hash::make($validated['password']),
+                'status' => PasswordResetRequest::STATUS_PENDING,
+                'requested_ip' => $request->ip(),
+                'requested_user_agent' => $this->boundedUserAgent($request),
+            ];
+
+            if ($pendingRequest) {
+                $pendingRequest->fill($attributes);
+                $pendingRequest->save();
+
+                return $pendingRequest;
+            }
+
+            return PasswordResetRequest::query()->create($attributes + ['user_id' => $user->id]);
+        });
+
+        $auditLogger->log(
+            module: AuditLog::MODULE_PASSWORD_RESET_REQUESTS,
+            action: AuditLog::ACTION_PASSWORD_RESET_REQUESTED,
+            recordId: $changeRequest->id,
+            description: 'Password change approval request submitted.',
+            userId: $user->id
+        );
+
+        $notifications->passwordResetSubmitted($changeRequest);
+        $realtime->passwordReset($changeRequest->id, $changeRequest->user_id, 'password-change.submitted');
+
+        return response()->json([
+            'message' => 'Your password change request was sent to an administrator for approval.',
         ], 202);
     }
 
@@ -152,12 +213,7 @@ class PasswordResetRequestController extends Controller
         RealtimeBroadcaster $realtime
     ): JsonResponse {
         $validated = $request->validate([
-            'password' => [
-                'required',
-                'string',
-                'min:8',
-                'confirmed',
-            ],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'resolution_note' => [
                 'nullable',
                 'string',
@@ -192,8 +248,25 @@ class PasswordResetRequestController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $user->password = Hash::make($validated['password']);
-            $user->must_change_password = true;
+            $isChangeRequest = $lockedRequest->request_type === PasswordResetRequest::TYPE_CHANGE;
+
+            if ($isChangeRequest && ! $lockedRequest->requested_password_hash) {
+                abort(response()->json([
+                    'message' => 'This password change request no longer has a valid password.',
+                ], 422));
+            }
+
+            if (! $isChangeRequest && empty($validated['password'])) {
+                abort(response()->json([
+                    'message' => 'A temporary password is required to resolve this reset request.',
+                    'errors' => ['password' => ['A temporary password is required.']],
+                ], 422));
+            }
+
+            $user->password = $isChangeRequest
+                ? $lockedRequest->requested_password_hash
+                : Hash::make($validated['password']);
+            $user->must_change_password = ! $isChangeRequest;
             $user->save();
             $user->tokens()->delete();
 
@@ -211,7 +284,9 @@ class PasswordResetRequestController extends Controller
             module: AuditLog::MODULE_PASSWORD_RESET_REQUESTS,
             action: AuditLog::ACTION_PASSWORD_RESET_REQUEST_RESOLVED,
             recordId: $updatedRequest->id,
-            description: 'Password reset request resolved with a temporary password.',
+            description: $updatedRequest->request_type === PasswordResetRequest::TYPE_CHANGE
+                ? 'Password change request approved.'
+                : 'Password reset request resolved with a temporary password.',
             userId: $request->user()->id
         );
 
@@ -219,7 +294,9 @@ class PasswordResetRequestController extends Controller
         $realtime->passwordReset($updatedRequest->id, $updatedRequest->user_id, 'password-reset.resolved');
 
         return response()->json([
-            'message' => 'Password reset request resolved successfully.',
+            'message' => $updatedRequest->request_type === PasswordResetRequest::TYPE_CHANGE
+                ? 'Password change request approved successfully.'
+                : 'Password reset request resolved successfully.',
             'password_reset_request' => $this->resetRequestShape(
                 $updatedRequest->load(['user:id,name,email', 'resolvedBy:id,name'])
             ),
@@ -300,6 +377,7 @@ class PasswordResetRequestController extends Controller
             'email' => (string) $resetRequest->email,
             'name' => $resetRequest->name,
             'message' => $resetRequest->message,
+            'request_type' => $resetRequest->request_type ?: PasswordResetRequest::TYPE_RESET,
             'status' => (string) $resetRequest->status,
             'requested_ip' => $resetRequest->requested_ip,
             'resolved_by' => $resetRequest->resolvedBy

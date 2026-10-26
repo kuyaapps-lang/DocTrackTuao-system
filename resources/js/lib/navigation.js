@@ -33,6 +33,7 @@ export const navigationItems = [
         label: 'Received Document',
         path: '/received-document',
         permission: 'documents.route',
+        hiddenRoles: ['Records Officer'],
         group: null,
     },
     {
@@ -40,6 +41,7 @@ export const navigationItems = [
         label: 'Change Status',
         path: '/change-status',
         permission: 'documents.process',
+        hiddenRoles: ['Records Officer'],
         group: null,
     },
     {
@@ -47,6 +49,7 @@ export const navigationItems = [
         label: 'Release Document',
         path: '/release-document',
         permission: 'documents.route',
+        hiddenRoles: ['Records Officer'],
         group: null,
     },
     {
@@ -85,6 +88,13 @@ export const navigationItems = [
                 permission: 'master_data.view',
                 group: 'master-data',
             },
+            {
+                key: 'document-statuses',
+                label: 'Document Statuses',
+                path: '/document-statuses',
+                permission: 'master_data.manage',
+                group: 'master-data',
+            },
         ],
     },
     {
@@ -100,6 +110,13 @@ export const navigationItems = [
                 label: 'Accomplishment Report',
                 path: '/reports/accomplishment',
                 permission: 'reports.view',
+                group: 'reports',
+            },
+            {
+                key: 'report-signatories',
+                label: 'Report Signatories',
+                path: '/reports/signatories',
+                permission: 'master_data.manage',
                 group: 'reports',
             },
         ],
@@ -129,10 +146,14 @@ const hasAnyPermission = (permissionNames, permissions = []) => {
         permissions.some(permission => permissionNames.has(permission))
 }
 
-export const visibleNavigation = (permissionNames = []) => {
+export const visibleNavigation = (permissionNames = [], roleName = null) => {
     const permissions = new Set(permissionNames)
 
     return navigationItems.flatMap(item => {
+        if (item.hiddenRoles?.includes(roleName)) {
+            return []
+        }
+
         if (!hasAnyPermission(permissions, item.visibilityPermissions)) {
             return []
         }

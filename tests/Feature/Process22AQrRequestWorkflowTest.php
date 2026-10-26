@@ -125,8 +125,11 @@ class Process22AQrRequestWorkflowTest extends TestCase
 
         Sanctum::actingAs($this->officeAUser);
         $this->getJson('/api/qr-code-requests')
-            ->assertOk()
-            ->assertJsonPath('data.0.id', $requestId);
+            ->assertForbidden();
+        $this->postJson('/api/qr-code-requests', [
+            'quantity' => 1,
+            'purpose' => 'Office users cannot request QR codes.',
+        ])->assertForbidden();
 
         Sanctum::actingAs($this->recordsA);
         $this->postJson("/api/qr-code-requests/{$requestId}/approve")

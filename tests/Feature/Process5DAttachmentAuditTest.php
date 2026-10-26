@@ -24,6 +24,11 @@ class Process5DAttachmentAuditTest extends TestCase
         parent::setUp();
         Storage::fake('local');
 
+        Schema::create('document_routes', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('document_id');
+            $table->unsignedBigInteger('from_office_id')->nullable(); $table->unsignedBigInteger('to_office_id')->nullable();
+        });
+
         Schema::create('roles', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -71,7 +76,7 @@ class Process5DAttachmentAuditTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['audit_logs', 'document_attachments', 'documents', 'users', 'roles'] as $table) {
+        foreach (['audit_logs', 'document_attachments', 'document_routes', 'documents', 'users', 'roles'] as $table) {
             Schema::dropIfExists($table);
         }
         parent::tearDown();

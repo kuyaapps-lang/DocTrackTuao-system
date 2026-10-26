@@ -288,7 +288,7 @@ onMounted(() => {
                 </CardHeader>
 
                 <CardContent class="bg-white">
-                    <TableSkeleton v-if="loading" :columns="6" />
+                    <TableSkeleton v-if="loading" :columns="6" :headers="['Time', 'Actor', 'Module / Action', 'Record ID', 'Description', 'IP']" />
                     <div
                         v-else-if="error"
                         class="rounded-md border border-red-200 bg-red-50 p-4 text-center text-red-700"
