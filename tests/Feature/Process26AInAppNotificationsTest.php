@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\InAppNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -100,6 +101,8 @@ class Process26AInAppNotificationsTest extends TestCase
             'user_id' => $this->destinationOfficer->id,
             'document_id' => $document->id,
             'type' => InAppNotificationService::TYPE_DOCUMENT_FORWARDED,
+            'title' => 'Document forwarded: Sensitive routing subject',
+            'message' => '“Sensitive routing subject” was forwarded to your office.',
         ]);
         $this->assertDatabaseMissing('notifications', [
             'user_id' => $this->requester->id,
@@ -111,6 +114,7 @@ class Process26AInAppNotificationsTest extends TestCase
             'user_id' => $this->requester->id,
             'document_id' => $document->id,
             'type' => InAppNotificationService::TYPE_DOCUMENT_RECEIVED,
+            'title' => 'Document received: Sensitive routing subject',
         ]);
 
         $protected = $this->notification($this->wrongOfficeUser, 'A document changed', '/documents/'.$document->id, $document->id);
@@ -122,6 +126,68 @@ class Process26AInAppNotificationsTest extends TestCase
             ->assertJsonMissing(['title' => $document->title]);
         $this->getJson("/api/documents/{$document->id}")
             ->assertForbidden();
+    }
+
+    public function test_idle_documents_notify_only_the_responsible_office_once_per_activity_period(): void
+    {
+        config()->set('doctrack.idle_notification_days', 3);
+        $clock = Carbon::getTestNow();
+
+        try {
+            Carbon::setTestNow(Carbon::parse('2026-10-28 08:00:00', 'Asia/Manila'));
+            $idleSince = now()->subDays(3)->subMinute();
+            $idle = Document::query()->create([
+                'tracking_no' => 'IDLE-001',
+                'title' => 'Budget proposal',
+                'origin_office_id' => $this->officeA->id,
+                'current_office_id' => $this->officeB->id,
+                'created_by' => $this->requester->id,
+                'current_action_updated_at' => $idleSince,
+            ]);
+            $completed = Document::query()->create([
+                'tracking_no' => 'IDLE-002',
+                'title' => 'Completed proposal',
+                'origin_office_id' => $this->officeA->id,
+                'current_office_id' => $this->officeB->id,
+                'created_by' => $this->requester->id,
+                'current_action_updated_at' => $idleSince,
+                'completed_at' => now(),
+            ]);
+
+            $this->artisan('documents:notify-idle')->assertSuccessful();
+            $this->assertDatabaseHas('notifications', [
+                'user_id' => $this->destinationOfficer->id,
+                'document_id' => $idle->id,
+                'type' => InAppNotificationService::TYPE_DOCUMENT_IDLE,
+                'title' => 'Document needs attention: Budget proposal',
+                'message' => '“Budget proposal” has had no recorded action since '.$idleSince->format('M j, Y g:i A').'.',
+            ]);
+            $this->assertDatabaseMissing('notifications', [
+                'document_id' => $completed->id,
+                'type' => InAppNotificationService::TYPE_DOCUMENT_IDLE,
+            ]);
+            $this->assertDatabaseMissing('notifications', [
+                'user_id' => $this->wrongOfficeUser->id,
+                'document_id' => $idle->id,
+                'type' => InAppNotificationService::TYPE_DOCUMENT_IDLE,
+            ]);
+
+            $this->artisan('documents:notify-idle')->assertSuccessful();
+            $this->assertSame(1, Notification::query()
+                ->where('document_id', $idle->id)
+                ->where('type', InAppNotificationService::TYPE_DOCUMENT_IDLE)
+                ->count());
+
+            Carbon::setTestNow(now()->addDays(4));
+            $idle->update(['current_action_updated_at' => now()->subDays(3)->subMinute()]);
+            $this->artisan('documents:notify-idle')->assertSuccessful();
+            $this->assertSame(2, Notification::query()
+                ->where('document_id', $idle->id)
+                ->where('type', InAppNotificationService::TYPE_DOCUMENT_IDLE)
+                ->count());
+        } finally {
+            Carbon::setTestNow($clock);
+        }
     }
 
     public function test_qr_and_password_reset_notifications_go_only_to_permitted_recipients(): void

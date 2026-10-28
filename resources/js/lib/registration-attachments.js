@@ -1,5 +1,13 @@
 const allowedExtensions = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'])
 
+export function addRegistrationAttachments(files, selected) {
+    return [...files, ...selected]
+}
+
+export function removeRegistrationAttachment(files, index) {
+    return files.filter((_, fileIndex) => fileIndex !== index)
+}
+
 export function validateRegistrationAttachments(files) {
     for (const file of files) {
         const extension = file.name.split('.').pop()?.toLowerCase()

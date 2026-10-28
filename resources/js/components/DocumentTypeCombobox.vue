@@ -55,7 +55,7 @@ function enter(event) {
 <template>
     <div class="relative">
         <input id="registration-document-type" :value="query" :disabled="disabled"
-            type="text" role="combobox" autocomplete="off" aria-required="true"
+            type="text" maxlength="20" role="combobox" autocomplete="off" aria-required="true"
             :aria-expanded="open" aria-controls="registration-document-type-options"
             :aria-activedescendant="open && active >= 0 ? `registration-type-${matches[active]?.id}` : undefined"
             placeholder="Search and select a document type"

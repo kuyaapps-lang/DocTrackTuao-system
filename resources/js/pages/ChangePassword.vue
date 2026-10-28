@@ -115,6 +115,7 @@ const submitPasswordChange = async () => {
                             <div class="relative">
                                 <Input
                                     v-model="currentPassword"
+                                    unrestricted
                                     :disabled="saving"
                                     :type="showCurrentPassword ? 'text' : 'password'"
                                     placeholder="Enter temporary password"
@@ -148,6 +149,7 @@ const submitPasswordChange = async () => {
                             <div class="relative">
                                 <Input
                                     v-model="password"
+                                    unrestricted
                                     :disabled="saving"
                                     :type="showPassword ? 'text' : 'password'"
                                     placeholder="Minimum 8 characters"
@@ -181,6 +183,7 @@ const submitPasswordChange = async () => {
                             <div class="relative">
                                 <Input
                                     v-model="passwordConfirmation"
+                                    unrestricted
                                     :disabled="saving"
                                     :type="showPasswordConfirmation ? 'text' : 'password'"
                                     placeholder="Repeat new password"

@@ -26,11 +26,17 @@ class DocumentTypeController extends Controller
      */
     public function store(Request $request, AuditLogger $auditLogger)
     {
-        $validated = $this->validated($request);
+        $validated = $this->validated($request, allowRoute: true);
 
         $documentType = DB::transaction(function () use ($validated, $request, $auditLogger) {
+            $officeIds = $validated['office_ids'] ?? [];
+            unset($validated['office_ids']);
             $documentType = DocumentType::create($validated);
             $this->requireAudit($auditLogger, $request, 'document_type_created', 'Document type created.', $documentType->id);
+            if ($officeIds !== []) {
+                $this->replaceRoute($documentType, $officeIds);
+                $this->requireAudit($auditLogger, $request, 'document_type_route_updated', 'Suggested document type route updated.', $documentType->id);
+            }
 
             return $documentType;
         });
@@ -67,13 +73,7 @@ class DocumentTypeController extends Controller
         ]);
         DB::transaction(function () use ($id, $validated, $request, $auditLogger) {
             $type = $this->record($id, true);
-            DB::table('document_type_route_steps')->where('document_type_id', $type->id)->delete();
-            foreach ($validated['office_ids'] as $index => $officeId) {
-                DB::table('document_type_route_steps')->insert([
-                    'document_type_id' => $type->id, 'office_id' => $officeId,
-                    'position' => $index + 1, 'created_at' => now(), 'updated_at' => now(),
-                ]);
-            }
+            $this->replaceRoute($type, $validated['office_ids']);
             $this->requireAudit($auditLogger, $request, 'document_type_route_updated', 'Suggested document type route updated.', $type->id);
         });
         return response()->json(['message' => 'Suggested route updated successfully.']);
@@ -150,18 +150,34 @@ class DocumentTypeController extends Controller
         return $type;
     }
 
-    private function validated(Request $request, ?DocumentType $type = null): array
+    private function replaceRoute(DocumentType $type, array $officeIds): void
     {
-        $this->rejectUnknownFields($request, ['type_name', 'description']);
+        DB::table('document_type_route_steps')->where('document_type_id', $type->id)->delete();
+        foreach ($officeIds as $index => $officeId) {
+            DB::table('document_type_route_steps')->insert([
+                'document_type_id' => $type->id, 'office_id' => $officeId,
+                'position' => $index + 1, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+    }
 
-        return $request->validate([
+    private function validated(Request $request, ?DocumentType $type = null, bool $allowRoute = false): array
+    {
+        $this->rejectUnknownFields($request, $allowRoute ? ['type_name', 'description', 'office_ids'] : ['type_name', 'description']);
+
+        $rules = [
             'type_name' => ['required', 'string', 'max:100', Rule::unique('document_types', 'type_name')->ignore($type?->id)],
             'description' => ['nullable', 'string', 'max:65535', function ($attribute, $value, $fail) {
                 if (is_string($value) && strlen($value) > 65535) {
                     $fail('The description must not exceed 65535 bytes.');
                 }
             }],
-        ]);
+        ];
+        if ($allowRoute) {
+            $rules['office_ids'] = ['sometimes', 'array', 'list', 'max:100'];
+            $rules['office_ids.*'] = ['required', 'integer', 'exists:offices,id'];
+        }
+        return $request->validate($rules);
     }
 
     private function rejectUnknownFields(Request $request, array $allowed): void

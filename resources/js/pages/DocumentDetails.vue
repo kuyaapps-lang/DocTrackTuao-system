@@ -12,6 +12,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import DocumentDetailsSkeleton from '@/components/loaders/DocumentDetailsSkeleton.vue'
+import ActionCombobox from '@/components/ActionCombobox.vue'
 
 import {
     Archive,
@@ -27,6 +28,7 @@ import {
 import { can } from '@/lib/auth'
 import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import { publicQrUrl } from '@/lib/qr-registration'
+import { firstSuggestedDestination, suggestedDestinations } from '@/lib/suggested-destination'
 import {
     formatDocumentDateField,
     formatDocumentDateTime,
@@ -122,6 +124,12 @@ const forwardForm = ref({
 })
 
 const forwardError = ref('')
+const forwardRouteLoading = ref(false)
+const suggestedForwardOfficeIds = ref([])
+const suggestedForwardOffices = computed(() => suggestedDestinations(
+    suggestedForwardOfficeIds.value,
+    routingOptions.value?.offices || []
+))
 
 /*
 |--------------------------------------------------------------------------
@@ -1736,7 +1744,7 @@ const archiveDocument = async () => {
 |--------------------------------------------------------------------------
 */
 
-const openForwardModal = () => {
+const openForwardModal = async () => {
     forwardForm.value = {
         to_office_id: '',
         remarks: '',
@@ -1744,8 +1752,41 @@ const openForwardModal = () => {
 
     forwardError.value = ''
     successMessage.value = ''
+    suggestedForwardOfficeIds.value = []
 
     showForwardModal.value = true
+    const documentTypeId = document.value?.document_type_id
+    if (!documentTypeId) {
+        forwardError.value = 'This document has no document type. Ask an administrator to set a suggested route.'
+        return
+    }
+
+    forwardRouteLoading.value = true
+    try {
+        const response = await fetch(`/api/document-types/${documentTypeId}/suggested-route`, {
+            headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${getToken()}`,
+            },
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || !Array.isArray(data.office_ids)) {
+            throw new Error(data.message || 'Unable to load the suggested route.')
+        }
+        suggestedForwardOfficeIds.value = data.office_ids
+        const firstOffice = firstSuggestedDestination(data.office_ids, routingOptions.value?.offices || [])
+        if (firstOffice) {
+            forwardForm.value.to_office_id = firstOffice.id
+        } else if (data.office_ids.length === 0) {
+            forwardError.value = 'No suggested route is set for this document type. Ask an administrator to set one.'
+        } else {
+            forwardError.value = 'None of the suggested offices are available as destinations for this document.'
+        }
+    } catch (err) {
+        forwardError.value = err.message || 'Unable to load the suggested route.'
+    } finally {
+        forwardRouteLoading.value = false
+    }
 }
 
 const closeForwardModal = () => {
@@ -1755,6 +1796,7 @@ const closeForwardModal = () => {
 
     showForwardModal.value = false
     forwardError.value = ''
+    suggestedForwardOfficeIds.value = []
 }
 
 /*
@@ -2381,45 +2423,36 @@ onBeforeUnmount(() => leaveRealtime?.())
                                     class="mt-6 border-t pt-5"
                                     @submit.prevent="saveProcessing"
                                 >
-                                    <div class="max-w-xl space-y-5">
-                                        <div>
-                                            <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_auto] xl:items-end">
+                                        <div class="min-w-0">
+                                            <label class="mb-2 flex h-5 items-center text-sm font-semibold text-gray-700">
                                                 Current Action
                                             </label>
-                                            <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
-                                                <select
-                                                    v-model="processingForm.current_action_id"
-                                                    class="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-[10pt] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                                    :disabled="processingSaving"
-                                                >
-                                                    <option value="">Select current action</option>
-                                                    <option
-                                                        v-for="action in processingInfo?.available_actions || []"
-                                                        :key="action.id"
-                                                        :value="String(action.id)"
-                                                    >
-                                                        {{ action.action_name }}
-                                                    </option>
-                                                </select>
-                                                <Button type="submit" :disabled="processingSaving" class="shrink-0 bg-blue-900 text-white hover:bg-blue-950">
-                                                    {{ processingSaving ? 'Saving...' : 'Save Current Process' }}
-                                                </Button>
-                                            </div>
+                                            <ActionCombobox
+                                                id="document-current-action"
+                                                v-model="processingForm.current_action_id"
+                                                :actions="processingInfo?.available_actions || []"
+                                                :disabled="processingSaving"
+                                            />
                                         </div>
 
-                                        <div>
-                                            <label class="mb-2 block text-sm font-semibold text-gray-700">
+                                        <div class="min-w-0">
+                                            <label class="mb-2 flex h-5 items-center text-sm font-semibold text-gray-700">
                                                 Processing Note <span class="font-normal text-gray-400">(Internal)</span>
                                             </label>
                                             <textarea
                                                 v-model="processingForm.processing_note"
-                                                rows="2"
+                                                rows="1"
                                                 maxlength="2000"
                                                 placeholder="Example: For signature of the Municipal Mayor."
-                                                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                                class="h-11 w-full resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                                 :disabled="processingSaving"
                                             ></textarea>
                                         </div>
+
+                                        <Button type="submit" :disabled="processingSaving" class="h-11 shrink-0 bg-blue-900 text-white hover:bg-blue-950">
+                                            {{ processingSaving ? 'Saving...' : 'Save Current Process' }}
+                                        </Button>
                                     </div>
 
                                     <div v-if="processingError" class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
@@ -3331,6 +3364,7 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                     <select
                         v-model="forwardForm.to_office_id"
+                        :disabled="forwardRouteLoading || !suggestedForwardOffices.length"
                         class="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     >
 
@@ -3339,15 +3373,18 @@ onBeforeUnmount(() => leaveRealtime?.())
                         </option>
 
                         <option
-                            v-for="office in routingOptions?.offices || []"
+                            v-for="office in suggestedForwardOffices"
                             :key="office.id"
                             :value="office.id"
                         >
-                            {{ office.office_name }}
+                            Step {{ office.routePosition }}: {{ office.office_name }}
                             ({{ office.office_code }})
                         </option>
 
                     </select>
+
+                    <p v-if="forwardRouteLoading" class="mt-2 text-sm text-gray-500">Loading suggested offices...</p>
+                    <p v-else-if="!suggestedForwardOffices.length && !forwardError" class="mt-2 text-sm text-gray-500">No suggested offices are available.</p>
 
                 </div>
 
@@ -3385,7 +3422,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                     <button
                         type="button"
                         class="rounded-md bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
-                        :disabled="actionLoading"
+                        :disabled="actionLoading || forwardRouteLoading"
                         @click="closeForwardModal"
                     >
                         Cancel
@@ -3394,7 +3431,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                     <button
                         type="button"
                         class="rounded-md bg-blue-900 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-950 disabled:opacity-50"
-                        :disabled="actionLoading"
+                        :disabled="actionLoading || forwardRouteLoading || !suggestedForwardOffices.length"
                         @click="forwardDocument"
                     >
                         {{

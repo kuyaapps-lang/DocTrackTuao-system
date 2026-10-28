@@ -112,7 +112,27 @@ const printReport = () => {
     const popup = window.open('', '_blank', 'width=960,height=720')
     if (!popup) return
     popup.document.write(`<!doctype html><html><head><title>Accomplishment Report</title><style>@page{size:landscape;margin:0}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111827;margin:0;padding:.5in .5in .5in 1in;font-size:11pt}.letterhead{border-bottom:2px solid #111827;padding-bottom:13px;text-align:center}.logo{display:block;width:70px;height:70px;margin:0 auto 8px;object-fit:contain}.government{text-align:center}.government p{margin:0;line-height:1.35}.republic{font-size:10pt}.province{font-size:11pt;font-weight:700}.lgu{font-size:14pt;font-weight:700;text-transform:uppercase;margin-top:3px!important}h1{text-align:center;font-size:19pt;letter-spacing:.5px;margin:23px 0 5px}.period{text-align:center;font-size:11pt;margin:0 0 23px}.office{font-size:11pt;margin:0 0 12px}.office strong{display:inline-block;min-width:55px}table{border-collapse:collapse;width:100%;font-size:10.5pt}th,td{border:1px solid #111827;padding:9px 11px;text-align:center}th{background:#e5e7eb;font-weight:700}.office-column{text-align:left}tfoot td{font-weight:700;background:#f3f4f6}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:84px;margin-top:63px}.signature{text-align:left}.signature .label{font-size:10pt;margin-bottom:30px}.signature .name{min-height:23px;border-bottom:1px solid #111827;padding:0 8px;text-align:center;font-weight:700}.signature .certified-name{border-bottom:0}.signature .designation{min-height:18px;margin-top:5px;text-align:center;font-size:10pt}.footer{margin-top:24px;text-align:right;color:#4b5563;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><header class="letterhead"><img class="logo" src="${escape(lguLogo)}" alt="Local Government Unit of Tuao logo"><div class="government"><p class="republic">Republic of the Philippines</p><p class="province">Province of Cagayan</p><p class="lgu">Local Government Unit of Tuao</p></div></header><h1>ACCOMPLISHMENT REPORT</h1><p class="period">${escape(period)}</p><p class="office"><strong>Office:</strong> ${escape(officeLabel)}</p><table><thead><tr>${includeOfficeColumn ? '<th class="office-column">Office</th>' : ''}<th>No. of Received</th><th>No. of Released</th><th>Status Changed</th><th>Completed</th><th>Archived</th></tr></thead><tbody>${rows}</tbody><tfoot><tr>${includeOfficeColumn ? '<td class="office-column">TOTAL</td>' : ''}<td>${totals.received}</td><td>${totals.released}</td><td>${totals.changed}</td><td>${totals.completed}</td><td>${totals.archived}</td></tr></tfoot></table><section class="signatures"><div class="signature"><div class="label">Prepared by:</div><div class="name">${escape(preparedBy)}</div><div class="designation">${escape(preparedByDesignation)}</div></div><div class="signature"><div class="label">Certified Correct:</div><div class="name certified-name">${escape(certifiedBy || '')}</div><div class="designation">${escape(certifiedByDesignation || '')}</div></div></section><p class="footer">Generated on ${escape(new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }))}</p><script>window.onload=()=>window.print()<\/script></body></html>`)
-    popup.document.head.insertAdjacentHTML('beforeend', '<style>.province{font-weight:700}</style>')
+    const printTable = popup.document.querySelector('table')
+    const headerElements = ['.letterhead', 'h1', '.period', '.office']
+        .map(selector => popup.document.querySelector(selector))
+        .filter(Boolean)
+    if (printTable?.tHead && headerElements.length === 4) {
+        const headerRow = popup.document.createElement('tr')
+        headerRow.className = 'repeating-report-header-row'
+        const headerCell = popup.document.createElement('th')
+        headerCell.colSpan = includeOfficeColumn ? 6 : 5
+        headerCell.className = 'repeating-report-header'
+        headerElements.forEach(element => headerCell.appendChild(element))
+        headerRow.appendChild(headerCell)
+        printTable.tHead.prepend(headerRow)
+    }
+    popup.document.head.insertAdjacentHTML('beforeend', '<style>@media print{table{break-inside:auto}thead{display:table-header-group!important}tbody{display:table-row-group!important}tr{break-inside:avoid;page-break-inside:avoid;break-after:auto;page-break-after:auto}.repeating-report-header{background:#fff!important;padding:0!important}.repeating-report-header-row{break-inside:avoid;page-break-inside:avoid}.repeating-report-header .province{font-weight:700}}</style>')
+    // The markup is rebuilt after document.write. Wait for the print window to
+    // lay it out so Chromium recognizes the table header group on later pages.
+    popup.document.querySelector('script')?.remove()
+    popup.addEventListener('load', () => {
+        popup.setTimeout(() => popup.print(), 150)
+    }, { once: true })
     popup.document.close()
     popup.opener = null
 }

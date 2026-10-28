@@ -2,7 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 
 import BulkStatusScanner from '@/components/BulkStatusScanner.vue'
+import ActionCombobox from '@/components/ActionCombobox.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { sanitizeBulkWorkflowText } from '@/lib/bulk-workflow-text'
 
 const actions = ref([])
 const actionId = ref('')
@@ -92,15 +94,13 @@ onMounted(loadActions)
                 <CardContent class="space-y-5">
                     <div>
                         <label for="bulk-current-action" class="mb-2 block text-sm font-semibold text-slate-700">Current Action</label>
-                        <select id="bulk-current-action" v-model="actionId" :disabled="loadingActions || saving" class="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" @change="scanner?.focus()">
-                            <option value="">Choose an action</option>
-                            <option v-for="action in actions" :key="action.id" :value="String(action.id)">{{ action.action_name }}</option>
-                        </select>
+                        <ActionCombobox id="bulk-current-action" v-model="actionId" :actions="actions" :disabled="loadingActions || saving" @select="scanner?.focus()" />
                     </div>
 
                     <div>
                         <label for="bulk-processing-note" class="mb-2 block text-sm font-semibold text-slate-700">Processing Note <span class="font-normal text-slate-500">(optional; required for Other)</span></label>
-                        <textarea id="bulk-processing-note" v-model="note" :disabled="saving" rows="3" maxlength="2000" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Applied to each scanned document" />
+                        <textarea id="bulk-processing-note" v-model="note" :disabled="saving" rows="3" maxlength="30" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Applied to each scanned document" @input="note = sanitizeBulkWorkflowText(note)" />
+                        <p class="mt-1 text-sm text-slate-500">Maximum 30 characters: letters, numbers, spaces, hyphens, and parentheses.</p>
                     </div>
 
                     <BulkStatusScanner ref="scanner" :disabled="loadingActions || saving || !actionId" @scan="processScan" />

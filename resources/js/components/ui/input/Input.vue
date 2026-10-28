@@ -1,16 +1,23 @@
 <script setup>
 import { useVModel } from "@vueuse/core";
+import { computed } from "vue";
 import { cn } from "@/lib/utils";
+import { inputMaxLength } from "@/lib/input-length";
 
 const props = defineProps({
   defaultValue: { type: [String, Number], required: false },
   modelValue: { type: [String, Number], required: false },
+  type: { type: String, default: 'text' },
+  maxlength: { type: [String, Number], default: undefined },
+  unrestricted: { type: Boolean, default: false },
   class: {
     type: [Boolean, null, String, Object, Array],
     required: false,
     skipCheck: true,
   },
 });
+
+const maxLength = computed(() => inputMaxLength(props.type, props.maxlength, props.unrestricted));
 
 const emits = defineEmits(["update:modelValue"]);
 
@@ -23,6 +30,8 @@ const modelValue = useVModel(props, "modelValue", emits, {
 <template>
   <input
     v-model="modelValue"
+    :type="type"
+    :maxlength="maxLength"
     data-slot="input"
     :class="
       cn(

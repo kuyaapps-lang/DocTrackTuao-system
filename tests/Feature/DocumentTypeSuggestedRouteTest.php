@@ -16,7 +16,7 @@ class DocumentTypeSuggestedRouteTest extends TestCase
     {
         $this->assertSame('sqlite', config('database.default'));
         $this->assertSame(':memory:', config('database.connections.sqlite.database'));
-        Schema::create('document_types', function (Blueprint $table) { $table->id(); $table->string('type_name'); $table->timestamps(); });
+        Schema::create('document_types', function (Blueprint $table) { $table->id(); $table->string('type_name'); $table->text('description')->nullable(); $table->timestamps(); });
         Schema::create('offices', function (Blueprint $table) { $table->id(); $table->string('office_name'); });
         Schema::create('document_type_route_steps', function (Blueprint $table) {
             $table->id(); $table->unsignedBigInteger('document_type_id'); $table->unsignedBigInteger('office_id'); $table->unsignedInteger('position'); $table->timestamps();
@@ -44,6 +44,21 @@ class DocumentTypeSuggestedRouteTest extends TestCase
         $this->assertSame(2, DB::table('audit_logs')->where('action', 'document_type_route_updated')->count());
         $this->putJson('/api/document-types/1/suggested-route', ['office_ids' => []])->assertOk();
         $this->assertSame(0, DB::table('document_type_route_steps')->count());
+
+        $this->role('Records Officer');
+        $this->postJson('/api/document-types', ['type_name' => 'Forbidden', 'office_ids' => [1]])->assertForbidden();
+        $this->role('Administrator');
+        $this->postJson('/api/document-types', ['type_name' => 'Invalid', 'office_ids' => [1, 999]])->assertUnprocessable();
+        $this->assertDatabaseMissing('document_types', ['type_name' => 'Invalid']);
+        $this->assertDatabaseMissing('document_types', ['type_name' => 'Forbidden']);
+        $response = $this->postJson('/api/document-types', ['type_name' => 'Memo', 'office_ids' => [2, 1]])->assertCreated();
+        $id = $response->json('document_type.id');
+        $this->getJson("/api/document-types/{$id}/suggested-route")->assertExactJson(['office_ids' => [2, 1]]);
+        $this->assertDatabaseHas('document_type_route_steps', ['document_type_id' => $id, 'office_id' => 2, 'position' => 1]);
+        $this->assertDatabaseHas('document_type_route_steps', ['document_type_id' => $id, 'office_id' => 1, 'position' => 2]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'document_type_created', 'record_id' => $id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'document_type_route_updated', 'record_id' => $id]);
+        $this->assertDatabaseHas('document_routes', ['sentinel' => 'actual history']);
     }
 
     private function role(string $name): void

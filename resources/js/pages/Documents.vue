@@ -43,7 +43,8 @@ import { ensureCurrentUser } from '@/lib/auth'
 import { listenForRealtimeInvalidation } from '@/lib/realtime'
 import { formatDocumentDateTime } from '@/lib/document-dates'
 import { normalizeRegistrationQrInput } from '@/lib/qr-registration'
-import { uploadRegistrationAttachments, validateRegistrationAttachments } from '@/lib/registration-attachments'
+import { addRegistrationAttachments, removeRegistrationAttachment, uploadRegistrationAttachments, validateRegistrationAttachments } from '@/lib/registration-attachments'
+import { sanitizeRegistrationDescription, sanitizeRegistrationTitle } from '@/lib/registration-text'
 import {
     buildDocumentListQuery,
     buildDocumentListRequestQuery,
@@ -250,9 +251,29 @@ const canCreateDocuments = computed(() => {
 
 const canUploadRegistrationAttachments = computed(() => can('attachments.manage'))
 
+const sanitizeRegistrationField = field => {
+    form.value[field] = field === 'title'
+        ? sanitizeRegistrationTitle(form.value[field])
+        : sanitizeRegistrationDescription(form.value[field])
+}
+
 const selectRegistrationFiles = event => {
-    registrationFiles.value = Array.from(event.target.files || [])
-    createError.value = validateRegistrationAttachments(registrationFiles.value)
+    const selected = Array.from(event.target.files || [])
+    event.target.value = ''
+    if (!selected.length) return
+    const previousFileError = validateRegistrationAttachments(registrationFiles.value)
+    registrationFiles.value = addRegistrationAttachments(registrationFiles.value, selected)
+    const fileError = validateRegistrationAttachments(registrationFiles.value)
+    if (fileError || createError.value === previousFileError) createError.value = fileError
+}
+
+const removeSelectedAttachment = index => {
+    if (creating.value || savedDocumentId.value || registrationUncertain.value) return
+    const previousFileError = validateRegistrationAttachments(registrationFiles.value)
+    registrationFiles.value = removeRegistrationAttachment(registrationFiles.value, index)
+    const fileError = validateRegistrationAttachments(registrationFiles.value)
+    if (createError.value === previousFileError || fileError) createError.value = fileError
+    if (registrationAttachmentInput.value) registrationAttachmentInput.value.value = ''
 }
 
 const canSubmitRegistration = computed(() => {
@@ -1244,6 +1265,7 @@ onBeforeUnmount(() => {
                                 <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
                                 <Input
                                     id="document-search"
+                                    unrestricted
                                     v-model="searchTerm"
                                     type="search"
                                     :maxlength="DOCUMENT_SEARCH_MAX_LENGTH"
@@ -1643,11 +1665,11 @@ onBeforeUnmount(() => {
             v-if="showCreateForm && canCreateDocuments"
             class="fixed inset-0 z-50 flex
                    items-center justify-center
-                   bg-black/50 px-4 py-6"
+                   bg-black/50 px-2 py-2 sm:px-4 sm:py-4"
         >
 
                 <Card
-                class="doctrack-date-picker-boundary w-full max-w-5xl max-h-[90vh]
+                class="doctrack-date-picker-boundary w-full max-w-7xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]
                        overflow-y-auto bg-white"
             >
 
@@ -1667,7 +1689,8 @@ onBeforeUnmount(() => {
                         @submit.prevent="createDocument"
                         class="space-y-5"
                     >
-                        <div class="mx-auto max-w-md text-center">
+                        <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        <div>
                             <label for="registration-qr-token" class="mb-2 block text-sm font-semibold text-gray-700">
                                 QR Code <span class="text-red-600">*</span>
                             </label>
@@ -1675,13 +1698,14 @@ onBeforeUnmount(() => {
                                 <Input
                                     ref="qrInputElement"
                                     id="registration-qr-token"
+                                    unrestricted
                                     v-model="qrInput"
                                     type="text"
                                     autocomplete="off"
                                     autofocus
                                     placeholder="Scan QR here"
                                     :disabled="qrVerifying || creating"
-                                    class="h-11 flex-1 text-center font-mono"
+                                    class="h-11 min-w-0 flex-1 font-mono"
                                     @input="clearQrVerificationWhenChanged"
                                     @keydown.enter.stop.prevent="verifyQrForRegistration"
                                 />
@@ -1696,22 +1720,6 @@ onBeforeUnmount(() => {
                             <p v-if="qrVerificationError" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-left text-sm text-red-700" role="alert">{{ qrVerificationError }}</p>
                         </div>
 
-                    <div v-if="canUploadRegistrationAttachments" class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                        <div class="flex flex-wrap items-center gap-3">
-                            <Button type="button" :disabled="creating || qrVerifying || !qrVerified || Boolean(savedDocumentId) || registrationUncertain" @click="registrationAttachmentInput?.click()">
-                                Add attachments
-                            </Button>
-                            <span class="text-sm text-gray-600">{{ registrationFiles.length ? `${registrationFiles.length} file(s) selected` : 'No files selected' }}</span>
-                        </div>
-                        <input ref="registrationAttachmentInput" id="registration-attachments" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                            :disabled="creating || qrVerifying || !qrVerified || Boolean(savedDocumentId) || registrationUncertain" class="hidden" @change="selectRegistrationFiles" />
-                        <p class="text-sm text-gray-500">PDF, Word, Excel, JPG or PNG; maximum 10 MB per file. The current and originating offices may view attachments.</p>
-                        <ul v-if="registrationFiles.length" class="list-disc pl-5 text-sm text-gray-700">
-                            <li v-for="(file, index) in registrationFiles" :key="index">{{ file.name }}</li>
-                        </ul>
-                        <p v-if="uploadedRegistrationFiles.length" class="text-sm text-green-700">Uploaded: {{ uploadedRegistrationFiles.join(', ') }}</p>
-                    </div>
-
                     <div
                         v-if="optionsLoading"
                         class="py-10 text-center text-gray-500"
@@ -1724,12 +1732,6 @@ onBeforeUnmount(() => {
                         :disabled="creating || qrVerifying || !qrVerified"
                         class="contents"
                     >
-                        <!-- Type + Priority -->
-                        <div
-                            class="grid grid-cols-1
-                                   md:grid-cols-2 gap-4"
-                        >
-
                             <div>
                                 <label for="registration-document-type"
                                     class="block mb-2 text-sm
@@ -1779,8 +1781,10 @@ onBeforeUnmount(() => {
                                 </div>
                             </div>
 
+                    </fieldset>
                         </div>
 
+                    <fieldset v-if="!optionsLoading" :disabled="creating || qrVerifying || !qrVerified" class="contents">
                         <!-- Title -->
                         <div>
                             <label
@@ -1796,6 +1800,7 @@ onBeforeUnmount(() => {
                                 placeholder="Enter document title or subject"
                                 class="h-11"
                                 :disabled="creating"
+                                @input="sanitizeRegistrationField('title')"
                             />
                         </div>
 
@@ -1813,6 +1818,7 @@ onBeforeUnmount(() => {
                                 rows="4"
                                 placeholder="Enter document details"
                                 :disabled="creating"
+                                @input="sanitizeRegistrationField('description')"
                                 class="w-full rounded-md
                                        border border-gray-300
                                        px-3 py-2 text-sm
@@ -1825,20 +1831,19 @@ onBeforeUnmount(() => {
                         <!-- New documents are always Private; tags grant history visibility. -->
                         <div>
                             <div>
-                                <label class="block mb-2 text-sm font-semibold text-gray-700">Tagged Offices</label>
-                                <textarea
-                                    readonly
-                                    :value="selectedTagOfficeNames.join('\n')"
-                                    rows="3"
-                                    placeholder="Checked offices will appear here"
-                                    class="mb-2 w-full resize-none rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none"
-                                    aria-label="Selected tagged offices"
-                                ></textarea>
+                                <p class="mb-2 text-sm font-semibold text-gray-700">Tagged Offices</p>
+                                <div class="mb-2 min-h-20 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700" aria-label="Selected tagged offices">
+                                    <ul v-if="selectedTagOfficeNames.length" class="flex flex-wrap gap-2">
+                                        <li v-for="office in selectedTagOfficeNames" :key="office" class="max-w-full rounded-md border border-blue-200 bg-blue-50 px-3 py-1 text-blue-900 break-words">{{ office }}</li>
+                                    </ul>
+                                    <p v-else class="text-gray-500">Checked offices will appear here</p>
+                                </div>
                                 <div class="relative">
                                     <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
                                     <input
                                         v-model="officeTagSearch"
                                         type="search"
+                                        maxlength="20"
                                         :disabled="creating"
                                         placeholder="Search office name or code"
                                         class="w-full h-11 rounded-md border border-gray-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -1871,7 +1876,7 @@ onBeforeUnmount(() => {
                         </div>
 
                         <!-- Dates -->
-                        <div class="ml-auto grid w-full grid-cols-1 gap-4 md:w-auto md:grid-cols-2">
+                        <div class="grid w-full grid-cols-1 gap-4 md:grid-cols-2">
 
                             <div>
                                 <label
@@ -1937,6 +1942,26 @@ onBeforeUnmount(() => {
                         </div>
 
                     </fieldset>
+
+                        <div v-if="canUploadRegistrationAttachments" class="space-y-2">
+                            <p class="text-sm font-semibold text-gray-700">Attachments</p>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <Button type="button" :disabled="creating || qrVerifying || !qrVerified || Boolean(savedDocumentId) || registrationUncertain" @click="registrationAttachmentInput?.click()">
+                                    Add attachments
+                                </Button>
+                                <span class="text-sm text-gray-600">{{ registrationFiles.length ? `${registrationFiles.length} file(s) selected` : 'No files selected' }}</span>
+                            </div>
+                            <input ref="registrationAttachmentInput" id="registration-attachments" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                                :disabled="creating || qrVerifying || !qrVerified || Boolean(savedDocumentId) || registrationUncertain" class="hidden" @change="selectRegistrationFiles" />
+                            <p class="text-sm text-gray-500">PDF, Word, Excel, JPG or PNG; maximum 10 MB per file. The current and originating offices may view attachments.</p>
+                            <ul v-if="registrationFiles.length" class="flex flex-wrap gap-2 text-sm text-gray-700">
+                                <li v-for="(file, index) in registrationFiles" :key="index" class="flex w-fit max-w-full items-center gap-2 rounded-md border border-blue-400 bg-blue-50 px-3 py-2">
+                                    <span class="min-w-0 flex-1 break-all font-medium text-blue-900">{{ file.name }}</span>
+                                    <button type="button" class="rounded px-2 py-1 text-lg leading-none text-red-700 hover:bg-red-100 disabled:opacity-50" :disabled="creating || Boolean(savedDocumentId) || registrationUncertain" :aria-label="`Remove ${file.name}`" title="Remove attachment" @click="removeSelectedAttachment(index)">×</button>
+                                </li>
+                            </ul>
+                            <p v-if="uploadedRegistrationFiles.length" class="text-sm text-green-700">Uploaded: {{ uploadedRegistrationFiles.join(', ') }}</p>
+                        </div>
 
                         <!-- Buttons -->
                         <div

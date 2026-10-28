@@ -26,6 +26,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import OfficeCombobox from '@/components/OfficeCombobox.vue'
 import { can } from '@/lib/auth'
 
 const documentTypes = ref([])
@@ -52,6 +53,12 @@ const routeReady = ref(false)
 const routeSaving = ref(false)
 const routeError = ref('')
 let routeRequest = 0
+const newRouteSteps = ref([])
+const newOffices = ref([])
+const newOfficesLoading = ref(false)
+const newOfficesReady = ref(false)
+const newOfficesError = ref('')
+let newOfficesRequest = 0
 
 const routeHeaders = () => ({ Accept: 'application/json', Authorization: `Bearer ${getToken()}` })
 
@@ -166,6 +173,10 @@ const fetchDocumentTypes = async () => {
 }
 
 const resetForm = () => {
+    newOfficesRequest++
+    newRouteSteps.value = []
+    newOfficesReady.value = false
+    newOfficesError.value = ''
     editingId.value = null
 
     form.value = {
@@ -176,6 +187,32 @@ const resetForm = () => {
     formError.value = ''
 }
 
+const loadNewOffices = async () => {
+    const requestId = ++newOfficesRequest
+    newOfficesLoading.value = true
+    newOfficesError.value = ''
+    try {
+        const response = await fetch('/api/offices', { headers: routeHeaders() })
+        if (!response.ok) throw new Error('Unable to load offices. Please try again.')
+        const offices = await response.json()
+        if (requestId !== newOfficesRequest) return
+        newOffices.value = offices
+        newOfficesReady.value = true
+    } catch (err) {
+        if (requestId === newOfficesRequest) newOfficesError.value = err.message || 'Unable to load offices. Please try again.'
+    } finally {
+        if (requestId === newOfficesRequest) newOfficesLoading.value = false
+    }
+}
+
+const moveNewRouteStep = (index, offset) => {
+    const target = index + offset
+    if (target < 0 || target >= newRouteSteps.value.length) return
+    const steps = [...newRouteSteps.value]
+    ;[steps[index], steps[target]] = [steps[target], steps[index]]
+    newRouteSteps.value = steps
+}
+
 const openAddForm = () => {
     if (!ensureCanManageMasterData()) {
         return
@@ -184,6 +221,7 @@ const openAddForm = () => {
     resetForm()
     successMessage.value = ''
     showForm.value = true
+    loadNewOffices()
 }
 
 const openEditForm = (documentType) => {
@@ -225,6 +263,11 @@ const saveDocumentType = async () => {
         return
     }
 
+    if (editingId.value === null && (!newOfficesReady.value || newRouteSteps.value.some(id => !id))) {
+        formError.value = 'Load the offices and select an office for every route step.'
+        return
+    }
+
     saving.value = true
 
     try {
@@ -247,6 +290,7 @@ const saveDocumentType = async () => {
                 type_name: form.value.type_name.trim(),
                 description:
                     form.value.description.trim() || null,
+                ...(isEditing ? {} : { office_ids: newRouteSteps.value.map(Number) }),
             }),
         })
 
@@ -469,6 +513,27 @@ onMounted(() => {
 
                         </div>
 
+                        <fieldset v-if="editingId === null" class="space-y-3">
+                            <legend class="text-sm font-semibold text-gray-700">Suggested routing offices</legend>
+                            <p class="text-sm text-gray-600">Steps are suggestions; authorized users may forward to another office.</p>
+                            <p v-if="newOfficesLoading" role="status">Loading offices...</p>
+                            <div v-if="newOfficesError" role="alert" class="text-sm text-red-700">
+                                {{ newOfficesError }}
+                                <Button type="button" variant="outline" @click="loadNewOffices">Retry</Button>
+                            </div>
+                            <template v-if="newOfficesReady">
+                                <div v-for="(officeId, index) in newRouteSteps" :key="index" class="flex flex-wrap items-center gap-2">
+                                    <label :for="`new-route-office-${index}`" class="w-16 text-sm font-semibold">Step {{ index + 1 }}</label>
+                                    <OfficeCombobox :id="`new-route-office-${index}`" v-model="newRouteSteps[index]" :offices="newOffices" :disabled="saving" />
+                                    <Button type="button" variant="outline" :disabled="saving || index === 0" @click="moveNewRouteStep(index, -1)">Up</Button>
+                                    <Button type="button" variant="outline" :disabled="saving || index === newRouteSteps.length - 1" @click="moveNewRouteStep(index, 1)">Down</Button>
+                                    <Button type="button" variant="outline" :disabled="saving" @click="newRouteSteps.splice(index, 1)">Remove</Button>
+                                </div>
+                                <p v-if="!newRouteSteps.length" class="text-sm text-gray-500">No suggested offices yet.</p>
+                                <Button type="button" variant="outline" :disabled="saving || newRouteSteps.length >= 100" @click="newRouteSteps.push('')">Add office</Button>
+                            </template>
+                        </fieldset>
+
                         <!-- Error -->
                         <div
                             v-if="formError"
@@ -493,7 +558,7 @@ onMounted(() => {
 
                             <Button
                                 type="submit"
-                                :disabled="saving"
+                                :disabled="saving || (editingId === null && !newOfficesReady)"
                             >
                                 <Save class="mr-2 h-4 w-4" />
                                 {{
@@ -530,10 +595,7 @@ onMounted(() => {
                     <template v-if="!routeLoading && routeReady">
                         <div v-for="(officeId, index) in routeSteps" :key="index" class="flex flex-wrap items-center gap-2">
                             <label :for="`route-office-${index}`" class="w-16 text-sm font-semibold">Step {{ index + 1 }}</label>
-                            <select :id="`route-office-${index}`" v-model="routeSteps[index]" :disabled="routeSaving" class="h-10 min-w-48 flex-1 rounded-md border border-gray-300 bg-white px-3 text-sm">
-                                <option value="">Select office</option>
-                                <option v-for="office in routeOffices" :key="office.id" :value="String(office.id)">{{ office.office_name }}</option>
-                            </select>
+                            <OfficeCombobox :id="`route-office-${index}`" v-model="routeSteps[index]" :offices="routeOffices" :disabled="routeSaving" />
                             <Button type="button" variant="outline" :disabled="routeSaving || index === 0" @click="moveRouteStep(index, -1)">Up</Button>
                             <Button type="button" variant="outline" :disabled="routeSaving || index === routeSteps.length - 1" @click="moveRouteStep(index, 1)">Down</Button>
                             <Button type="button" variant="outline" :disabled="routeSaving" @click="routeSteps.splice(index, 1)">Remove</Button>

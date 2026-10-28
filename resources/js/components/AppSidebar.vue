@@ -181,7 +181,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                 </div>
 
                 <p
-                    v-if="item.key === 'outgoing-documents'"
+                    v-if="item.key === 'incoming-documents'"
                     class="mt-[5pt] flex items-center gap-2 pt-2 text-xs font-bold uppercase tracking-wide text-slate-400"
                     :class="desktopCollapsed ? 'sr-only' : 'px-3'"
                 >
@@ -291,7 +291,7 @@ const linkClasses = (key, grouped = false, collapsed = false) => {
                     </div>
 
                     <p
-                    v-if="item.key === 'outgoing-documents'"
+                    v-if="item.key === 'incoming-documents'"
                         class="mt-[5pt] flex items-center gap-2 px-3 pt-2 text-xs font-bold uppercase tracking-wide text-gray-400"
                 >
                     <span class="h-px flex-1 bg-slate-300/80" aria-hidden="true" />

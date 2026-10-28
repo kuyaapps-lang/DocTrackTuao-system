@@ -1117,6 +1117,7 @@ onBeforeUnmount(() => leaveRealtime?.())
 
                                 <Input
                                     v-model="form.username"
+                                    unrestricted
                                     :disabled="saving"
                                     autocomplete="username"
                                     placeholder="Enter username"
@@ -1227,6 +1228,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 <div class="relative">
                                     <Input
                                         v-model="form.password"
+                                        unrestricted
                                         :disabled="saving"
                                         :type="showPassword ? 'text' : 'password'"
                                         :placeholder="isEditing ? 'Leave blank to keep current password' : 'Minimum 8 characters'"
@@ -1260,6 +1262,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                                 <div class="relative">
                                     <Input
                                         v-model="form.password_confirmation"
+                                        unrestricted
                                         :disabled="saving"
                                         :type="showPasswordConfirmation ? 'text' : 'password'"
                                         placeholder="Repeat password"
@@ -1353,6 +1356,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                             <div class="relative">
                                 <Input
                                     v-model="resetPasswordForm.password"
+                                    unrestricted
                                     :disabled="resetPasswordSaving"
                                     :type="showPassword ? 'text' : 'password'"
                                     placeholder="Minimum 8 characters"
@@ -1386,6 +1390,7 @@ onBeforeUnmount(() => leaveRealtime?.())
                             <div class="relative">
                                 <Input
                                     v-model="resetPasswordForm.password_confirmation"
+                                    unrestricted
                                     :disabled="resetPasswordSaving"
                                     :type="showPasswordConfirmation ? 'text' : 'password'"
                                     placeholder="Repeat temporary password"

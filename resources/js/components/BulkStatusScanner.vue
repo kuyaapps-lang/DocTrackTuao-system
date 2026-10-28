@@ -45,6 +45,7 @@ defineExpose({ focus })
         <div class="relative">
             <Input
                 id="bulk-status-scanner"
+                unrestricted
                 ref="input"
                 v-model="value"
                 :disabled="disabled"

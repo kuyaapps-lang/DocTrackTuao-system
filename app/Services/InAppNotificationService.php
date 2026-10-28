@@ -26,6 +26,8 @@ class InAppNotificationService
 
     public const TYPE_DOCUMENT_RETURNED = 'document_returned';
 
+    public const TYPE_DOCUMENT_IDLE = 'document_idle';
+
     public const TYPE_PASSWORD_RESET_SUBMITTED = 'password_reset_submitted';
 
     public const TYPE_PASSWORD_RESET_RESOLVED = 'password_reset_resolved';
@@ -63,11 +65,13 @@ class InAppNotificationService
 
     public function documentForwarded(DocumentRoute $route): void
     {
+        $document = $this->documentForNotification($route->document_id);
+
         $this->createForUsers(
             $this->usersWithPermission('documents.route', $route->to_office_id),
             self::TYPE_DOCUMENT_FORWARDED,
-            'Document forwarded',
-            'A document was forwarded to your office.',
+            'Document forwarded: '.$this->documentTitle($document),
+            '“'.$this->documentTitle($document).'” was forwarded to your office.',
             '/documents/'.$route->document_id,
             $route->document_id
         );
@@ -75,11 +79,13 @@ class InAppNotificationService
 
     public function documentReceived(DocumentRoute $route): void
     {
+        $document = $this->documentForNotification($route->document_id);
+
         $this->createForUsers(
             $this->usersByIds([$route->forwarded_by]),
             self::TYPE_DOCUMENT_RECEIVED,
-            'Document received',
-            'A document forwarded by your office was received.',
+            'Document received: '.$this->documentTitle($document),
+            '“'.$this->documentTitle($document).'” forwarded by your office was received.',
             '/documents/'.$route->document_id,
             $route->document_id
         );
@@ -87,13 +93,43 @@ class InAppNotificationService
 
     public function documentReturned(DocumentRoute $route): void
     {
+        $document = $this->documentForNotification($route->document_id);
+
         $this->createForUsers(
             $this->usersWithPermission('documents.route', $route->to_office_id),
             self::TYPE_DOCUMENT_RETURNED,
-            'Document Returned',
-            'A document was returned to your office. Review the reason, then confirm receipt when the physical document arrives.',
+            'Document returned: '.$this->documentTitle($document),
+            '“'.$this->documentTitle($document).'” was returned to your office. Review the reason, then confirm receipt when the physical document arrives.',
             '/documents/'.$route->document_id,
             $route->document_id
+        );
+    }
+
+    /**
+     * Alert staff who can act for the office currently responsible for a document.
+     * A notification is created once per recipient for each unchanged activity period.
+     */
+    public function documentIdle(Document $document, \DateTimeInterface $idleSince): void
+    {
+        if (! $document->current_office_id) {
+            return;
+        }
+
+        $users = $this->usersWithPermission('documents.route', (int) $document->current_office_id)
+            ->reject(fn (User $user) => Notification::query()
+                ->where('user_id', $user->id)
+                ->where('document_id', $document->id)
+                ->where('type', self::TYPE_DOCUMENT_IDLE)
+                ->where('created_at', '>=', $idleSince)
+                ->exists());
+
+        $this->createForUsers(
+            $users,
+            self::TYPE_DOCUMENT_IDLE,
+            'Document needs attention: '.$this->documentTitle($document),
+            '“'.$this->documentTitle($document).'” has had no recorded action since '.$idleSince->format('M j, Y g:i A').'.',
+            '/documents/'.$document->id,
+            $document->id
         );
     }
 
@@ -242,5 +278,15 @@ class InAppNotificationService
                     ->where('from_office_id', $officeId)
                     ->orWhere('to_office_id', $officeId))
                 ->exists();
+    }
+
+    private function documentForNotification(int $documentId): ?Document
+    {
+        return Document::query()->find($documentId);
+    }
+
+    private function documentTitle(?Document $document): string
+    {
+        return trim((string) $document?->title) ?: 'Untitled document';
     }
 }

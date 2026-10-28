@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
 import {
     navigationItems,
@@ -57,13 +58,19 @@ const flattenKeys = (items) => {
     })
 }
 
+test('desktop and mobile Documents headings appear before Incoming', async () => {
+    const sidebar = await readFile(new URL('../../resources/js/components/AppSidebar.vue', import.meta.url), 'utf8')
+    assert.equal((sidebar.match(/v-if="item\.key === 'incoming-documents'"/g) || []).length, 2)
+    assert.equal((sidebar.match(/v-if="item\.key === 'outgoing-documents'"/g) || []).length, 0)
+})
+
 test('administrator sees every current sidebar destination', () => {
     assert.deepEqual(
         flattenKeys(visibleNavigation(permissionSets.administrator)),
         [
             'dashboard',
-            'outgoing-documents',
             'incoming-documents',
+            'outgoing-documents',
             'received-document',
             'change-status',
             'release-document',
@@ -90,8 +97,8 @@ test('records officer sees registration, review, and reporting links without bul
         )),
         [
             'dashboard',
-            'outgoing-documents',
             'incoming-documents',
+            'outgoing-documents',
             'document-inquiry',
             'qr-codes',
             'master-data',
@@ -109,8 +116,8 @@ test('office user does not see QR requests or master data links', () => {
         flattenKeys(visibleNavigation(permissionSets.officeUser)),
         [
             'dashboard',
-            'outgoing-documents',
             'incoming-documents',
+            'outgoing-documents',
             'received-document',
             'change-status',
             'release-document',
@@ -126,8 +133,8 @@ test('viewer does not see master data links', () => {
         flattenKeys(visibleNavigation(permissionSets.viewer)),
         [
             'dashboard',
-            'outgoing-documents',
             'incoming-documents',
+            'outgoing-documents',
             'document-inquiry',
             'reports',
             'accomplishment-report',

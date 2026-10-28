@@ -2,7 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 
 import BulkStatusScanner from '@/components/BulkStatusScanner.vue'
+import OfficeCombobox from '@/components/OfficeCombobox.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { sanitizeBulkWorkflowText } from '@/lib/bulk-workflow-text'
 
 const offices = ref([])
 const officeId = ref('')
@@ -92,15 +94,13 @@ onMounted(loadOffices)
                 <CardContent class="space-y-5">
                     <div>
                         <label for="bulk-destination-office" class="mb-2 block text-sm font-semibold text-slate-700">Destination Office</label>
-                        <select id="bulk-destination-office" v-model="officeId" :disabled="loadingOffices || saving" class="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" @change="scanner?.focus()">
-                            <option value="">Choose an office</option>
-                            <option v-for="office in offices" :key="office.id" :value="String(office.id)">{{ office.office_name }}{{ office.office_code ? ` (${office.office_code})` : '' }}</option>
-                        </select>
+                        <OfficeCombobox id="bulk-destination-office" v-model="officeId" :offices="offices" :disabled="loadingOffices || saving" @select="scanner?.focus()" />
                     </div>
 
                     <div>
                         <label for="bulk-release-remarks" class="mb-2 block text-sm font-semibold text-slate-700">Remarks <span class="font-normal text-slate-500">(optional)</span></label>
-                        <textarea id="bulk-release-remarks" v-model="remarks" :disabled="saving" rows="3" maxlength="2000" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Applied to each released document" />
+                        <textarea id="bulk-release-remarks" v-model="remarks" :disabled="saving" rows="3" maxlength="30" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Applied to each released document" @input="remarks = sanitizeBulkWorkflowText(remarks)" />
+                        <p class="mt-1 text-sm text-slate-500">Maximum 30 characters: letters, numbers, spaces, hyphens, and parentheses.</p>
                     </div>
 
                     <BulkStatusScanner ref="scanner" :disabled="loadingOffices || saving || !officeId" @scan="processScan" />

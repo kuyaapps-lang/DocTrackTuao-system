@@ -599,10 +599,10 @@ class DocumentController extends Controller
 
         $validated = $request->validate([
             'title' =>
-                'required|string|max:255',
+                ['required', 'string', 'max:255', 'regex:/\A[A-Za-z0-9 -]+\z/D'],
 
             'description' =>
-                'nullable|string',
+                ['nullable', 'string', 'regex:/\A[A-Za-z0-9 ,@#()\/-]*\z/D'],
 
             'document_type_id' =>
                 'required|exists:document_types,id',

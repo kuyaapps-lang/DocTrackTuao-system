@@ -7,23 +7,23 @@ export const navigationItems = [
         group: null,
     },
     {
-        key: 'outgoing-documents',
-        label: 'Outgoing Documents',
-        path: '/documents',
-        to: {
-            path: '/documents',
-            query: { view: 'outgoing' },
-        },
-        permission: 'documents.view',
-        group: null,
-    },
-    {
         key: 'incoming-documents',
         label: 'Incoming Documents',
         path: '/documents',
         to: {
             path: '/documents',
             query: { view: 'incoming' },
+        },
+        permission: 'documents.view',
+        group: null,
+    },
+    {
+        key: 'outgoing-documents',
+        label: 'Outgoing Documents',
+        path: '/documents',
+        to: {
+            path: '/documents',
+            query: { view: 'outgoing' },
         },
         permission: 'documents.view',
         group: null,

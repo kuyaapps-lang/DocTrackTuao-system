@@ -384,6 +384,7 @@ const submitResetRequest = async () => {
 
                     <Input
                         v-model="loginIdentifier"
+                        unrestricted
                         type="text"
                         autocomplete="username"
                         placeholder="Enter your username or email"
@@ -407,6 +408,7 @@ const submitResetRequest = async () => {
 
                             <Input
                                 v-model="password"
+                                unrestricted
                                 :type="showPassword ? 'text' : 'password'"
                                 placeholder="Enter your password"
                                 class="h-12 rounded-xl pr-12"

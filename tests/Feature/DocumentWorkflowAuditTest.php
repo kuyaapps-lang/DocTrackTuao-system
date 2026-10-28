@@ -98,6 +98,16 @@ class DocumentWorkflowAuditTest extends TestCase
         Sanctum::actingAs($this->createUser('Records Officer', $officeId));
         $this->postJson('/api/documents', [])
             ->assertUnprocessable();
+        $invalidTitle = $this->validCreatePayload($officeId);
+        $invalidTitle['title'] = 'Invalid title!';
+        $this->postJson('/api/documents', $invalidTitle)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('title');
+        $invalidDescription = $this->validCreatePayload($officeId);
+        $invalidDescription['description'] = 'Invalid description!';
+        $this->postJson('/api/documents', $invalidDescription)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('description');
 
         $this->assertSame($initialDocumentCount, Document::count());
         $this->assertSame(
